@@ -1,0 +1,309 @@
+.outfits-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 30px 34px;
+  padding: 43px 52px 70px;
+}
+
+.outfit-card {
+  display: block;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: zoom-in;
+}
+
+.outfit-card:focus-visible { outline: none; }
+
+.outfit-card:focus-visible .outfit-card-art {
+  outline: 1px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.outfit-card-art {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, .18);
+}
+
+.outfit-card-hero,
+.outfit-card-hero img {
+  width: 100%;
+  height: 100%;
+}
+
+.outfit-card-hero img {
+  object-fit: cover;
+  object-position: 50% 15%;
+  transition: opacity 320ms ease, filter 320ms ease;
+}
+
+.outfit-card:hover .outfit-card-hero img,
+.outfit-card:focus-visible .outfit-card-hero img {
+  opacity: .14;
+  filter: saturate(.55);
+}
+
+.outfit-card-hover-pieces {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 280ms ease;
+  pointer-events: none;
+}
+
+.outfit-card:hover .outfit-card-hover-pieces,
+.outfit-card:focus-visible .outfit-card-hover-pieces {
+  opacity: 1;
+}
+
+.outfit-card-hover-piece {
+  position: absolute;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 14px rgba(25, 24, 22, .18));
+  opacity: 0;
+  transform: scale(.88) rotate(var(--rot, 0deg));
+  transition: opacity 320ms ease, transform 360ms cubic-bezier(.34, 1.35, .64, 1);
+}
+
+.outfit-card:hover .outfit-card-hover-piece,
+.outfit-card:focus-visible .outfit-card-hover-piece {
+  opacity: 1;
+  transform: scale(1) rotate(var(--rot, 0deg));
+}
+
+.outfit-card-art .outfit-stack {
+  height: 100%;
+  border: 0;
+  background: none;
+  justify-content: center;
+  padding: 24px;
+}
+
+.outfit-card-processing {
+  position: absolute;
+  inset: auto 0 0;
+  display: flex;
+  justify-content: center;
+  padding: 10px;
+  background: rgba(246, 241, 232, .88);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.outfit-card-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.outfit-card-spinner { animation: outfit-card-spin 900ms linear infinite; }
+
+@keyframes outfit-card-spin { to { transform: rotate(360deg); } }
+
+.outfit-style-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 18px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.outfit-style-description {
+  margin: 0;
+  color: var(--ink);
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.45;
+}
+
+.outfit-style-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.outfit-style-tag {
+  border: 1px solid var(--line);
+  padding: 3px 8px;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.outfit-card-name {
+  margin: 12px 2px 0;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.outfit-card-note {
+  width: 100%;
+  border: 1px solid var(--line);
+  padding: 6px 8px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 11px;
+  font-family: inherit;
+}
+
+.outfit-card-note:focus-visible { border-color: var(--ink); outline: none; }
+
+.outfit-builder-entry { width: clamp(390px, 40vw, 560px); }
+
+.outfit-builder-body {
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.outfit-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, .18);
+  min-height: 64px;
+}
+
+.outfit-stack-zone {
+  display: flex;
+  align-items: center;
+}
+
+.outfit-stack-item {
+  width: 72px;
+  height: 72px;
+  flex: none;
+}
+
+.outfit-stack-item:not(:first-child) { margin-left: -20px; }
+
+.outfit-stack-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.outfit-stack.compact {
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.outfit-stack.compact .outfit-stack-item { width: 56px; height: 56px; }
+
+/* ── Outfit detail viewer — mirrors the wardrobe item viewer (.viewer, .viewer-details, .modeled-hero) ── */
+
+.outfit-viewer-art {
+  padding: 12px 0 18px;
+}
+
+.outfit-viewer-art .outfit-stack {
+  width: 100%;
+}
+
+.outfit-viewer-pieces-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+  gap: 8px;
+  margin: 4px 0 22px;
+}
+
+.outfit-viewer-piece-tile {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  padding: 6px;
+  background: rgba(255, 255, 255, .18);
+}
+
+.outfit-viewer-piece-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.outfit-category-label {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.outfit-category-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.outfit-piece {
+  flex: none;
+  width: 72px;
+  height: 72px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  padding: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.outfit-piece img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.outfit-piece.active {
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+.outfit-piece:hover,
+.outfit-piece:focus-visible { border-color: var(--ink); outline: none; }
+
+.outfit-error { margin: 0; text-align: right; }
+
+@media (max-width: 860px) {
+  .outfit-builder-entry { width: 100%; }
+}
+
+@media (max-width: 640px) {
+  .outfits-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 18px 16px;
+    padding: 26px 20px 50px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .outfit-card-hero img,
+  .outfit-card-hover-pieces,
+  .outfit-card-hover-piece,
+  .outfit-card-spinner { transition: none; animation: none; }
+}

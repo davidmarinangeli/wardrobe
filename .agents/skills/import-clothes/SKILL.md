@@ -133,12 +133,14 @@ Inspect checkerboard contact sheets of at most 12 items and compare sensitive re
 
 Use `data/model-reference.png` as the identity reference unless `WARDROBE_MODEL_REFERENCE` points to another local PNG. If neither exists, ask the user for a clear reference photo before continuing. Never add that photo to Git.
 
-For every accepted cutout, use Imagegen with the identity image first and exact garment PNG second. Save a horizontal 3:2 PNG as `$WORK/modeled/SLUG.png` and set `modeledFile` to `SLUG.png` in the manifest.
+Also check for a close-up face/headshot reference at `data/model-reference-face.png` (or `WARDROBE_FACE_REFERENCE`). It's optional, but strongly recommended: a full-body reference alone usually leaves the face as a tiny fraction of the frame, which is the most common cause of identity drift across generations. If it exists, include it as an additional identity image alongside the full-body reference. If it doesn't exist, proceed with the full-body reference alone and mention to the user that adding a face closeup would likely improve consistency.
+
+For every accepted cutout, use Imagegen with the identity image(s) first — full-body reference, then the face closeup if present — and the exact garment PNG last. Save a horizontal 3:2 PNG as `$WORK/modeled/SLUG.png` and set `modeledFile` to `SLUG.png` in the manifest.
 
 Use this generation brief:
 
 ```text
-Create a professional horizontal 3:2 editorial fashion photograph of the person in Image 1 wearing the exact clothing item from Image 2.
+Create a professional horizontal 3:2 editorial fashion photograph of the person in Image 1 wearing the exact clothing item from Image 2. (If a face closeup reference is included, adjust the numbering: it becomes Image 2 and the garment becomes Image 3 — state that explicitly and add: "Image 2 is a close-up of that same person's face; treat it as the primary source for their exact facial identity and do not idealize or alter it.")
 
 Preserve the person's recognizable face, hair, age, build, skin texture, and body proportions. Preserve the featured garment precisely: color, material, fit, construction, pattern, graphics, logos, text, proportions, closure, and distinctive details. Do not redesign, simplify, replace, or reinterpret it.
 
