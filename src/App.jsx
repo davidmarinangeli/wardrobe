@@ -5,7 +5,10 @@ import { ColorProfileModal, SEASONS, itemMatchesPalette, readColorProfile } from
 import { Outfits } from "./outfits.jsx";
 import { Inspo } from "./inspo.jsx";
 import { Wishlist } from "./wishlist.jsx";
-import { GalleryItem, ItemViewer, TYPE_MAP, TYPE_ORDER, TYPES } from "./item-editor.jsx";
+import { GalleryItem, ItemViewer } from "./item-editor.jsx";
+import { WARDROBE_TYPES as TYPES, TYPE_MAP, TYPE_ORDER } from "./categories.js";
+import { PageShell } from "./components/PageShell.jsx";
+import { PageStatus } from "./components/PageStatus.jsx";
 import { DISMISS_KEY as ONBOARDING_DISMISS_KEY, Onboarding, RESUME_KEY as ONBOARDING_RESUME_KEY } from "./onboarding.jsx";
 
 const STORAGE_KEY = "open-wardrobe-edits-v1";
@@ -228,42 +231,36 @@ export function App() {
       ) : view === "outfits" ? (
         <Outfits items={items} premiumAllowed={premiumAllowed} />
       ) : (
-        <main className="gallery-pane">
-          <header className="gallery-header">
-            <div className="gallery-meta-row">
-              <p className="piece-count">{items.length} {items.length === 1 ? "piece" : "pieces"}</p>
-              <button type="button" className="color-profile-trigger" onClick={() => setShowColorQuiz(true)}>
-                {colorProfile ? <><span className="season-dot" style={{ backgroundColor: SEASONS[colorProfile.season].accent }} />{SEASONS[colorProfile.season].label}</> : "My Colors"}
-              </button>
-            </div>
-            <nav className="category-nav" aria-label="Filter wardrobe by item type">
-              {TYPES.map((type) => (
-                <button
-                  key={type.id}
-                  type="button"
-                  className={activeType === type.id ? "active" : ""}
-                  onClick={() => chooseType(type.id)}
-                  aria-pressed={activeType === type.id}
-                >
-                  {type.label}
-                </button>
-              ))}
-              {colorProfile && (
-                <button
-                  type="button"
-                  className={onlyMatches ? "active" : ""}
-                  onClick={() => setOnlyMatches((current) => !current)}
-                  aria-pressed={onlyMatches}
-                >
-                  Matches my colors
-                </button>
-              )}
-            </nav>
-          </header>
-
-          {error && <p className="status error">{error}</p>}
-          {!error && loading && <p className="status">Loading wardrobe</p>}
-          {!error && !loading && !items.length && <p className="status empty">Drop, paste, or add a photo to import your first piece.</p>}
+        <PageShell
+          count={items.length}
+          noun="piece"
+          actions={(
+            <button type="button" className="header-action-btn" onClick={() => setShowColorQuiz(true)}>
+              {colorProfile ? <><span className="season-dot" style={{ backgroundColor: SEASONS[colorProfile.season].accent }} />{SEASONS[colorProfile.season].label}</> : "My Colors"}
+            </button>
+          )}
+          categories={TYPES}
+          activeCategory={activeType}
+          onCategory={chooseType}
+          navLabel="Filter wardrobe by item type"
+          navExtra={colorProfile && (
+            <button
+              type="button"
+              className={onlyMatches ? "active" : ""}
+              onClick={() => setOnlyMatches((current) => !current)}
+              aria-pressed={onlyMatches}
+            >
+              Matches my colors
+            </button>
+          )}
+        >
+          <PageStatus
+            loading={loading}
+            error={error}
+            empty={!items.length}
+            emptyMessage="Drop, paste, or add a photo to import your first piece."
+            noun="wardrobe"
+          />
 
           {!!items.length && (
             <section className="gallery-grid" aria-label={`${TYPE_MAP[activeType]?.label || "All"} wardrobe items`}>
@@ -278,7 +275,7 @@ export function App() {
               ))}
             </section>
           )}
-        </main>
+        </PageShell>
       )}
 
       {selectedItem && <ItemViewer item={selectedItem} onClose={() => setSelectedId(null)} onSave={saveItem} onDelete={deleteItem} onGenerateModeled={generateModeledPhoto} premiumAllowed={premiumAllowed} />}

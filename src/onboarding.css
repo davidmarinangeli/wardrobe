@@ -1,17 +1,20 @@
-.onboarding-overlay {
+/* Compound selectors (rather than bare .onboarding-*) so these reliably win over the
+   base .viewer-overlay/.viewer-entry/.viewer rules in styles.css regardless of CSS
+   bundle order — this modal is a centered dialog, not a slide-in side panel. */
+.viewer-overlay.onboarding-overlay {
   justify-content: center;
   align-items: center;
   padding: 24px;
 }
 
-.onboarding-entry {
+.viewer-entry.onboarding-entry {
   width: min(560px, 100%);
   height: auto;
   max-height: min(88vh, 760px);
   animation: viewer-in 240ms cubic-bezier(.22, .8, .22, 1) both;
 }
 
-.onboarding {
+.viewer.onboarding {
   position: relative;
   width: 100%;
   max-height: min(88vh, 760px);
@@ -262,16 +265,16 @@
   font-size: 11.5px;
 }
 
-@keyframes onboarding-spin { to { transform: rotate(360deg); } }
-.onboarding-spinner { animation: onboarding-spin 900ms linear infinite; }
+/* uses the shared @keyframes spin from styles.css */
+.onboarding-spinner { animation: spin 900ms linear infinite; }
 
 @media (prefers-reduced-motion: reduce) {
-  .onboarding-entry { animation: none; }
+  .viewer-entry.onboarding-entry { animation: none; }
   .onboarding-spinner { animation: none !important; }
 }
 
 @media (max-width: 640px) {
-  .onboarding-overlay { padding: 0; align-items: flex-end; }
-  .onboarding-entry { width: 100%; max-height: 92dvh; }
-  .onboarding { border-radius: 20px 20px 0 0; padding: 28px 20px 24px; max-height: 92dvh; }
+  .viewer-overlay.onboarding-overlay { padding: 0; align-items: flex-end; }
+  .viewer-entry.onboarding-entry { width: 100%; max-height: 92dvh; }
+  .viewer.onboarding { border-radius: 20px 20px 0 0; padding: 28px 20px 24px; max-height: 92dvh; }
 }

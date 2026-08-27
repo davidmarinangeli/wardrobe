@@ -646,6 +646,26 @@ button { font: inherit; }
 .sample-button.active { border-color: var(--accent); color: var(--accent); }
 .action-spacer { flex: 1; }
 
+/* ─── Generic header action button — used across all view top bars ─────────── */
+.header-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  padding: 8px 14px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.header-action-btn:hover,
+.header-action-btn:focus-visible { border-color: var(--ink); outline: none; }
+.header-action-btn:disabled { opacity: .45; cursor: not-allowed; }
+
 .edit-button:hover,
 .edit-button:focus-visible,
 .secondary-button:hover,
@@ -677,9 +697,10 @@ button { font: inherit; }
 
 .modeled-photo-prompt.is-processing p { margin: 0; color: var(--muted); font-size: 12px; }
 
-.modeled-photo-spinner { flex: none; animation: modeled-spin 900ms linear infinite; }
+.modeled-photo-spinner { flex: none; animation: spin 900ms linear infinite; }
 
-@keyframes modeled-spin { to { transform: rotate(360deg); } }
+/* ─── Shared spinner keyframe — all spinner classes across the app use this ── */
+@keyframes spin { to { transform: rotate(360deg); } }
 
 .modeled-photo-prompt__title { margin: 0; color: var(--ink); font-size: 13px; font-weight: 500; }
 .modeled-photo-prompt__detail { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }

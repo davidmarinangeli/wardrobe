@@ -107,9 +107,8 @@
   font-size: 11px;
 }
 
-.outfit-card-spinner { animation: outfit-card-spin 900ms linear infinite; }
-
-@keyframes outfit-card-spin { to { transform: rotate(360deg); } }
+.outfit-card-spinner { animation: spin 900ms linear infinite; }
+/* outfit-card-spin removed — uses shared @keyframes spin from styles.css */
 
 .outfit-style-summary {
   display: flex;

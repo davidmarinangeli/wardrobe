@@ -29,9 +29,5 @@
 
 .wishlist-retry-badge:disabled { opacity: .6; cursor: default; }
 
-.wishlist-retry-spinner { animation: wishlist-spin 900ms linear infinite; }
-
-@keyframes wishlist-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
+.wishlist-retry-spinner { animation: spin 900ms linear infinite; }
+/* wishlist-spin removed — uses shared @keyframes spin from styles.css */

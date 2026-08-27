@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, CheckCircle, SpinnerGap, UploadSimple, WarningCircle, X } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, Check, CheckCircle, SpinnerGap, UploadSimple, WarningCircle } from "@phosphor-icons/react";
+import { api } from "./api.js";
+import { ViewerPanel } from "./components/ViewerPanel.jsx";
 import "./onboarding.css";
 
 const CONFIG_API = "/api/import/config";
@@ -36,13 +38,6 @@ const PROVIDERS = [
     getKeyLabel: "minimax.io/platform",
   },
 ];
-
-async function api(path, options) {
-  const response = await fetch(path, { ...options, headers: { "Content-Type": "application/json", ...(options?.headers || {}) } });
-  const value = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(value.error || "That didn't work.");
-  return value;
-}
 
 const fileToDataUrl = (file) => new Promise((resolve, reject) => {
   const reader = new FileReader();
@@ -355,26 +350,25 @@ export function Onboarding({ setup, onSetupChange, onClose }) {
   }, [onClose]);
 
   return (
-    <div className="viewer-overlay onboarding-overlay" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && dismiss()}>
-      <div className="onboarding-entry">
-        <section className="onboarding" role="dialog" aria-modal="true" aria-label="Wardrobe setup">
-          <button className="viewer-icon-close" type="button" onClick={dismiss} aria-label="Close setup">
-            <X size={22} weight="light" aria-hidden="true" />
-          </button>
-          <StepDots step={step} />
-          {step === "welcome" && <WelcomeStep onNext={() => setStep("provider")} />}
-          {step === "provider" && <ProviderStep provider={provider} setProvider={setProvider} onNext={() => setStep("keys")} onBack={() => setStep("welcome")} />}
-          {step === "keys" && (
-            <KeysStep
-              provider={provider}
-              onBack={() => setStep("provider")}
-              onSaved={(latest) => { onSetupChange?.(latest); setStep(latest.hasModelReference ? "done" : "photos"); }}
-            />
-          )}
-          {step === "photos" && <PhotosStep setup={setup} onSetupChange={onSetupChange} onNext={() => setStep("done")} onBack={() => setStep(setup?.hasApiKey ? "welcome" : "keys")} />}
-          {step === "done" && <DoneStep setup={setup} onClose={finish} />}
-        </section>
-      </div>
-    </div>
+    <ViewerPanel
+      onClose={dismiss}
+      ariaLabel="Wardrobe setup"
+      overlayClassName="onboarding-overlay"
+      entryClassName="onboarding-entry"
+      panelClassName="onboarding"
+    >
+      <StepDots step={step} />
+      {step === "welcome" && <WelcomeStep onNext={() => setStep("provider")} />}
+      {step === "provider" && <ProviderStep provider={provider} setProvider={setProvider} onNext={() => setStep("keys")} onBack={() => setStep("welcome")} />}
+      {step === "keys" && (
+        <KeysStep
+          provider={provider}
+          onBack={() => setStep("provider")}
+          onSaved={(latest) => { onSetupChange?.(latest); setStep(latest.hasModelReference ? "done" : "photos"); }}
+        />
+      )}
+      {step === "photos" && <PhotosStep setup={setup} onSetupChange={onSetupChange} onNext={() => setStep("done")} onBack={() => setStep(setup?.hasApiKey ? "welcome" : "keys")} />}
+      {step === "done" && <DoneStep setup={setup} onClose={finish} />}
+    </ViewerPanel>
   );
 }

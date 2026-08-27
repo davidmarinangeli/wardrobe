@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowCounterClockwise, Check, PencilSimple, Plus, Sparkle, SpinnerGap, Trash, X, Lightbulb, MagicWand, ArrowRight } from "@phosphor-icons/react";
+import { Check, PencilSimple, Plus, SpinnerGap, X, Lightbulb, MagicWand } from "@phosphor-icons/react";
 import { OptimizedImage } from "./OptimizedImage.jsx";
+import { api } from "./api.js";
+import { OUTFIT_CATEGORIES as CATEGORIES } from "./categories.js";
+import { ModeledPhotoPrompt } from "./item-editor.jsx";
+import { ViewerPanel } from "./components/ViewerPanel.jsx";
+import { ModeledHero } from "./components/ModeledHero.jsx";
+import { PanelActions } from "./components/PanelActions.jsx";
+import { PageShell } from "./components/PageShell.jsx";
+import { PageStatus } from "./components/PageStatus.jsx";
+import { useViewerKeyboard } from "./hooks/useViewerKeyboard.js";
 import "./outfits.css";
 import "./suggestions.css";
-
-const MODEL_TIERS = [
-  { id: "standard", label: "Standard", detail: "Gemini 2.5 Flash — fast, ~$0.04" },
-  { id: "premium", label: "Premium", detail: "Nano Banana 2 — sharper, ~$0.07" },
-];
 
 const OCCASIONS = [
   { id: "casual", label: "Casual", emoji: "👕" },
@@ -15,15 +19,6 @@ const OCCASIONS = [
   { id: "date", label: "Date", emoji: "🌹" },
   { id: "sport", label: "Sport", emoji: "🏃" },
   { id: "event", label: "Event", emoji: "🎉" },
-];
-
-const CATEGORIES = [
-  { id: "upperbody", label: "Top" },
-  { id: "lowerbody", label: "Bottom" },
-  { id: "wholebody_up", label: "Jacket" },
-  { id: "shoes", label: "Shoes" },
-  { id: "socks", label: "Socks" },
-  { id: "accessories_up", label: "Accessory" },
 ];
 
 // Groups garments into worn-order zones (top of the body first) so a picked
@@ -143,13 +138,6 @@ function OutfitHoverPieces({ outfitId, pieces }) {
       })}
     </div>
   );
-}
-
-async function api(path, options) {
-  const response = await fetch(path, { headers: { "Content-Type": "application/json" }, ...options });
-  const value = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(value.error || "The outfit could not be saved.");
-  return value;
 }
 
 function OutfitBuilder({ items, initialOutfit, onCancel, onSave }) {
@@ -276,26 +264,14 @@ function OutfitCard({ outfit, itemMap, onOpen }) {
 function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateModeled, premiumAllowed }) {
   const closeButtonRef = useRef(null);
   const pieces = outfit.itemIds.map((id) => itemMap[id]).filter(Boolean);
-  const [tier, setTier] = useState(outfit.modeledTier || "standard");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const hasModeledImage = Boolean(outfit.modeledImage);
   const processing = outfit.modeledStatus === "processing";
 
-  useEffect(() => { if (tier === "premium" && !premiumAllowed) setTier("standard"); }, [premiumAllowed, tier]);
+  useViewerKeyboard(onClose, closeButtonRef);
 
-  useEffect(() => {
-    const onKeyDown = (event) => { if (event.key === "Escape") onClose(); };
-    document.addEventListener("keydown", onKeyDown);
-    document.body.classList.add("viewer-open");
-    closeButtonRef.current?.focus({ preventScroll: true });
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.body.classList.remove("viewer-open");
-    };
-  }, [onClose]);
-
-  const generate = async () => {
+  const generate = async (tier) => {
     setBusy(true);
     try {
       await onGenerateModeled(outfit, tier, note.trim());
@@ -308,101 +284,64 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
   };
 
   return (
-    <div className="viewer-overlay" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <div className="viewer-entry">
-        <aside className={`viewer${hasModeledImage ? " has-modeled-image" : ""}`} role="dialog" aria-modal="true" aria-label={`Outfit: ${outfit.name}`}>
-          <button className="viewer-icon-close" type="button" onClick={onClose} aria-label="Close viewer" ref={closeButtonRef}>
-            <X size={24} weight="light" aria-hidden="true" />
-          </button>
+    <ViewerPanel
+      onClose={onClose}
+      closeRef={closeButtonRef}
+      ariaLabel={`Outfit: ${outfit.name}`}
+      panelClassName={hasModeledImage ? "has-modeled-image" : undefined}
+    >
+      {hasModeledImage ? (
+        <ModeledHero src={outfit.modeledImage} alt={`${outfit.name} worn by a model`} name={outfit.name} />
+      ) : (
+        <>
+          <div className="viewer-heading"><div><h2>{outfit.name}</h2></div></div>
+          <div className="viewer-art outfit-viewer-art"><OutfitStack items={pieces} /></div>
+        </>
+      )}
 
-          {hasModeledImage ? (
-            <div className="modeled-hero">
-              <OptimizedImage
-                className="modeled-hero-photo"
-                src={outfit.modeledImage}
-                alt={`${outfit.name} worn by a model`}
-                sizes="(max-width: 860px) 100vw, 520px"
-                breakpoints={[320, 480, 640, 800, 1040, 1280]}
-                quality={82}
-                priority
-              />
-              <div className="viewer-heading modeled-heading">
-                <div><h2>{outfit.name}</h2></div>
-              </div>
-            </div>
-          ) : (
-            <>
-              <div className="viewer-heading"><div><h2>{outfit.name}</h2></div></div>
-              <div className="viewer-art outfit-viewer-art"><OutfitStack items={pieces} /></div>
-            </>
-          )}
-
-          <div className="viewer-details editing">
-            {outfit.description && (
-              <div className="outfit-style-summary">
-                <p className="outfit-style-description">{outfit.description}</p>
-                {!!outfit.tags?.length && (
-                  <div className="outfit-style-tags">
-                    {outfit.tags.map((tag) => <span key={tag} className="outfit-style-tag">{tag}</span>)}
-                  </div>
-                )}
+      <div className="viewer-details editing">
+        {outfit.description && (
+          <div className="outfit-style-summary">
+            <p className="outfit-style-description">{outfit.description}</p>
+            {!!outfit.tags?.length && (
+              <div className="outfit-style-tags">
+                {outfit.tags.map((tag) => <span key={tag} className="outfit-style-tag">{tag}</span>)}
               </div>
             )}
-            <p className="details-label">{pieces.length} {pieces.length === 1 ? "piece" : "pieces"}</p>
-            <div className="outfit-viewer-pieces-grid">
-              {pieces.map((item) => (
-                <div className="outfit-viewer-piece-tile" key={item.id} title={item.name}>
-                  <OptimizedImage src={item.thumbnail || item.image} alt="" sizes="64px" breakpoints={[64, 96]} />
-                </div>
-              ))}
-            </div>
-
-            {processing ? (
-              <p className="outfit-card-status"><SpinnerGap size={13} className="outfit-card-spinner" aria-hidden="true" /> Generating model photo…</p>
-            ) : (
-              <div className="modeled-photo-prompt outfit-viewer-generate">
-                {outfit.modeledStatus === "error" && <p className="modeled-photo-prompt__error">{outfit.modeledError || "That attempt failed."}</p>}
-                <div className="modeled-tier-picker" role="radiogroup" aria-label="Model photo quality">
-                  {MODEL_TIERS.map((option) => {
-                    const disabled = option.id === "premium" && !premiumAllowed;
-                    return (
-                      <button key={option.id} type="button" className={tier === option.id ? "active" : ""} aria-pressed={tier === option.id} disabled={disabled} title={disabled ? "Switch to PROD mode to use Premium quality" : undefined} onClick={() => setTier(option.id)}>
-                        <span>{option.label}</span>
-                        <small>{disabled ? "Needs PROD mode" : option.detail}</small>
-                      </button>
-                    );
-                  })}
-                </div>
-                {hasModeledImage && (
-                  <input
-                    type="text"
-                    className="outfit-card-note"
-                    value={note}
-                    onChange={(event) => setNote(event.target.value)}
-                    placeholder="What's off? e.g. jacket should be darker"
-                  />
-                )}
-                <button className="primary-button" type="button" onClick={generate} disabled={busy}>
-                  {hasModeledImage
-                    ? <><ArrowCounterClockwise size={15} weight="bold" aria-hidden="true" /> Regenerate model photo</>
-                    : <><Sparkle size={15} weight="bold" aria-hidden="true" /> Generate model photo</>}
-                </button>
-              </div>
-            )}
-
-            <div className="viewer-actions">
-              <button className="delete-button" type="button" onClick={() => onDelete(outfit.id)}>
-                <Trash size={15} weight="regular" aria-hidden="true" /> Delete
-              </button>
-              <span className="action-spacer" />
-              <button className="secondary-button" type="button" onClick={() => onEdit(outfit)}>
-                <PencilSimple size={15} weight="regular" aria-hidden="true" /> Edit
-              </button>
-            </div>
           </div>
-        </aside>
+        )}
+        <p className="details-label">{pieces.length} {pieces.length === 1 ? "piece" : "pieces"}</p>
+        <div className="outfit-viewer-pieces-grid">
+          {pieces.map((item) => (
+            <div className="outfit-viewer-piece-tile" key={item.id} title={item.name}>
+              <OptimizedImage src={item.thumbnail || item.image} alt="" sizes="64px" breakpoints={[64, 96]} />
+            </div>
+          ))}
+        </div>
+
+        {processing ? (
+          <p className="outfit-card-status"><SpinnerGap size={13} className="outfit-card-spinner" aria-hidden="true" /> Generating model photo…</p>
+        ) : (
+          <ModeledPhotoPrompt
+            status={outfit.modeledStatus}
+            error={outfit.modeledError}
+            busy={busy}
+            onGenerate={generate}
+            premiumAllowed={premiumAllowed}
+            hasImage={hasModeledImage}
+            initialTier={outfit.modeledTier || "standard"}
+            note={note}
+            onNoteChange={setNote}
+          />
+        )}
+
+        <PanelActions
+          onDelete={() => onDelete(outfit.id)}
+          onCancel={() => onEdit(outfit)}
+          cancelLabel={<><PencilSimple size={15} weight="regular" aria-hidden="true" /> Edit</>}
+        />
       </div>
-    </div>
+    </ViewerPanel>
   );
 }
 
@@ -460,6 +399,7 @@ function SuggestionPanel({ items, outfits, onSaveOutfit, onClose }) {
         body: JSON.stringify({ occasion, colorProfile })
       });
       setSuggestions(res.suggestions || []);
+      setSavedIds(new Set());
     } catch (e) {
       setError(e.message);
     } finally {
@@ -637,23 +577,29 @@ export function Outfits({ items, premiumAllowed = true }) {
   const viewingOutfit = outfits.find((outfit) => outfit.id === viewingOutfitId) || null;
 
   return (
-    <main className="gallery-pane">
-      <header className="gallery-header">
-        <div className="gallery-meta-row">
-          <p className="piece-count">{outfits.length} {outfits.length === 1 ? "outfit" : "outfits"}</p>
-          <button type="button" className="color-profile-trigger suggest-trigger" onClick={() => setShowSuggestions(true)} disabled={items.length < 5}>
+    <PageShell
+      count={outfits.length}
+      noun="outfit"
+      actions={(
+        <>
+          <button type="button" className="header-action-btn suggest-trigger" onClick={() => setShowSuggestions(true)} disabled={items.length < 5}>
             <Lightbulb size={13} weight="bold" aria-hidden="true" /> Suggest outfits
           </button>
-          <button type="button" className="color-profile-trigger" onClick={openNewOutfit} disabled={!items.length}>
+          <button type="button" className="header-action-btn" onClick={openNewOutfit} disabled={!items.length}>
             <Plus size={13} weight="bold" aria-hidden="true" /> New outfit
           </button>
-        </div>
-      </header>
-
-      {error && <p className="status error">{error}</p>}
-      {!error && loading && <p className="status">Loading outfits</p>}
-      {!error && !loading && !items.length && <p className="status empty">Import some wardrobe pieces first, then come back to build outfits.</p>}
-      {!error && !loading && !!items.length && !outfits.length && <p className="status empty">No outfits yet — combine pieces from your wardrobe into a look.</p>}
+        </>
+      )}
+    >
+      <PageStatus
+        loading={loading}
+        error={error}
+        empty={!items.length}
+        emptyMessage="Import some wardrobe pieces first, then come back to build outfits."
+        filterEmpty={!!items.length && !outfits.length}
+        filterEmptyMessage="No outfits yet — combine pieces from your wardrobe into a look."
+        noun="outfits"
+      />
 
       <SuggestionNudges items={items} />
 
@@ -691,6 +637,6 @@ export function Outfits({ items, premiumAllowed = true }) {
           onClose={() => setShowSuggestions(false)}
         />
       )}
-    </main>
+    </PageShell>
   );
 }

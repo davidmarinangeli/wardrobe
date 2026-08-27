@@ -138,8 +138,8 @@
 .inspo-classify-btn:hover:not(:disabled),
 .inspo-classify-btn:focus-visible:not(:disabled) { background: var(--accent); border-color: var(--accent); outline: none; }
 
-.inspo-classify-spinner { animation: inspo-spin 900ms linear infinite; }
-@keyframes inspo-spin { to { transform: rotate(360deg); } }
+.inspo-classify-spinner { animation: spin 900ms linear infinite; }
+/* inspo-spin removed — uses shared @keyframes spin from styles.css */
 
 /* ─── Edit modal ────────────────────────────────────────────────────────────── */
 

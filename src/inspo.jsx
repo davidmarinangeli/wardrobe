@@ -1,33 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, MagicWand, PencilSimple, SpinnerGap, Trash, UploadSimple, X } from "@phosphor-icons/react";
 import { OptimizedImage } from "./OptimizedImage.jsx";
+import { api } from "./api.js";
+import { INSPO_CATEGORIES as CATEGORIES, CATEGORY_LABEL } from "./categories.js";
+import { ViewerPanel } from "./components/ViewerPanel.jsx";
+import { PanelActions } from "./components/PanelActions.jsx";
+import { PageShell } from "./components/PageShell.jsx";
+import { PageStatus } from "./components/PageStatus.jsx";
 import "./inspo.css";
-
-// ─── Shared category definitions (mirrors App.jsx TYPES) ──────────────────────
-const CATEGORIES = [
-  { id: "all", label: "All" },
-  { id: "upperbody", label: "Tops" },
-  { id: "wholebody_up", label: "Jackets" },
-  { id: "lowerbody", label: "Bottoms" },
-  { id: "accessories_up", label: "Accessories" },
-  { id: "shoes", label: "Shoes" },
-  { id: "socks", label: "Socks" },
-  { id: "full_look", label: "Full Look" },
-  { id: "unclassified", label: "Unclassified" },
-];
-
-const CATEGORY_LABEL = Object.fromEntries(CATEGORIES.map((c) => [c.id, c.label]));
-
-// ─── API helper ───────────────────────────────────────────────────────────────
-async function api(path, options) {
-  const response = await fetch(path, {
-    ...options,
-    headers: { "Content-Type": "application/json", ...(options?.headers || {}) },
-  });
-  const value = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(value.error || "Request failed.");
-  return value;
-}
 
 const fileToDataUrl = (file) =>
   new Promise((resolve, reject) => {
@@ -110,104 +90,84 @@ function InspoImporter({ onClose, onImported }) {
   const canSubmit = tab === "url" ? urlText.trim().length > 0 : dropQueue.length > 0;
 
   return (
-    <div className="viewer-overlay" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="viewer-entry inspo-importer-entry">
-        <aside className="viewer" role="dialog" aria-modal="true" aria-label="Add inspiration">
-          <button className="viewer-icon-close" type="button" onClick={onClose} aria-label="Close">
-            <X size={24} weight="light" aria-hidden="true" />
-          </button>
-          <div className="viewer-heading">
-            <h2>Add Inspo</h2>
+    <ViewerPanel title="Add Inspo" ariaLabel="Add inspiration" onClose={onClose} entryClassName="inspo-importer-entry">
+      <div className="inspo-importer-body">
+        <nav className="inspo-tabs">
+          <button type="button" className={tab === "url" ? "active" : ""} onClick={() => setTab("url")}>From URLs</button>
+          <button type="button" className={tab === "drop" ? "active" : ""} onClick={() => setTab("drop")}>Drop images</button>
+        </nav>
+
+        {tab === "url" && (
+          <div className="inspo-url-field">
+            <label htmlFor="inspo-urls">Image URLs</label>
+            <textarea
+              id="inspo-urls"
+              value={urlText}
+              onChange={(e) => setUrlText(e.target.value)}
+              placeholder={"https://i.pinimg.com/736x/…\nhttps://…\nhttps://…"}
+              spellCheck={false}
+            />
+            <p className="inspo-url-hint">Paste one image URL per line. Any public image link works — Pinterest, Instagram saves, or any site.</p>
           </div>
+        )}
 
-          <div className="inspo-importer-body">
-            <nav className="inspo-tabs">
-              <button type="button" className={tab === "url" ? "active" : ""} onClick={() => setTab("url")}>From URLs</button>
-              <button type="button" className={tab === "drop" ? "active" : ""} onClick={() => setTab("drop")}>Drop images</button>
-            </nav>
+        {tab === "drop" && (
+          <>
+            <div
+              className={`inspo-dropzone${over ? " over" : ""}`}
+              onDrop={onDrop}
+              onDragOver={onDragOver}
+              onDragLeave={onDragLeave}
+              onClick={() => fileInputRef.current?.click()}
+              role="button"
+              tabIndex={0}
+              aria-label="Drop images here or click to browse"
+              onKeyDown={(e) => e.key === "Enter" && fileInputRef.current?.click()}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                aria-hidden="true"
+                onChange={(e) => addFiles(e.target.files)}
+              />
+              <UploadSimple size={28} weight="light" aria-hidden="true" style={{ color: "var(--muted)" }} />
+              <div className="inspo-dropzone-label">
+                <strong>Drop images here</strong>
+                or click to browse
+              </div>
+            </div>
 
-            {tab === "url" && (
-              <div className="inspo-url-field">
-                <label htmlFor="inspo-urls">Image URLs</label>
-                <textarea
-                  id="inspo-urls"
-                  value={urlText}
-                  onChange={(e) => setUrlText(e.target.value)}
-                  placeholder={"https://i.pinimg.com/736x/…\nhttps://…\nhttps://…"}
-                  spellCheck={false}
-                />
-                <p className="inspo-url-hint">Paste one image URL per line. Any public image link works — Pinterest, Instagram saves, or any site.</p>
+            {dropQueue.length > 0 && (
+              <div className="inspo-queue">
+                {dropQueue.map((item, index) => (
+                  <div className="inspo-queue-item" key={index}>
+                    <img className="inspo-queue-thumb" src={item.dataUrl} alt="" />
+                    <span className="inspo-queue-name">{item.name}</span>
+                    <button className="inspo-queue-remove" type="button" onClick={() => removeQueued(index)} aria-label={`Remove ${item.name}`}>
+                      <X size={13} />
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
+          </>
+        )}
 
-            {tab === "drop" && (
-              <>
-                <div
-                  className={`inspo-dropzone${over ? " over" : ""}`}
-                  onDrop={onDrop}
-                  onDragOver={onDragOver}
-                  onDragLeave={onDragLeave}
-                  onClick={() => fileInputRef.current?.click()}
-                  role="button"
-                  tabIndex={0}
-                  aria-label="Drop images here or click to browse"
-                  onKeyDown={(e) => e.key === "Enter" && fileInputRef.current?.click()}
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    aria-hidden="true"
-                    onChange={(e) => addFiles(e.target.files)}
-                  />
-                  <UploadSimple size={28} weight="light" aria-hidden="true" style={{ color: "var(--muted)" }} />
-                  <div className="inspo-dropzone-label">
-                    <strong>Drop images here</strong>
-                    or click to browse
-                  </div>
-                </div>
+        {importErrors.length > 0 && (
+          <p className="inspo-import-errors">
+            {importErrors.map((e, i) => <span key={i} style={{ display: "block" }}>{e}</span>)}
+          </p>
+        )}
 
-                {dropQueue.length > 0 && (
-                  <div className="inspo-queue">
-                    {dropQueue.map((item, index) => (
-                      <div className="inspo-queue-item" key={index}>
-                        <img className="inspo-queue-thumb" src={item.dataUrl} alt="" />
-                        <span className="inspo-queue-name">{item.name}</span>
-                        <button className="inspo-queue-remove" type="button" onClick={() => removeQueued(index)} aria-label={`Remove ${item.name}`}>
-                          <X size={13} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-
-            {importErrors.length > 0 && (
-              <p className="inspo-import-errors">
-                {importErrors.map((e, i) => <span key={i} style={{ display: "block" }}>{e}</span>)}
-              </p>
-            )}
-
-            <div className="viewer-actions">
-              <button className="secondary-button" type="button" onClick={onClose}>Cancel</button>
-              <span className="action-spacer" />
-              <button
-                className="primary-button"
-                type="button"
-                onClick={submit}
-                disabled={importing || !canSubmit}
-              >
-                {importing
-                  ? <><SpinnerGap size={14} className="inspo-classify-spinner" aria-hidden="true" /> Importing…</>
-                  : <><Check size={14} weight="bold" aria-hidden="true" /> Import</>}
-              </button>
-            </div>
-          </div>
-        </aside>
+        <PanelActions onCancel={onClose}>
+          <button className="primary-button" type="button" onClick={submit} disabled={importing || !canSubmit}>
+            {importing ? <><SpinnerGap size={14} className="inspo-classify-spinner" aria-hidden="true" /> Importing…</> : <><Check size={14} weight="bold" aria-hidden="true" /> Import</>}
+          </button>
+        </PanelActions>
       </div>
-    </div>
+    </ViewerPanel>
   );
 }
 
@@ -236,52 +196,35 @@ function InspoEditor({ pin, onClose, onSave }) {
   };
 
   return (
-    <div className="viewer-overlay" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="viewer-entry inspo-editor-entry">
-        <aside className="viewer" role="dialog" aria-modal="true" aria-label="Edit pin">
-          <button className="viewer-icon-close" type="button" onClick={onClose} aria-label="Close">
-            <X size={24} weight="light" aria-hidden="true" />
-          </button>
-          <div className="viewer-heading">
-            <h2>Edit Pin</h2>
-          </div>
+    <ViewerPanel title="Edit Pin" ariaLabel="Edit pin" onClose={onClose} entryClassName="inspo-editor-entry">
+      <div className="inspo-editor-body">
+        <img className="inspo-editor-preview" src={pin.image} alt="" />
 
-          <div className="inspo-editor-body">
-            <img className="inspo-editor-preview" src={pin.image} alt="" />
+        <label className="field">
+          <span>Name</span>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. oversized linen blazer" />
+        </label>
 
-            <label className="field">
-              <span>Name</span>
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. oversized linen blazer" />
-            </label>
+        <label className="field">
+          <span>Category</span>
+          <select value={category} onChange={(e) => setCategory(e.target.value)}>
+            <option value="">— unclassified —</option>
+            {CATEGORIES.slice(1, -1).map((c) => (
+              <option key={c.id} value={c.id}>{c.label}</option>
+            ))}
+          </select>
+        </label>
 
-            <label className="field">
-              <span>Category</span>
-              <select value={category} onChange={(e) => setCategory(e.target.value)}>
-                <option value="">— unclassified —</option>
-                {CATEGORIES.slice(1, -1).map((c) => (
-                  <option key={c.id} value={c.id}>{c.label}</option>
-                ))}
-              </select>
-            </label>
+        <label className="field inspo-notes-field">
+          <span>Notes</span>
+          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="What you like about it, where you saw it…" />
+        </label>
 
-            <label className="field inspo-notes-field">
-              <span>Notes</span>
-              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="What you like about it, where you saw it…" />
-            </label>
+        {error && <p className="status error" style={{ margin: 0 }}>{error}</p>}
 
-            {error && <p className="status error" style={{ margin: 0 }}>{error}</p>}
-
-            <div className="viewer-actions">
-              <button className="secondary-button" type="button" onClick={onClose}>Cancel</button>
-              <span className="action-spacer" />
-              <button className="primary-button" type="button" onClick={save} disabled={saving}>
-                <Check size={14} weight="bold" aria-hidden="true" /> Save
-              </button>
-            </div>
-          </div>
-        </aside>
+        <PanelActions onCancel={onClose} onConfirm={save} confirmIcon={<Check size={14} weight="bold" aria-hidden="true" />} confirmDisabled={saving} />
       </div>
-    </div>
+    </ViewerPanel>
   );
 }
 
@@ -326,7 +269,7 @@ function InspoCard({ pin, onEdit, onDelete, onDetect, onUpdate, wishlistCount = 
 
       <div className="inspo-card-body">
         {/* Detect CTA — shown when nothing detected yet, or the last attempt failed */}
-        {(!wishlistCount || isError) && (
+        {(!wishlistCount || isError) && !isProcessing && (
           <div className="inspo-card-classify">
             {isError && <p className="inspo-card-classify-error">{pin.detectError || "Detection failed."}</p>}
             <button
@@ -455,43 +398,29 @@ export function Inspo() {
   };
 
   return (
-    <main className="gallery-pane">
-      <header className="gallery-header">
-        <div className="gallery-meta-row">
-          <p className="piece-count">{pins.length} {pins.length === 1 ? "pin" : "pins"}</p>
-          <button type="button" className="color-profile-trigger" onClick={() => setShowImporter(true)}>
-            + Add inspo
-          </button>
-        </div>
-
-        <nav className="category-nav" aria-label="Filter inspo by category">
-          {CATEGORIES.map((cat) => {
-            // skip "unclassified" if none exist
-            if (cat.id === "unclassified" && unclassifiedCount === 0 && activeCategory !== "unclassified") return null;
-            return (
-              <button
-                key={cat.id}
-                type="button"
-                className={activeCategory === cat.id ? "active" : ""}
-                onClick={() => setActiveCategory(cat.id)}
-                aria-pressed={activeCategory === cat.id}
-              >
-                {cat.label}
-                {cat.id === "unclassified" && unclassifiedCount > 0 && ` (${unclassifiedCount})`}
-              </button>
-            );
-          })}
-        </nav>
-      </header>
-
-      {error && <p className="status error">{error}</p>}
-      {!error && loading && <p className="status">Loading inspo</p>}
-      {!error && !loading && !pins.length && (
-        <p className="status empty">No inspo yet — add a Pinterest link or drop an image to start your board.</p>
+    <PageShell
+      count={pins.length}
+      noun="pin"
+      actions={(
+        <button type="button" className="header-action-btn" onClick={() => setShowImporter(true)}>
+          + Add inspo
+        </button>
       )}
-      {!error && !loading && !!pins.length && !visiblePins.length && (
-        <p className="status empty">No pins in this category.</p>
-      )}
+      categories={CATEGORIES.filter((cat) => cat.id !== "unclassified" || unclassifiedCount > 0 || activeCategory === "unclassified")}
+      activeCategory={activeCategory}
+      onCategory={setActiveCategory}
+      renderCategory={(cat) => cat.id === "unclassified" && unclassifiedCount > 0 ? `${cat.label} (${unclassifiedCount})` : cat.label}
+      navLabel="Filter inspo by category"
+    >
+      <PageStatus
+        loading={loading}
+        error={error}
+        empty={!pins.length}
+        emptyMessage="No inspo yet — add a Pinterest link or drop an image to start your board."
+        filterEmpty={!!pins.length && !visiblePins.length}
+        filterEmptyMessage="No pins in this category."
+        noun="inspo"
+      />
 
       {!!visiblePins.length && (
         <section className="inspo-grid">
@@ -523,6 +452,6 @@ export function Inspo() {
           onSave={(updated) => { handleUpdate(updated); setEditingPin(null); }}
         />
       )}
-    </main>
+    </PageShell>
   );
 }

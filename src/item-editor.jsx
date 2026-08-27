@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, Plus, Sparkle, SpinnerGap, Trash, X } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, Check, Plus, Sparkle, SpinnerGap, X } from "@phosphor-icons/react";
 import { OptimizedImage } from "./OptimizedImage.jsx";
+import { useViewerKeyboard } from "./hooks/useViewerKeyboard.js";
+import { ModeledHero } from "./components/ModeledHero.jsx";
+import { PanelActions } from "./components/PanelActions.jsx";
 
 export const TYPES = [
   { id: "all", label: "All" },
@@ -295,8 +298,8 @@ const MODEL_TIERS = [
   { id: "premium", label: "Premium", detail: "Nano Banana 2 — sharper detail, ~$0.07/image" },
 ];
 
-export function ModeledPhotoPrompt({ status, error, busy, onGenerate, premiumAllowed = true }) {
-  const [tier, setTier] = useState("standard");
+export function ModeledPhotoPrompt({ status, error, busy, onGenerate, premiumAllowed = true, hasImage = false, initialTier = "standard", note, onNoteChange }) {
+  const [tier, setTier] = useState(initialTier);
   useEffect(() => { if (tier === "premium" && !premiumAllowed) setTier("standard"); }, [premiumAllowed, tier]);
   if (status === "processing") {
     return (
@@ -308,8 +311,12 @@ export function ModeledPhotoPrompt({ status, error, busy, onGenerate, premiumAll
   }
   return (
     <div className="modeled-photo-prompt">
-      <p className="modeled-photo-prompt__title">No model photo yet</p>
-      <p className="modeled-photo-prompt__detail">Optional — generate an editorial shot of this piece worn by your reference model. Nothing happens until you pick a quality and generate.</p>
+      {!hasImage && (
+        <>
+          <p className="modeled-photo-prompt__title">No model photo yet</p>
+          <p className="modeled-photo-prompt__detail">Optional — generate an editorial shot of this piece worn by your reference model. Nothing happens until you pick a quality and generate.</p>
+        </>
+      )}
       {status === "error" && <p className="modeled-photo-prompt__error">{error || "That attempt failed."}</p>}
       <div className="modeled-tier-picker" role="radiogroup" aria-label="Model photo quality">
         {MODEL_TIERS.map((option) => {
@@ -330,8 +337,19 @@ export function ModeledPhotoPrompt({ status, error, busy, onGenerate, premiumAll
           );
         })}
       </div>
+      {hasImage && onNoteChange && (
+        <input
+          type="text"
+          className="outfit-card-note"
+          value={note}
+          onChange={(event) => onNoteChange(event.target.value)}
+          placeholder="What's off? e.g. jacket should be darker"
+        />
+      )}
       <button className="primary-button" type="button" disabled={busy} onClick={() => onGenerate(tier)}>
-        <Sparkle size={15} weight="bold" aria-hidden="true" /> Generate model photo
+        {hasImage
+          ? <><ArrowCounterClockwise size={15} weight="bold" aria-hidden="true" /> Regenerate model photo</>
+          : <><Sparkle size={15} weight="bold" aria-hidden="true" /> Generate model photo</>}
       </button>
     </div>
   );
@@ -394,23 +412,14 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
     else onClose();
   }, [isDirty, nudgeUnsaved, onClose]);
 
-  useEffect(() => {
-    const onKeyDown = (event) => {
-      if (event.key === "Escape") {
-        if (sampling) setSampling(null);
-        else requestClose();
-      }
-    };
+  useViewerKeyboard(requestClose, closeButtonRef);
 
-    document.addEventListener("keydown", onKeyDown);
-    document.body.classList.add("viewer-open");
-    closeButtonRef.current?.focus({ preventScroll: true });
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.body.classList.remove("viewer-open");
-      clearTimeout(shakeTimerRef.current);
-    };
-  }, [requestClose, sampling]);
+  useEffect(() => {
+    if (!sampling) return;
+    const onKeyDown = (e) => { if (e.key === 'Escape') setSampling(null); };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [sampling]);
 
   useEffect(() => {
     if (!isDirty) setCloseBlocked(false);
@@ -484,23 +493,10 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
       </button>
 
       {hasModeledImage ? (
-        <div className="modeled-hero">
-          <OptimizedImage
-            className="modeled-hero-photo"
-            src={item.modeledImage}
-            alt={`${draft.name || type} worn by a model`}
-            sizes="(max-width: 860px) 100vw, 520px"
-            breakpoints={[320, 480, 640, 800, 1040, 1280]}
-            quality={82}
-            priority
-          />
-          <div className="viewer-heading modeled-heading">
-            <div>
-              <h2>{draft.name || TYPE_MAP[draft.part]?.singular}</h2>
-            </div>
-          </div>
+        <>
+          <ModeledHero src={item.modeledImage} alt={`${draft.name || type} worn by a model`} name={draft.name || TYPE_MAP[draft.part]?.singular} />
           {garmentArtwork}
-        </div>
+        </>
       ) : (
         <>
           <div className="viewer-heading">
@@ -533,16 +529,12 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
 
         {closeBlocked && <p className="unsaved-notice" role="status">Save or cancel changes before closing.</p>}
 
-        <div className="viewer-actions">
-          <button className="delete-button" type="button" onClick={() => onDelete(item.id)}>
-            <Trash size={15} weight="regular" aria-hidden="true" /> Delete
-          </button>
-          <span className="action-spacer" />
-          <button className="secondary-button" type="button" onClick={cancelEditing}>Cancel</button>
-          <button className="primary-button" type="button" onClick={saveEditing}>
-            <Check size={15} weight="bold" aria-hidden="true" /> Save
-          </button>
-        </div>
+        <PanelActions
+          onDelete={() => onDelete(item.id)}
+          onCancel={cancelEditing}
+          onConfirm={saveEditing}
+          confirmIcon={<Check size={15} weight="bold" aria-hidden="true" />}
+        />
       </div>
     </aside>
     </div>

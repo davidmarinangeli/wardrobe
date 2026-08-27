@@ -1,6 +1,8 @@
 import { useRef, useState } from "react";
 import { Check, X } from "@phosphor-icons/react";
 import "./color-profile.css";
+import { ViewerPanel } from "./components/ViewerPanel.jsx";
+import { PanelActions } from "./components/PanelActions.jsx";
 
 const PROFILE_STORAGE_KEY = "open-wardrobe-color-profile-v1";
 const MATCH_THRESHOLD = 60;
@@ -290,48 +292,31 @@ export function ColorProfileModal({ onClose, onSave, initialProfile }) {
   const answeredCount = QUESTIONS.filter((question) => answers[question.id]).length;
 
   return (
-    <div className="viewer-overlay" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <div className="viewer-entry color-quiz-entry">
-        <aside className="viewer color-quiz" role="dialog" aria-modal="true" aria-label="My Colors">
-          <button className="viewer-icon-close" type="button" onClick={onClose} aria-label="Close">
-            <X size={24} weight="light" aria-hidden="true" />
-          </button>
-          <div className="viewer-heading">
-            <h2>My Colors</h2>
+    <ViewerPanel title="My Colors" ariaLabel="My Colors" onClose={onClose} entryClassName="color-quiz-entry" panelClassName="color-quiz">
+      {!result ? (
+        <div className="color-quiz-body">
+          <p className="color-quiz-intro">Answer a few quick questions about your natural coloring to find your season palette. {answeredCount}/{QUESTIONS.length} answered.</p>
+          {QUESTIONS.map((question) => (
+            <QuizStep key={question.id} question={question} value={answers[question.id]} onAnswer={(value) => answerQuestion(question.id, value)} />
+          ))}
+        </div>
+      ) : (
+        <div className="color-quiz-result">
+          <div className="season-result">
+            <h3>{SEASONS[result].label}</h3>
+            <p>{SEASONS[result].description}</p>
           </div>
 
-          {!result ? (
-            <div className="color-quiz-body">
-              <p className="color-quiz-intro">Answer a few quick questions about your natural coloring to find your season palette. {answeredCount}/{QUESTIONS.length} answered.</p>
-              {QUESTIONS.map((question) => (
-                <QuizStep key={question.id} question={question} value={answers[question.id]} onAnswer={(value) => answerQuestion(question.id, value)} />
-              ))}
-            </div>
-          ) : (
-            <div className="color-quiz-result">
-              <div className="season-result">
-                <h3>{SEASONS[result].label}</h3>
-                <p>{SEASONS[result].description}</p>
-              </div>
+          <PaletteEditor palette={palette} onRemove={removeColor} onAdd={addColor} />
 
-              <PaletteEditor palette={palette} onRemove={removeColor} onAdd={addColor} />
+          <label className="palette-toggle">
+            <input type="checkbox" checked={showBadges} onChange={(event) => setShowBadges(event.target.checked)} />
+            <span>Show palette matches on wardrobe items</span>
+          </label>
 
-              <label className="palette-toggle">
-                <input type="checkbox" checked={showBadges} onChange={(event) => setShowBadges(event.target.checked)} />
-                <span>Show palette matches on wardrobe items</span>
-              </label>
-
-              <div className="viewer-actions">
-                <button className="secondary-button" type="button" onClick={restart}>Retake quiz</button>
-                <span className="action-spacer" />
-                <button className="primary-button" type="button" onClick={applyResult}>
-                  <Check size={15} weight="bold" aria-hidden="true" /> Save
-                </button>
-              </div>
-            </div>
-          )}
-        </aside>
-      </div>
-    </div>
+          <PanelActions onCancel={restart} cancelLabel="Retake quiz" onConfirm={applyResult} confirmIcon={<Check size={15} weight="bold" aria-hidden="true" />} confirmLabel="Save" />
+        </div>
+      )}
+    </ViewerPanel>
   );
 }

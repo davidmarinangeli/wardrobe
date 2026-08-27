@@ -1,17 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowCounterClockwise, SpinnerGap } from "@phosphor-icons/react";
-import { GalleryItem, ItemViewer, TYPE_MAP, TYPE_ORDER, TYPES } from "./item-editor.jsx";
+import { GalleryItem, ItemViewer } from "./item-editor.jsx";
+import { api } from "./api.js";
+import { WARDROBE_TYPES as TYPES, TYPE_MAP, TYPE_ORDER } from "./categories.js";
+import { PageShell } from "./components/PageShell.jsx";
+import { PageStatus } from "./components/PageStatus.jsx";
 import "./wishlist.css";
-
-async function api(path, options) {
-  const response = await fetch(path, {
-    ...options,
-    headers: { "Content-Type": "application/json", ...(options?.headers || {}) },
-  });
-  const value = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(value.error || "Request failed.");
-  return value;
-}
 
 export function Wishlist() {
   const [items, setItems] = useState([]);
@@ -86,31 +80,21 @@ export function Wishlist() {
   };
 
   return (
-    <main className="gallery-pane">
-      <header className="gallery-header">
-        <div className="gallery-meta-row">
-          <p className="piece-count">{items.length} {items.length === 1 ? "piece" : "pieces"}</p>
-        </div>
-        <nav className="category-nav" aria-label="Filter wishlist by item type">
-          {TYPES.map((type) => (
-            <button
-              key={type.id}
-              type="button"
-              className={activeType === type.id ? "active" : ""}
-              onClick={() => setActiveType(type.id)}
-              aria-pressed={activeType === type.id}
-            >
-              {type.label}
-            </button>
-          ))}
-        </nav>
-      </header>
-
-      {error && <p className="status error">{error}</p>}
-      {!error && loading && <p className="status">Loading wishlist</p>}
-      {!error && !loading && !items.length && (
-        <p className="status empty">Detect items from your Inspo board to start your wishlist.</p>
-      )}
+    <PageShell
+      count={items.length}
+      noun="piece"
+      categories={TYPES}
+      activeCategory={activeType}
+      onCategory={setActiveType}
+      navLabel="Filter wishlist by item type"
+    >
+      <PageStatus
+        loading={loading}
+        error={error}
+        empty={!items.length}
+        emptyMessage="Detect items from your Inspo board to start your wishlist."
+        noun="wishlist"
+      />
 
       {!!visibleItems.length && (
         <section className="gallery-grid" aria-label={`${TYPE_MAP[activeType]?.label || "All"} wishlist items`}>
@@ -126,7 +110,7 @@ export function Wishlist() {
                   aria-label={`Retry generating a clean image for ${item.name || "this item"}`}
                   title={item.generateError || "Cutout generation failed"}
                 >
-                  {retryingId === item.id || item.generateStatus === "processing"
+                  {retryingId === item.id
                     ? <SpinnerGap size={13} className="wishlist-retry-spinner" aria-hidden="true" />
                     : <ArrowCounterClockwise size={13} aria-hidden="true" />}
                   Retry
@@ -146,6 +130,6 @@ export function Wishlist() {
           showModeledPhoto={false}
         />
       )}
-    </main>
+    </PageShell>
   );
 }
