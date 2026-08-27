@@ -6,6 +6,7 @@ import { inspoApi } from "./scripts/inspo-api.mjs";
 import { wishlistApi } from "./scripts/wishlist-api.mjs";
 import { suggestionsApi } from "./scripts/suggestions-api.mjs";
 import { responsiveImageApi } from "./scripts/responsive-image-api.mjs";
+import { wardrobeSetupApi } from "./scripts/setup-api.mjs";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
@@ -25,6 +26,6 @@ export default defineConfig(({ mode }) => {
       port: 4173,
       allowedHosts: ["localhost"],
     },
-    plugins: [react(), responsiveImageApi(), wardrobeImportApi({ env }), outfitsApi({ env }), inspoApi({ env }), wishlistApi({ env }), suggestionsApi({ env })],
+    plugins: [react(), responsiveImageApi(), wardrobeImportApi({ env }), outfitsApi({ env }), inspoApi({ env }), wishlistApi({ env }), suggestionsApi({ env }), wardrobeSetupApi({ env })],
   };
 });

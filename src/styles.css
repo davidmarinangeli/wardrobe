@@ -52,13 +52,39 @@ button { font: inherit; }
   gap: 0;
 }
 
+.app-top-bar__right {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 24px 56px 0 0;
+}
+
 .ai-mode-switch {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  margin: 24px 56px 0 0;
   position: relative;
+}
+
+.setup-trigger {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.setup-trigger:hover,
+.setup-trigger:focus-visible {
+  border-color: var(--ink);
+  color: var(--ink);
+  outline: none;
 }
 
 .ai-mode-switch__label {

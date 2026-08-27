@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Gear } from "@phosphor-icons/react";
 import { WardrobeImportFlow } from "./import-flow.jsx";
 import { ColorProfileModal, SEASONS, itemMatchesPalette, readColorProfile } from "./color-profile.jsx";
 import { Outfits } from "./outfits.jsx";
 import { Inspo } from "./inspo.jsx";
 import { Wishlist } from "./wishlist.jsx";
 import { GalleryItem, ItemViewer, TYPE_MAP, TYPE_ORDER, TYPES } from "./item-editor.jsx";
+import { DISMISS_KEY as ONBOARDING_DISMISS_KEY, Onboarding, RESUME_KEY as ONBOARDING_RESUME_KEY } from "./onboarding.jsx";
 
 const STORAGE_KEY = "open-wardrobe-edits-v1";
 const DELETED_STORAGE_KEY = "open-wardrobe-deleted-v1";
@@ -82,6 +84,7 @@ export function App() {
   const [showColorQuiz, setShowColorQuiz] = useState(false);
   const [onlyMatches, setOnlyMatches] = useState(false);
   const [aiSetup, setAiSetup] = useState(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
     fetch("/api/import/config", { cache: "no-store" })
@@ -89,6 +92,14 @@ export function App() {
       .then(setAiSetup)
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!aiSetup || loading) return;
+    if (aiSetup.ready) return;
+    const resuming = sessionStorage.getItem(ONBOARDING_RESUME_KEY) === "1";
+    const dismissed = localStorage.getItem(ONBOARDING_DISMISS_KEY) === "1";
+    if (resuming || (!dismissed && items.length === 0)) setShowOnboarding(true);
+  }, [aiSetup, loading, items.length]);
 
   const setAiMode = useCallback(async (mode) => {
     const response = await fetch("/api/import/mode", {
@@ -202,7 +213,12 @@ export function App() {
           <button type="button" className={view === "inspo" ? "active" : ""} onClick={() => setView("inspo")} aria-pressed={view === "inspo"}>Inspo</button>
           <button type="button" className={view === "wishlist" ? "active" : ""} onClick={() => setView("wishlist")} aria-pressed={view === "wishlist"}>Wishlist</button>
         </nav>
-        <AiModeToggle setup={aiSetup} onChange={setAiMode} />
+        <div className="app-top-bar__right">
+          <AiModeToggle setup={aiSetup} onChange={setAiMode} />
+          <button type="button" className="setup-trigger" onClick={() => setShowOnboarding(true)} aria-label="Open setup guide">
+            <Gear size={16} />
+          </button>
+        </div>
       </div>
 
       {view === "inspo" ? (
@@ -273,7 +289,14 @@ export function App() {
           onSave={(profile) => { setColorProfile(profile); setShowColorQuiz(false); }}
         />
       )}
-      <WardrobeImportFlow onGarmentApproved={addImportedItem} />
+      <WardrobeImportFlow onGarmentApproved={addImportedItem} externalSetup={aiSetup} />
+      {showOnboarding && (
+        <Onboarding
+          setup={aiSetup}
+          onSetupChange={setAiSetup}
+          onClose={() => setShowOnboarding(false)}
+        />
+      )}
     </div>
   );
 }

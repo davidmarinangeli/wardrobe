@@ -126,7 +126,7 @@ function CleanupEditor({ job, tolerance, setTolerance, busy, onPreview, onAccept
   );
 }
 
-export function WardrobeImportFlow({ onGarmentApproved }) {
+export function WardrobeImportFlow({ onGarmentApproved, externalSetup }) {
   const inputRef = useRef(null);
   const [jobs, setJobs] = useState([]);
   const [drafts, setDrafts] = useState({});
@@ -140,6 +140,12 @@ export function WardrobeImportFlow({ onGarmentApproved }) {
   const [notice, setNotice] = useState(null);
   const [setup, setSetup] = useState(null);
   const [analyzingFiles, setAnalyzingFiles] = useState([]);
+
+  // The setup wizard can complete (e.g. a reference photo drop) without a page reload — resync
+  // whenever the parent's copy of the setup status changes instead of only checking on mount.
+  useEffect(() => {
+    if (externalSetup) setSetup(externalSetup);
+  }, [externalSetup]);
 
   useEffect(() => {
     api(CONFIG_API).then(setSetup).catch((requestError) => setSetup({ ready: false, error: requestError.message }));

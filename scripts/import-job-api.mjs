@@ -164,7 +164,7 @@ Avoid: person, body, skin, hair, mannequin, hanger, props, other garments, retai
 Critical: Use no ${chromaKey} anywhere in the garment. Produce exactly one complete garment with a crisp, separable outer silhouette.`;
 }
 
-const AI_PROVIDERS = new Set(["openai", "gemini", "minimax"]);
+export const AI_PROVIDERS = new Set(["openai", "gemini", "minimax"]);
 
 export function resolveProvider(setting) {
   const requested = setting("AI_PROVIDER", "openai");

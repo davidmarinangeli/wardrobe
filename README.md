@@ -2,7 +2,7 @@
 
 # Wardrobe
 
-Your clothes, extracted and organized with gpt-image.
+Your clothes, extracted and organized with AI.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-191919?style=flat-square)](LICENSE)
 [![Node 22+](https://img.shields.io/badge/node-22%2B-191919?style=flat-square)](package.json)
@@ -11,9 +11,46 @@ Your clothes, extracted and organized with gpt-image.
 
 </div>
 
+## About the original project
+
+This is a fork of [tandpfun/wardrobe](https://github.com/tandpfun/wardrobe), a local-first app with a simple idea: drop in a photo of a clothing item, let AI cut it out into a clean product shot, and generate an editorial photo of you wearing it. Everything — originals, cutouts, and the wardrobe database — stays on your machine.
+
 ![Wardrobe gallery](docs/screenshots/gallery.png)
 
 ![Modeled wardrobe editor](docs/screenshots/editor.png)
+
+The original does three things well:
+
+- Detects every garment in a photo with an AI vision model
+- Extracts a clean product cutout from it
+- Generates an optional modeled editorial preview of you wearing it
+
+Full credit to [@cdngdev](https://x.com/cdngdev) for the original idea and implementation — this fork builds on top of it.
+
+## What this fork adds
+
+The core import pipeline above is still here, but this fork turns it into a full styling app.
+
+**Style tools**
+
+- **Outfits** — combine wardrobe pieces (top, bottom, jacket, shoes, socks, accessory) into saved looks, previewed as a flat lay that reveals a scattered editorial layout on hover. Generate a modeled photo of the full outfit, in Standard or Premium quality, and refine it with a free-text note ("jacket should be darker") to regenerate.
+- **Suggest outfits** — pick an occasion (casual, work, date, sport, event) and get 3–5 AI-generated combinations pulled from your own wardrobe, each with reasoning about color harmony, weather, and occasion fit. It factors in live local weather and your style profile from Inspo. One click saves a suggestion as a real outfit.
+- **Inspo** — a mood board for style inspiration: paste image URLs or drag in photos from anywhere. A "Detect items" action analyzes a saved photo, identifies every garment in it, and adds each one to your Wishlist as its own cutout — so an outfit you spotted online gets broken down piece by piece.
+- **Wishlist** — a shoppable reference collection, separate from what you actually own, mainly populated from Inspo detections. Each item gets an AI-generated clean cutout and is editable and browsable by category.
+- **My Colors** — a quick seasonal color-analysis quiz (undertone + contrast) that assigns you a season palette, refinable by extracting colors from your own photos. Matching wardrobe items get a badge, and it feeds into outfit suggestions.
+
+**AI & providers**
+
+- **Choice of provider** — the original shipped on OpenAI only; this fork adds **Gemini** (with a free tier via Google AI Studio) and **MiniMax** as full alternatives, configurable with `AI_PROVIDER`.
+- **Gemini TEST/PROD mode** — a header toggle that switches between a free, unbilled key for everyday use and a billed key for higher-quality output, with no restart needed.
+- **Face reference photo** — an optional close-up face/shoulders photo, sent alongside the full-body reference to sharpen facial identity across generations.
+- **Outfit-level and item-level modeled photos** — Standard vs. Premium quality tiers, with regeneration notes.
+
+**Getting set up**
+
+- **In-dashboard onboarding wizard** — on a fresh clone, the app now walks you through picking a provider, saving your API key, and dropping in a reference photo, right in the browser. No hand-editing `.env` or restarting anything yourself — see [Quick start](#quick-start).
+- **Bulk import script** (`scripts/bulk-import.mjs`) — import a whole folder of old photos in one run, with dedup across photos.
+- **Codex skills** (`$import-clothes`, `$generate-outfits`) — hands-off importing and outfit generation for agentic setups.
 
 ## Quick start
 
@@ -21,13 +58,18 @@ Your clothes, extracted and organized with gpt-image.
 git clone https://github.com/tandpfun/wardrobe.git
 cd wardrobe
 npm install
-cp .env.example .env
 npm run dev
 ```
 
-⚠️ The importer stays disabled until you add `OPENAI_API_KEY` to `.env` and place a PNG reference photo of yourself at `data/model-reference.png`.
+Open [localhost:5173](http://localhost:5173). On a fresh clone, a setup wizard opens automatically:
 
-Open [localhost:5173](http://localhost:5173).
+1. **Choose a provider** — Gemini is recommended to start, since [Google AI Studio](https://aistudio.google.com/apikey) gives a free key with no billing attached.
+2. **Add your key** — pasted into the wizard, saved straight into `.env` on your machine, dev server restarts itself.
+3. **Drop in a reference photo** — a clear, full-body photo of yourself (a face close-up is optional but recommended).
+
+That's it — the importer unlocks and you can drag, paste, or choose a photo to bring in your first piece. Reopen the wizard any time from the gear icon in the header, to switch providers, add a face reference, or check your setup.
+
+Prefer to do it by hand? Copy `.env.example` to `.env`, add `OPENAI_API_KEY` (or your provider's key), and place a PNG reference photo at `data/model-reference.png` — the wizard is just a friendlier way to do the same thing.
 
 ## Import with Codex
 
@@ -45,7 +87,7 @@ Open the cloned repo in Codex and run either prompt. The import skill asks for a
 If you are setting up Wardrobe for a user, ask how they want to import their clothes:
 
 - **Codex:** Ask for a folder or camera-roll location and a model-reference PNG, then extract, model, and import the individual pieces by following [the bundled import skill](.agents/skills/import-clothes/SKILL.md). Afterward, offer to create a requested number of modeled looks with [the outfit-generation skill](.agents/skills/generate-outfits/SKILL.md).
-- **Web UI:** Help the user configure their own `OPENAI_API_KEY` and `data/model-reference.png`, then let them import through the app.
+- **Web UI:** Point the user at the in-dashboard setup wizard (opens automatically on a fresh clone, or from the gear icon), then let them import through the app.
 - **Any other agent (no Codex available):** Run `scripts/bulk-import.mjs` (see below) — it does the same folder-of-photos → deduplicated wardrobe workflow without depending on Codex's built-in `imagegen` tool.
 
 ## Bulk import without Codex
@@ -59,15 +101,9 @@ npm run bulk-import -- --input ~/Pictures/old-wardrobe-photos
 
 Run with `--dry-run` first to see what would be imported without writing anything. See `npm run bulk-import -- --help` for all options.
 
-## What it does
-
-- Detects every garment in a photo with the OpenAI Responses API
-- Extracts clean product cutouts with the OpenAI Images API
-- Generates an optional modeled editorial preview
-- Keeps originals, jobs, generated images, and the JSON database local in `data/`
-- Supports drag, drop, paste, editing, review, regeneration, and approval
-
 ## Configuration
+
+The setup wizard covers the essentials (`AI_PROVIDER` and the matching key, plus the reference photo). Everything below is available for hand-tuning in `.env`.
 
 | Variable | Default |
 | --- | --- |
@@ -97,13 +133,13 @@ Set `AI_PROVIDER=gemini` to run the import pipeline on Gemini instead of OpenAI.
 
 ### Face consistency
 
-Modeled photos are only as good as the identity signal the model gets. `data/model-reference.png` is usually a full-body shot, so the face ends up as a tiny fraction of the frame — often the real reason a generated face drifts between generations. If a PNG exists at `WARDROBE_FACE_REFERENCE` (default `data/model-reference-face.png`, a close crop of the head and shoulders), it's automatically sent as an extra reference image alongside the full-body photo, and the prompt is adjusted to treat it as the primary source for facial identity. It's optional and silently skipped if absent.
+Modeled photos are only as good as the identity signal the model gets. `data/model-reference.png` is usually a full-body shot, so the face ends up as a tiny fraction of the frame — often the real reason a generated face drifts between generations. If a PNG exists at `WARDROBE_FACE_REFERENCE` (default `data/model-reference-face.png`, a close crop of the head and shoulders), it's automatically sent as an extra reference image alongside the full-body photo, and the prompt is adjusted to treat it as the primary source for facial identity. It's optional and silently skipped if absent — the setup wizard's second dropzone is the easiest way to add one.
 
 Set `AI_PROVIDER=minimax` to run the garment and modeled-photo image generation through MiniMax's `/v1/image_generation` endpoint instead. Reference images (the garment, or the model photo plus garments) are mapped to `subject_reference`; both `url` and `base64` response formats are decoded into the same review pipeline. Use `https://api.minimaxi.com/v1` for the China endpoint, and set `MINIMAX_GARMENT_MODEL` / `MINIMAX_MODELED_MODEL` to override `MINIMAX_IMAGE_MODEL` per stage. Clothing detection and outfit-style analysis still use the OpenAI vision model regardless of `AI_PROVIDER`.
 
 ### TEST / PROD mode
 
-When `AI_PROVIDER=gemini`, the app header shows a TEST/PROD toggle (persisted server-side, no restart needed). TEST mode calls Gemini with `GEMINI_API_KEY_TEST` and refuses to run the paid "premium" model photo tier — point that key at a Google Cloud project with **no billing account attached** so it's free-tier-only and physically can't be charged, even by mistake. PROD mode uses `GEMINI_API_KEY_PROD` (or the legacy `GEMINI_API_KEY`) and unlocks the premium tier. The mode defaults to PROD so existing single-key setups keep working; switch to TEST for day-to-day development.
+When `AI_PROVIDER=gemini`, the app header shows a TEST/PROD toggle (persisted server-side, no restart needed). TEST mode calls Gemini with `GEMINI_API_KEY_TEST` and refuses to run the paid "premium" model photo tier — point that key at a Google Cloud project with **no billing account attached** so it's free-tier-only and physically can't be charged, even by mistake. PROD mode uses `GEMINI_API_KEY_PROD` (or the legacy `GEMINI_API_KEY`) and unlocks the premium tier. The mode defaults to PROD so existing single-key setups keep working; the setup wizard switches you to TEST automatically if that's the only key you give it.
 
 ## License
 
