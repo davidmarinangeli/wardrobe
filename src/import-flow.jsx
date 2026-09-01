@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowCounterClockwise, Check, Plus, SpinnerGap, Trash, UploadSimple, WarningCircle, X } from "@phosphor-icons/react";
 import { api } from "./api.js";
+import { useViewerKeyboard } from "./hooks/useViewerKeyboard.js";
 import "./import-flow.css";
 
 const API = "/api/import/jobs";
@@ -117,8 +118,9 @@ function CleanupEditor({ job, tolerance, setTolerance, busy, onPreview, onAccept
   );
 }
 
-export function WardrobeImportFlow({ onGarmentApproved, externalSetup }) {
+export function WardrobeImportFlow({ onGarmentApproved, externalSetup, idleLabel, onIdleActivate }) {
   const inputRef = useRef(null);
+  const closeButtonRef = useRef(null);
   const [jobs, setJobs] = useState([]);
   const [drafts, setDrafts] = useState({});
   const [regenerationPrompts, setRegenerationPrompts] = useState({});
@@ -131,6 +133,11 @@ export function WardrobeImportFlow({ onGarmentApproved, externalSetup }) {
   const [notice, setNotice] = useState(null);
   const [setup, setSetup] = useState(null);
   const [analyzingFiles, setAnalyzingFiles] = useState([]);
+
+  // Same reasoning as Mirror: this popover is always mounted and toggles its
+  // own backdrop, so Escape/body-scroll-lock must be gated on `open` rather
+  // than bound for the component's whole lifetime.
+  useViewerKeyboard(() => setOpen(false), closeButtonRef, open);
 
   // The setup wizard can complete (e.g. a reference photo drop) without a page reload — resync
   // whenever the parent's copy of the setup status changes instead of only checking on mount.
@@ -269,13 +276,28 @@ export function WardrobeImportFlow({ onGarmentApproved, externalSetup }) {
     <>
       <input ref={inputRef} type="file" accept="image/*" multiple hidden disabled={!setup?.ready} onChange={(event) => { submitFiles(event.target.files); event.target.value = ""; }} />
       <div className="import-drop-overlay" data-active={dragging && !setupRequired} aria-hidden={!dragging || setupRequired}><div className="import-drop-target is-over"><UploadSimple size={34} weight="light" /><h2>Drop clothing images</h2><p>A single garment or a photo of a full outfit works. Your wardrobe stays exactly where you left it.</p></div></div>
-      <aside className={`import-tray${hasImportActivity ? " is-expanded" : ""}`} aria-label="Wardrobe imports">
-        <button className="import-tray__button" type="button" onClick={() => setupRequired || hasImportActivity ? setOpen(true) : inputRef.current?.click()} aria-label={setupRequired ? "Open setup instructions" : hasImportActivity ? "Open import progress" : "Add clothes"}>{activeStatus?.tone === "processing" ? <SpinnerGap size={19} className="import-spinner" /> : activeStatus?.tone === "error" ? <WarningCircle size={19} /> : readyCount ? <span>{readyCount}</span> : notice ? <X size={18} /> : <Plus size={19} />}</button>
-        <div className="import-tray__actions">{active && <img className="import-tray__preview" src={active.stages?.garment?.assetUrl || active.stages?.garment?.failedAssetUrl || active.stages?.crop?.assetUrl || active.originalAssetUrl} alt="" />}<span className="import-tray__label">{activeStatus?.text || "Add clothes"}</span>{!setupRequired && <button className="import-icon-button" type="button" onClick={() => inputRef.current?.click()} aria-label="Choose images"><UploadSimple size={17} /></button>}</div>
-      </aside>
+      <button
+        type="button"
+        className={`top-action top-action--primary${activeStatus?.tone === "error" ? " is-error" : ""}`}
+        onClick={() => {
+          if (setupRequired || hasImportActivity) { setOpen(true); return; }
+          // Idle: this button doubles as whichever view's "add" action is relevant
+          // right now (see App.jsx) — falls back to its own file picker otherwise.
+          if (onIdleActivate) onIdleActivate();
+          else inputRef.current?.click();
+        }}
+        aria-label={setupRequired ? "Open setup instructions" : hasImportActivity ? "Open import progress" : (idleLabel || "Add clothes")}
+      >
+        {activeStatus?.tone === "processing" ? <SpinnerGap size={16} className="top-action__spinner" />
+          : activeStatus?.tone === "error" ? <WarningCircle size={16} />
+          : readyCount ? <span className="top-action__count">{readyCount}</span>
+          : notice ? <X size={16} />
+          : <Plus size={16} />}
+        <span className="top-action__label">{activeStatus?.text || idleLabel || "Add clothes"}</span>
+      </button>
       <div className="import-popover-backdrop" data-open={open} onMouseDown={(event) => event.target === event.currentTarget && setOpen(false)}>
         <section className="import-popover" role="dialog" aria-modal="true" aria-labelledby="import-title">
-          <header className="import-popover__header"><div><p className="import-popover__eyebrow">Wardrobe import</p><h2 className="import-popover__title" id="import-title">{readyCount ? `${readyCount} ready for review` : activeStatus?.tone === "error" ? "Import needs attention" : analyzing ? analyzingStatus.text : jobs.length ? "Preparing new pieces" : notice?.text || "Add to your wardrobe"}</h2></div><button className="import-icon-button" type="button" onClick={() => setOpen(false)} aria-label="Close import progress"><X size={20} /></button></header>
+          <header className="import-popover__header"><div><p className="import-popover__eyebrow">Wardrobe import</p><h2 className="import-popover__title" id="import-title">{readyCount ? `${readyCount} ready for review` : activeStatus?.tone === "error" ? "Import needs attention" : analyzing ? analyzingStatus.text : jobs.length ? "Preparing new pieces" : notice?.text || "Add to your wardrobe"}</h2></div><button className="import-icon-button" type="button" onClick={() => setOpen(false)} aria-label="Close import progress" ref={closeButtonRef}><X size={20} /></button></header>
           {!jobs.length ? setupRequired ? <div className="import-drop-target import-setup-warning"><WarningCircle size={30} /><h2>Setup required</h2><p>Add your OpenAI API key to <code>.env</code> and a PNG reference photo of yourself at <code>{setup.modelReference || "data/model-reference.png"}</code>, then restart the app.</p></div> : analyzing ? <div className="import-drop-target import-loading-target"><SpinnerGap size={30} className="import-spinner" /><h2>Reading your photo</h2><p>We’re identifying each clothing item and framing it for review. This takes a few seconds.</p></div> : <div className="import-drop-target"><UploadSimple size={28} /><h2>{notice ? "Try another image" : "Choose or paste an image"}</h2><p>{notice?.detail || "We’ll isolate each clothing item, suggest its details, and hold everything for your approval."}</p><button className="import-button import-button--primary" disabled={!setup?.ready} onClick={() => { setNotice(null); inputRef.current?.click(); }}>Choose images</button></div> : (
             <>
               {analyzing && <div className="import-drop-target import-loading-target" style={{ minHeight: 60 }}><SpinnerGap size={20} className="import-spinner" /><h2 style={{ fontSize: 13, margin: 0 }}>Analyzing {analyzingFiles.length > 1 ? `${analyzingFiles.length} more photos` : 'another photo'}…</h2></div>}

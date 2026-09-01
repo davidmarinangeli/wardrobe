@@ -2,7 +2,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 30px 34px;
-  padding: 43px 52px 70px;
+  padding: 40px var(--page-x) 80px;
 }
 
 .outfit-card {
@@ -23,13 +23,30 @@
   outline-offset: 3px;
 }
 
+/* The card carries a warm placeholder from first paint, so it never reads as
+   an empty box while a large modeled photo streams in. */
 .outfit-card-art {
   position: relative;
   aspect-ratio: 3 / 4;
   overflow: hidden;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, .18);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  background:
+    linear-gradient(165deg, rgba(255, 250, 242, .9), rgba(238, 227, 212, .85));
+  box-shadow: var(--glass-edge), var(--shadow-sm);
+  transition:
+    transform var(--dur-panel) var(--ease-out),
+    box-shadow var(--dur-panel) var(--ease-out);
 }
+
+@media (hover: hover) and (pointer: fine) {
+  .outfit-card:hover .outfit-card-art {
+    transform: translateY(-3px);
+    box-shadow: var(--glass-edge), var(--shadow-md);
+  }
+}
+
+.outfit-card:active .outfit-card-art { transform: scale(.98); }
 
 .outfit-card-hero,
 .outfit-card-hero img {
@@ -37,23 +54,37 @@
   height: 100%;
 }
 
+/* Materialise rather than pop: blur and scale resolve together as the photo
+   arrives, so it reads as settling into the card. */
 .outfit-card-hero img {
   object-fit: cover;
   object-position: 50% 15%;
-  transition: opacity 320ms ease, filter 320ms ease;
+  opacity: 0;
+  transform: scale(1.03);
+  filter: blur(12px);
+  transition:
+    opacity 260ms var(--ease-out),
+    transform 280ms var(--ease-out),
+    filter 280ms var(--ease-out);
 }
 
-.outfit-card:hover .outfit-card-hero img,
-.outfit-card:focus-visible .outfit-card-hero img {
-  opacity: .14;
-  filter: saturate(.55);
+.outfit-card-hero img[data-loaded] {
+  opacity: 1;
+  transform: none;
+  filter: none;
 }
+
+@media (hover: hover) and (pointer: fine) {
+  .outfit-card:hover .outfit-card-hero img[data-loaded] { opacity: .14; filter: saturate(.55); }
+}
+
+.outfit-card:focus-visible .outfit-card-hero img[data-loaded] { opacity: .14; filter: saturate(.55); }
 
 .outfit-card-hover-pieces {
   position: absolute;
   inset: 0;
   opacity: 0;
-  transition: opacity 280ms ease;
+  transition: opacity var(--dur-panel) var(--ease-out);
   pointer-events: none;
 }
 
@@ -67,16 +98,46 @@
   width: auto;
   height: auto;
   object-fit: contain;
-  filter: drop-shadow(0 4px 14px rgba(25, 24, 22, .18));
+  filter: var(--shadow-contact);
   opacity: 0;
   transform: scale(.88) rotate(var(--rot, 0deg));
-  transition: opacity 320ms ease, transform 360ms cubic-bezier(.34, 1.35, .64, 1);
+  transition: opacity 260ms var(--ease-out), transform 300ms var(--ease-out);
 }
 
-.outfit-card:hover .outfit-card-hover-piece,
 .outfit-card:focus-visible .outfit-card-hover-piece {
   opacity: 1;
   transform: scale(1) rotate(var(--rot, 0deg));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .outfit-card:hover .outfit-card-hover-piece {
+    opacity: 1;
+    transform: scale(1) rotate(var(--rot, 0deg));
+  }
+}
+
+/* The permanent flat-lay for an outfit with no modeled photo yet — same
+   scattered slots and same .outfit-card-hover-piece styling as the photo
+   card's hover reveal, just visible from the start instead of hidden until
+   hover (there's no photo underneath for it to reveal *over*). The card
+   itself already lifts on hover via .outfit-card-art above, regardless of
+   which branch renders inside it; this adds the piece-level flourish so an
+   unphotographed card still feels like it's responding, not sitting dead. */
+.outfit-card-flatlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.outfit-card-flatlay .outfit-card-hover-piece {
+  opacity: 1;
+  transform: scale(1) rotate(var(--rot, 0deg));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .outfit-card:hover .outfit-card-flatlay .outfit-card-hover-piece {
+    transform: scale(1.06) rotate(var(--rot, 0deg));
+  }
 }
 
 .outfit-card-art .outfit-stack {
@@ -93,7 +154,7 @@
   display: flex;
   justify-content: center;
   padding: 10px;
-  background: rgba(246, 241, 232, .88);
+  background: rgba(247, 242, 233, .88);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
 }
@@ -134,10 +195,12 @@
 }
 
 .outfit-style-tag {
-  border: 1px solid var(--line);
-  padding: 3px 8px;
+  border-radius: var(--r-full);
+  padding: 4px 10px;
+  background: var(--wash-1);
   color: var(--muted);
   font-size: 10px;
+  font-weight: 450;
   letter-spacing: .04em;
   text-transform: uppercase;
 }
@@ -146,7 +209,7 @@
   margin: 12px 2px 0;
   min-width: 0;
   overflow: hidden;
-  color: var(--ink);
+  color: var(--ink-soft);
   font-size: 13px;
   font-weight: 500;
   text-overflow: ellipsis;
@@ -155,15 +218,22 @@
 
 .outfit-card-note {
   width: 100%;
+  min-height: 40px;
   border: 1px solid var(--line);
-  padding: 6px 8px;
-  background: transparent;
-  color: var(--ink);
+  border-radius: var(--r-sm);
+  padding: 9px 10px;
+  background: var(--paper-raised);
+  color: var(--ink-soft);
   font-size: 11px;
   font-family: inherit;
+  transition: border-color var(--dur-pop) var(--ease-out), box-shadow var(--dur-pop) var(--ease-out);
 }
 
-.outfit-card-note:focus-visible { border-color: var(--ink); outline: none; }
+.outfit-card-note:focus-visible {
+  border-color: var(--accent-warm);
+  box-shadow: 0 0 0 3px rgba(140, 68, 54, .12);
+  outline: none;
+}
 
 .outfit-builder-entry { width: clamp(390px, 40vw, 560px); }
 
@@ -179,8 +249,10 @@
   flex-direction: column;
   gap: 10px;
   padding: 14px;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, .18);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  background: var(--glass-card);
+  box-shadow: var(--glass-edge), var(--shadow-sm);
   min-height: 64px;
 }
 
@@ -201,6 +273,7 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
+  filter: var(--shadow-contact);
 }
 
 .outfit-stack.compact {
@@ -233,9 +306,11 @@
   aspect-ratio: 1;
   display: grid;
   place-items: center;
-  border: 1px solid var(--line);
-  padding: 6px;
-  background: rgba(255, 255, 255, .18);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-md);
+  padding: 8px;
+  background: var(--glass-card);
+  box-shadow: var(--glass-edge), var(--shadow-sm);
 }
 
 .outfit-viewer-piece-tile img {
@@ -266,25 +341,36 @@
   height: 72px;
   display: grid;
   place-items: center;
-  border: 1px solid var(--line);
-  padding: 6px;
-  background: transparent;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-md);
+  padding: 7px;
+  background: var(--glass-card);
+  box-shadow: var(--glass-edge), var(--shadow-sm);
   cursor: pointer;
+  transition:
+    border-color var(--dur-pop) var(--ease-out),
+    box-shadow var(--dur-pop) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
 }
 
 .outfit-piece img {
   width: 100%;
   height: 100%;
   object-fit: contain;
+  filter: var(--shadow-contact);
 }
 
 .outfit-piece.active {
-  border-color: var(--ink);
-  box-shadow: inset 0 0 0 1px var(--ink);
+  border-color: var(--accent-warm);
+  box-shadow: var(--glass-edge), 0 0 0 1px var(--accent-warm), var(--shadow-sm);
 }
 
-.outfit-piece:hover,
-.outfit-piece:focus-visible { border-color: var(--ink); outline: none; }
+@media (hover: hover) and (pointer: fine) {
+  .outfit-piece:hover { border-color: var(--line); box-shadow: var(--glass-edge), var(--shadow-md); }
+}
+
+.outfit-piece:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
+.outfit-piece:active { transform: scale(.96); }
 
 .outfit-error { margin: 0; text-align: right; }
 
@@ -296,7 +382,7 @@
   .outfits-grid {
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
     gap: 18px 16px;
-    padding: 26px 20px 50px;
+    padding: 26px var(--page-x) 60px;
   }
 }
 
@@ -305,4 +391,10 @@
   .outfit-card-hover-pieces,
   .outfit-card-hover-piece,
   .outfit-card-spinner { transition: none; animation: none; }
+
+  .outfit-card-art,
+  .outfit-piece { transition-property: opacity, background, border-color, box-shadow; }
+
+  .outfit-card:hover .outfit-card-art,
+  .outfit-piece:active { transform: none; }
 }

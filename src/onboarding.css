@@ -11,7 +11,7 @@
   width: min(560px, 100%);
   height: auto;
   max-height: min(88vh, 760px);
-  animation: viewer-in 240ms cubic-bezier(.22, .8, .22, 1) both;
+  animation: viewer-in 240ms var(--ease-out) both;
 }
 
 .viewer.onboarding {
@@ -20,10 +20,10 @@
   max-height: min(88vh, 760px);
   overflow: auto;
   border: 1px solid var(--line);
-  border-radius: 20px;
+  border-radius: var(--r-lg);
   padding: 40px 38px 32px;
   background: var(--paper);
-  box-shadow: 0 30px 70px rgba(25, 24, 22, .18);
+  box-shadow: var(--shadow-lg);
 }
 
 .onboarding-dots {
@@ -38,7 +38,7 @@
   width: 22px;
   height: 3px;
   background: var(--line);
-  border-radius: 2px;
+  border-radius: var(--r-xs);
 }
 
 .onboarding-dots li.is-active { background: var(--ink); }
@@ -76,7 +76,7 @@
 .onboarding-highlights code {
   padding: 1px 5px;
   background: rgba(25, 24, 22, .06);
-  border-radius: 4px;
+  border-radius: var(--r-xs);
   font-size: .92em;
 }
 
@@ -88,6 +88,35 @@
   color: var(--ink);
   font-size: 13px;
   line-height: 1.5;
+}
+
+/* The Gemini test/prod switch — reuses .ai-mode-switch__pill (styles.css) for
+   the pill itself, since that's the same control that used to live in the
+   topbar; only this wrapper and its label/warning are new to this context. */
+.onboarding-mode-switch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding-top: 18px;
+  margin-top: 4px;
+  border-top: 1px solid var(--line);
+}
+
+.onboarding-mode-switch__label {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.onboarding-mode-switch__warning {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--error);
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .onboarding-actions {
@@ -108,7 +137,7 @@
   gap: 6px;
   text-align: left;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--r-md);
   padding: 14px 16px;
   background: transparent;
   color: var(--ink);
@@ -145,7 +174,7 @@
 
 .onboarding-badge {
   padding: 2px 7px;
-  border-radius: 999px;
+  border-radius: var(--r-full);
   background: var(--accent);
   color: var(--paper);
   font-size: 9px;
@@ -184,7 +213,7 @@
   box-sizing: border-box;
   padding: 11px 12px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--r-sm);
   background: transparent;
   color: var(--ink);
   font: inherit;
@@ -204,7 +233,7 @@
   font-size: 12px;
 }
 
-.onboarding-status.is-error { color: #8a3f35; }
+.onboarding-status.is-error { color: var(--error); }
 
 .onboarding-dropzone {
   display: flex;
@@ -212,7 +241,7 @@
   gap: 14px;
   margin-bottom: 12px;
   border: 1px dashed var(--line);
-  border-radius: 14px;
+  border-radius: var(--r-md);
   padding: 14px 16px;
   cursor: pointer;
   transition: background 160ms ease, border-color 160ms ease;
@@ -235,7 +264,7 @@
   width: 46px;
   height: 46px;
   flex: 0 0 auto;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   object-fit: cover;
 }
 
@@ -244,7 +273,7 @@
   color: var(--muted);
 }
 
-.onboarding-dropzone.is-uploaded svg { color: var(--accent); }
+.onboarding-dropzone.is-uploaded svg { color: var(--success); }
 
 .onboarding-dropzone__text { min-width: 0; }
 
@@ -276,5 +305,5 @@
 @media (max-width: 640px) {
   .viewer-overlay.onboarding-overlay { padding: 0; align-items: flex-end; }
   .viewer-entry.onboarding-entry { width: 100%; max-height: 92dvh; }
-  .viewer.onboarding { border-radius: 20px 20px 0 0; padding: 28px 20px 24px; max-height: 92dvh; }
+  .viewer.onboarding { border-radius: var(--r-lg) var(--r-lg) 0 0; padding: 28px 20px 24px; max-height: 92dvh; }
 }

@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useViewerKeyboard } from "./hooks/useViewerKeyboard.js";
 import { Check, X } from "@phosphor-icons/react";
 import "./color-profile.css";
 import { ViewerPanel } from "./components/ViewerPanel.jsx";
@@ -260,6 +261,8 @@ function PaletteEditor({ palette, onRemove, onAdd }) {
 }
 
 export function ColorProfileModal({ onClose, onSave, initialProfile }) {
+  const closeButtonRef = useRef(null);
+  useViewerKeyboard(onClose, closeButtonRef);
   const [answers, setAnswers] = useState(initialProfile?.answers || {});
   const [result, setResult] = useState(initialProfile?.season || null);
   const [palette, setPalette] = useState(() => initialProfile?.palette || (initialProfile?.season ? SEASONS[initialProfile.season].palette : []));
@@ -292,7 +295,7 @@ export function ColorProfileModal({ onClose, onSave, initialProfile }) {
   const answeredCount = QUESTIONS.filter((question) => answers[question.id]).length;
 
   return (
-    <ViewerPanel title="My Colors" ariaLabel="My Colors" onClose={onClose} entryClassName="color-quiz-entry" panelClassName="color-quiz">
+    <ViewerPanel title="My Colors" ariaLabel="My Colors" onClose={onClose} closeRef={closeButtonRef} entryClassName="color-quiz-entry" panelClassName="color-quiz">
       {!result ? (
         <div className="color-quiz-body">
           <p className="color-quiz-intro">Answer a few quick questions about your natural coloring to find your season palette. {answeredCount}/{QUESTIONS.length} answered.</p>

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { atomicJson, readAiMode, resolveApiKey, resolveProvider } from "./import-job-api.mjs";
+import { PART_TO_REGION, classifyColor, describeColorHarmonyRules, evaluateColorHarmony } from "./style-rules.mjs";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -209,32 +210,6 @@ ${pinSummaries}`;
 }
 
 // ---------------------------------------------------------------------------
-// Color hue helper (lets the model reason with real hue degrees instead of
-// guessing harmony from hex codes / color names)
-// ---------------------------------------------------------------------------
-
-function hexToHue(hex) {
-  if (typeof hex !== "string") return null;
-  const match = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
-  if (!match) return null;
-  const int = parseInt(match[1], 16);
-  const r = ((int >> 16) & 255) / 255;
-  const g = ((int >> 8) & 255) / 255;
-  const b = (int & 255) / 255;
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const delta = max - min;
-  const sat = max === 0 ? 0 : delta / max;
-  if (delta === 0 || sat < 0.08) return null; // near-gray/neutral: hue is meaningless
-  let hue;
-  if (max === r) hue = 60 * (((g - b) / delta) % 6);
-  else if (max === g) hue = 60 * ((b - r) / delta + 2);
-  else hue = 60 * ((r - g) / delta + 4);
-  if (hue < 0) hue += 360;
-  return Math.round(hue);
-}
-
-// ---------------------------------------------------------------------------
 // Gemini suggestion call
 // ---------------------------------------------------------------------------
 
@@ -273,15 +248,15 @@ async function generateSuggestions({ filteredItems, weather, occasion, colorProf
 
   const model = setting("GEMINI_SUGGESTIONS_MODEL", "gemini-3.6-flash");
 
-  // Build wardrobe text
+  // Build wardrobe text — colors are classified through the same shared vocabulary
+  // Mirror uses, so navy/brown/etc. are correctly labeled neutral instead of being
+  // described as raw hue degrees that miss real style convention.
   const wardrobeText = filteredItems.map((item) => {
-    const hue = hexToHue(item.color);
-    const secondaryHue = item.secondaryColor ? hexToHue(item.secondaryColor) : null;
-    const hueText = hue === null ? "neutral" : `${hue}°`;
-    const secondaryText = item.secondaryColor
-      ? ` secondary:${item.secondaryColor}(hue:${secondaryHue === null ? "neutral" : `${secondaryHue}°`})`
-      : "";
-    return `- id:"${item.id}" name:"${item.name}" part:${item.part} color:${item.color}(hue:${hueText})${secondaryText} tags:[${(item.tags || []).join(", ")}]`;
+    const primary = classifyColor(item.color);
+    const secondary = item.secondaryColor ? classifyColor(item.secondaryColor) : null;
+    const describe = (info) => info.neutral ? `${info.name}, neutral` : `${info.name}, hue:${info.hue}°`;
+    const secondaryText = secondary ? ` secondary:${item.secondaryColor}(${describe(secondary)})` : "";
+    return `- id:"${item.id}" name:"${item.name}" part:${item.part} color:${item.color}(${describe(primary)})${secondaryText} tags:[${(item.tags || []).join(", ")}]`;
   }).join("\n");
 
   // Build existing outfits text (to avoid duplicates)
@@ -327,7 +302,7 @@ Rules:
 - Maximum 6 pieces per outfit.
 - Only use item IDs from the list above. Do not invent IDs.
 - Don't repeat an outfit that already exists.
-- Consider color harmony using the hue° values given (0-360° on the color wheel; "neutral" items have no hue and pair with anything): tonal (hues within ~15° of each other), analogous (within ~45°), or complementary (opposite, ~165-195° apart) with at most one accent piece outside those ranges. Do not combine two non-neutral hues that are ~50-160° or ~200-345° apart — those clash rather than harmonize.
+- ${describeColorHarmonyRules()}
 - If a color profile is set, prefer items that work with that seasonal palette.
 - If a style profile is set, match its aesthetic sensibility.
 - Weather must be appropriate: no heavy layers in heat, proper coverage in cold.
@@ -360,6 +335,18 @@ Rules:
   }
   // Remove outfits with no valid items
   parsed.outfits = parsed.outfits.filter((outfit) => outfit.itemIds.length >= 2);
+
+  // Defense in depth: even with the harmony rules stated in the prompt, re-check
+  // each proposed outfit against the same deterministic engine Mirror uses, and
+  // drop any that still violate a grounded rule rather than surface a bad call.
+  const itemById = new Map(filteredItems.map((item) => [item.id, item]));
+  parsed.outfits = parsed.outfits.filter((outfit) => {
+    const garments = outfit.itemIds
+      .map((id) => itemById.get(id))
+      .filter(Boolean)
+      .map((item) => ({ region: PART_TO_REGION[item.part] || item.part, color: classifyColor(item.color).name }));
+    return !evaluateColorHarmony(garments).issue;
+  });
 
   return parsed.outfits;
 }

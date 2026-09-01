@@ -35,8 +35,7 @@ The core import pipeline above is still here, but this fork turns it into a full
 
 - **Outfits** — combine wardrobe pieces (top, bottom, jacket, shoes, socks, accessory) into saved looks, previewed as a flat lay that reveals a scattered editorial layout on hover. Generate a modeled photo of the full outfit, in Standard or Premium quality, and refine it with a free-text note ("jacket should be darker") to regenerate.
 - **Suggest outfits** — pick an occasion (casual, work, date, sport, event) and get 3–5 AI-generated combinations pulled from your own wardrobe, each with reasoning about color harmony, weather, and occasion fit. It factors in live local weather and your style profile from Inspo. One click saves a suggestion as a real outfit.
-- **Inspo** — a mood board for style inspiration: paste image URLs or drag in photos from anywhere. A "Detect items" action analyzes a saved photo, identifies every garment in it, and adds each one to your Wishlist as its own cutout — so an outfit you spotted online gets broken down piece by piece.
-- **Wishlist** — a shoppable reference collection, separate from what you actually own, mainly populated from Inspo detections. Each item gets an AI-generated clean cutout and is editable and browsable by category.
+- **Inspo** — one board for style inspiration and the wishlist pieces detected from it. Paste image URLs or drag in photos from anywhere to save a full look; a "Detect items" action analyzes it and breaks it down into individual garment cutouts. Browse by category — Full Look for the saved photos, or any garment type for the pieces detected out of them.
 - **My Colors** — a quick seasonal color-analysis quiz (undertone + contrast) that assigns you a season palette, refinable by extracting colors from your own photos. Matching wardrobe items get a badge, and it feeds into outfit suggestions.
 
 **AI & providers**

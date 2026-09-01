@@ -9,24 +9,33 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 6px 10px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--paper);
-  color: var(--ink);
+  padding: 7px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-full);
+  background: var(--paper-raised);
+  color: var(--ink-soft);
   font-size: 11px;
   letter-spacing: .02em;
   cursor: pointer;
-  transition: background 160ms ease, border-color 160ms ease;
+  box-shadow: var(--shadow-sm);
+  transition:
+    background var(--dur-pop) var(--ease-out),
+    border-color var(--dur-pop) var(--ease-out),
+    color var(--dur-pop) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
 }
 
+/* Fill with the accent on hover/focus like every other primary action — the
+   text switches to --paper too, otherwise dark-on-dark disappears. */
 .wishlist-retry-badge:hover:not(:disabled),
 .wishlist-retry-badge:focus-visible:not(:disabled) {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-warm);
+  border-color: var(--accent-warm);
+  color: var(--paper);
   outline: none;
 }
 
+.wishlist-retry-badge:active:not(:disabled) { transform: scale(.97); }
 .wishlist-retry-badge:disabled { opacity: .6; cursor: default; }
 
 .wishlist-retry-spinner { animation: spin 900ms linear infinite; }

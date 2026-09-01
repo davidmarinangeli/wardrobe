@@ -1,13 +1,70 @@
 @import "@fontsource-variable/instrument-sans";
 
 :root {
+  /* ─── Colour ─────────────────────────────────────────────────────────────
+     Warm neutrals. Nothing is pure black on pure white: --ink-soft carries
+     body copy, --ink is reserved for emphasis and filled surfaces. */
   --paper: #f4f0e8;
+  --paper-warm: #f7f2e9;
+  --paper-raised: #fbf7f0;
   --ink: #191919;
-  --muted: #66625d;
-  --line: #cfc8bc;
+  --ink-soft: #2e2a26;
+  --muted: #6d675f;
+  --line: #d8d0c3;
   --accent: #6e302e;
+  --accent-warm: #8c4436;
+  --success: #4e6350;
+  --error: #8a3f35;
+
+  /* Washes — the translucent inks used for hovers, scrims and hairlines. */
+  --wash-1: rgba(46, 42, 38, .045);
+  --wash-2: rgba(46, 42, 38, .09);
+  --wash-3: rgba(46, 42, 38, .16);
+  --scrim: rgba(38, 32, 26, .32);
+
+  /* ─── Radius ─────────────────────────────────────────────────────────────
+     Five steps. Every rectangular surface picks one; nothing invents its own. */
+  --r-xs: 6px;
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 28px;
+  --r-full: 999px;
+
+  /* ─── Materials ──────────────────────────────────────────────────────────
+     Chrome gets real backdrop-filter (few elements, content scrolls under).
+     Cards get a translucent warm fill instead — over the gradient field it
+     reads the same, without paying blur cost on 55+ elements. */
+  --glass-card: linear-gradient(160deg, rgba(255, 251, 243, .62), rgba(250, 242, 230, .34));
+  --glass-card-hover: linear-gradient(160deg, rgba(255, 253, 248, .82), rgba(252, 246, 235, .52));
+  --glass-chrome: rgba(250, 245, 237, .72);
+  --glass-blur: blur(20px) saturate(155%);
+  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, .7);
+  --glass-border: rgba(255, 255, 255, .5);
+
+  /* ─── Elevation ──────────────────────────────────────────────────────────
+     Warm-toned shadows; a cool grey shadow on cream reads as dirt. */
+  --shadow-sm: 0 1px 2px rgba(60, 47, 33, .05), 0 6px 16px rgba(60, 47, 33, .06);
+  --shadow-md: 0 2px 4px rgba(60, 47, 33, .06), 0 14px 32px rgba(60, 47, 33, .1);
+  --shadow-lg: 0 4px 8px rgba(60, 47, 33, .07), 0 28px 60px rgba(60, 47, 33, .16);
+  --shadow-contact: drop-shadow(0 10px 12px rgba(60, 47, 33, .17));
+
+  /* ─── Layout ─────────────────────────────────────────────────────────────
+     One page gutter. Header and grid both align to it. */
+  --page-x: 56px;
+  --item-pad: 14px;
+
+  /* ─── Motion ─────────────────────────────────────────────────────────────
+     Built-in easings are too weak; these are the only curves in the app. */
+  --ease-out: cubic-bezier(.23, 1, .32, 1);
+  --ease-in-out: cubic-bezier(.77, 0, .175, 1);
+  --ease-drawer: cubic-bezier(.32, .72, 0, 1);
+  --dur-press: 140ms;
+  --dur-pop: 180ms;
+  --dur-panel: 260ms;
+
   font-family: "Instrument Sans Variable", "Helvetica Neue", Arial, sans-serif;
-  color: var(--ink);
+  color: var(--ink-soft);
   background: var(--paper);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -22,8 +79,38 @@ body {
   min-width: 320px;
   min-height: 100vh;
   background: var(--paper);
-  color: var(--ink);
+  color: var(--ink-soft);
   -webkit-font-smoothing: antialiased;
+}
+
+/* ─── The warm field ───────────────────────────────────────────────────────
+   Two jobs. It warms the page, and it gives backdrop-filter something to
+   actually blur — over a flat colour, glass collapses into a plain
+   translucent rectangle. Fixed attachment so it stays put under the chrome.
+
+   ::before is the colour field, ::after the grain. Both are inert. */
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+body::before {
+  background:
+    radial-gradient(1100px 780px at 12% -6%, rgba(255, 241, 219, .85), transparent 62%),
+    radial-gradient(950px 900px at 92% 8%, rgba(246, 226, 208, .6), transparent 58%),
+    radial-gradient(1250px 1000px at 78% 104%, rgba(226, 205, 184, .52), transparent 60%),
+    var(--paper);
+}
+
+/* Grain. Keeps the field from banding and gives the material a fine texture
+   to pick up. Deliberately faint — if you can see it as noise, it is too much. */
+body::after {
+  opacity: .035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 body.viewer-open { overflow: hidden; }
@@ -37,37 +124,269 @@ button { font: inherit; }
 
 .gallery-pane { min-width: 0; }
 
+/* Translucent chrome. Content scrolls under it, and the edge fades rather
+   than sitting on a hard 1px rule.
+
+   The blur lives on ::before, not on .app-top-bar itself: backdrop-filter on
+   an element makes it a containing block for any position:fixed descendant.
+   Mirror and WardrobeImportFlow render here now (see .top-actions below) and
+   each owns a fixed-position popover/backdrop — nested under a filtered
+   ancestor those would be clipped to the top bar instead of the viewport. A
+   pseudo-element has no descendants, so it can carry the blur with nothing
+   to trap. */
 .app-top-bar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 10px 24px;
+  padding: 14px var(--page-x);
+}
+
+.app-top-bar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--glass-chrome);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+
+.app-top-bar::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  height: 24px;
+  background: linear-gradient(to bottom, rgba(244, 240, 232, .55), transparent);
+  pointer-events: none;
 }
 
 .app-view-switch {
   display: flex;
   width: max-content;
-  margin: 24px 56px 0;
-  gap: 0;
+  gap: 4px;
+  padding: 3px;
+  border-radius: var(--r-full);
+  background: var(--wash-1);
 }
 
 .app-top-bar__right {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  margin: 24px 56px 0 0;
+  align-items: center;
+  gap: 14px;
 }
 
-.ai-mode-switch {
+/* ─── Top actions ──────────────────────────────────────────────────────────
+   Add a garment and How do I look? used to float as two translucent pills in
+   opposite corners of the screen — easy to lose against a busy photo grid,
+   and in the wrong place twice over. They live here now: fixed to the one
+   spot every view shares, at the same visual weight as everything else that
+   matters, right above the page's own contextual actions (Suggest outfits,
+   My Colors, ...) so the two rows read as one hierarchy — global tools on
+   top, page-specific ones below. */
+.top-actions {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 8px;
+  padding-right: 14px;
+  border-right: 1px solid var(--wash-2);
+}
+
+.top-action {
   position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  border: 1px solid transparent;
+  border-radius: var(--r-full);
+  padding: 0 15px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: .01em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--dur-pop) var(--ease-out),
+    border-color var(--dur-pop) var(--ease-out),
+    box-shadow var(--dur-pop) var(--ease-out),
+    color var(--dur-pop) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
+}
+
+.top-action:active { transform: scale(.96); }
+.top-action:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
+.top-action:disabled { opacity: .45; cursor: not-allowed; transform: none; box-shadow: none; }
+
+/* ─── AI action border beam ───────────────────────────────────────────────────
+   A one-shot light that travels the border of an AI-powered action ("How do
+   I look?", "Suggest outfit") once when it appears on screen — a discovery
+   cue for two easy-to-miss features, not a persistent decoration. Plays once
+   per arrival, then the button settles into its plain resting state; it
+   never loops, so it never becomes ambient motion on something seen many
+   times a day.
+
+   Adapted from Magic UI's Border Beam (magicui.design). The earlier attempt
+   rotated an entire masked ring via transform: rotate() — wrong, because a
+   pill isn't a circle, so its straight edges visibly swung out of alignment
+   with the real (static) button underneath as the ring spun, reading as a
+   separate rigid stroke laid on top rather than light on the button's own
+   edge. This version never rotates a shape: a small beam moves along an
+   offset-path tracing the button's actual perimeter, clipped to a thin band
+   by a masked wrapper so only the sliver of the beam crossing the real
+   border is ever visible. The beam auto-reorients to the path's direction at
+   every point (offset-rotate's default), which is what keeps a comet-style
+   gradient reading correctly on straight edges and rounded ends alike. */
+.ai-action { position: relative; }
+
+.ai-action-beam-mask {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+  padding: 1.5px;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+}
+
+.ai-action-beam {
+  position: absolute;
+  width: 28px;
+  aspect-ratio: 1;
+  background: linear-gradient(90deg, transparent, var(--accent-warm) 55%, #fff);
+  /* drop-shadow (not box-shadow) glows around the gradient's actual visible
+     shape, including its transparent tail — box-shadow would glow around
+     the full square regardless of what's transparent. Two stacked shadows:
+     a tight bright core, a wider warm bloom. */
+  filter: drop-shadow(0 0 2px rgba(255, 255, 255, .9)) drop-shadow(0 0 7px var(--accent-warm));
+  offset-path: rect(0 auto auto 0 round var(--r-full));
+  /* Two independent animations, not one keyframe set sharing an easing:
+     the travel must stay perfectly linear (constant-speed motion), while
+     the fade wants ease-out on both ends — mixing them into shared
+     per-keyframe timing-function hints would let the fade's easing bleed
+     into the travel speed. */
+  animation:
+    ai-beam-move 1000ms linear 1 both,
+    ai-beam-fade 1000ms var(--ease-out) 1 both;
+}
+
+@keyframes ai-beam-move {
+  from { offset-distance: 0%; }
+  to   { offset-distance: 100%; }
+}
+
+@keyframes ai-beam-fade {
+  0%, 100% { opacity: 0; }
+  8%, 88%  { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-action-beam { animation: none; opacity: 0; }
+}
+
+/* Browsers without offset-path: rect() support just get the plain button —
+   no rotating fallback, since that's the exact effect being avoided. */
+@supports not (offset-path: rect(0 auto auto 0)) {
+  .ai-action-beam { display: none; }
+}
+
+/* Hover identity for the two AI actions — the border beam above is a one-
+   shot arrival cue and, by design, has fully faded by the time anyone can
+   hover; without its own hover state these buttons fall back to the same
+   quiet treatment as every other secondary button, which undersells them.
+   This is a real hover STATE (transitions once on enter/leave), not a
+   looping animation, so it's fine at any frequency — "reduce for high-
+   frequency" (STANDARDS.md) governs repeated *animations*, not a static
+   color/glow a pointer rests into. `ease` per the standard's hover/color
+   rule, warm tones matching the beam's own palette so arrival and hover
+   read as one family. */
+@media (hover: hover) and (pointer: fine) {
+  .ai-action {
+    transition:
+      border-color 180ms ease,
+      background 180ms ease,
+      box-shadow 180ms ease,
+      color 180ms ease;
+  }
+
+  /* `.top-action` prefix, not just `.ai-action`, so this wins its tie-break
+     against `.top-action--secondary:hover` (identical specificity otherwise)
+     regardless of which rule the cascade happens to place last. */
+  .top-action.ai-action:hover {
+    border-color: var(--accent-warm);
+    background: linear-gradient(180deg, rgba(140, 68, 54, .08), rgba(140, 68, 54, .03));
+    color: var(--accent-warm);
+    box-shadow:
+      var(--glass-edge),
+      0 0 0 1px rgba(140, 68, 54, .18),
+      0 0 18px 1px rgba(140, 68, 54, .28);
+  }
+}
+
+/* Primary: the one creative action every view shares. Filled, so it can never
+   read as decoration the way a translucent icon-only FAB did. */
+.top-action--primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--paper);
+  box-shadow: var(--shadow-sm);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .top-action--primary:hover { background: var(--accent-warm); border-color: var(--accent-warm); box-shadow: var(--shadow-md); }
+}
+
+.top-action--primary.is-error { border-color: var(--error); background: var(--error); }
+
+/* Secondary: a real utility, not a decoration — solid and bordered rather
+   than translucent, so it holds up against any photo behind it. */
+.top-action--secondary {
+  border-color: var(--glass-border);
+  background: var(--paper-raised);
+  color: var(--ink-soft);
+  box-shadow: var(--shadow-sm);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .top-action--secondary:hover { border-color: var(--line); box-shadow: var(--shadow-md); }
+}
+
+.top-action__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.top-action__spinner { animation: spin 900ms linear infinite; }
+
+@media (max-width: 860px) {
+  /* Icon-only at phone width, same circular treatment as the gear button —
+     the label is what the popover title is for. 44px is the touch-target
+     floor; below this width these are the two most-used controls on screen. */
+  .top-action {
+    width: 44px;
+    min-height: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .top-action__label { display: none; }
+
+  .setup-trigger { width: 44px; height: 44px; }
 }
 
 .setup-trigger {
+  position: relative;
   display: grid;
   place-items: center;
   width: 34px;
@@ -78,96 +397,131 @@ button { font: inherit; }
   background: transparent;
   color: var(--muted);
   cursor: pointer;
+  transition:
+    background var(--dur-pop) var(--ease-out),
+    color var(--dur-pop) var(--ease-out),
+    border-color var(--dur-pop) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
 }
 
-.setup-trigger:hover,
+/* Gemini mode, at a glance, without opening Settings. Purely informational —
+   the gear itself is still the one click target. */
+.setup-trigger__badge {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 1px solid var(--paper);
+  background: var(--muted);
+  color: var(--paper);
+  font-size: 8px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.setup-trigger__badge.is-warning { background: var(--error); }
+
+@media (hover: hover) and (pointer: fine) {
+  .setup-trigger:hover { border-color: var(--muted); color: var(--ink-soft); background: var(--wash-1); }
+}
+
 .setup-trigger:focus-visible {
-  border-color: var(--ink);
-  color: var(--ink);
-  outline: none;
+  border-color: var(--accent-warm);
+  color: var(--ink-soft);
+  outline: 2px solid var(--accent-warm);
+  outline-offset: 2px;
 }
 
-.ai-mode-switch__label {
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
+.setup-trigger:active { transform: scale(.94); }
 
 .ai-mode-switch__pill {
   display: flex;
   width: max-content;
-  gap: 0;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--r-full);
+  background: var(--wash-1);
 }
 
+/* A developer setting. It should be findable, never the loudest thing on
+   screen — so no accent fill; it takes the same quiet treatment as the gear. */
 .ai-mode-switch__pill button {
-  min-height: 34px;
-  border: 1px solid var(--line);
-  padding: 7px 14px;
+  min-height: 30px;
+  border: 0;
+  border-radius: var(--r-full);
+  padding: 6px 12px;
   background: transparent;
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: .06em;
+  font-size: 10px;
+  font-weight: 450;
+  letter-spacing: .05em;
   text-transform: uppercase;
   cursor: pointer;
+  transition:
+    background var(--dur-pop) var(--ease-out),
+    color var(--dur-pop) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
 }
-
-.ai-mode-switch__pill button + button { border-left: 0; }
 
 .ai-mode-switch__pill button.active {
-  background: var(--accent);
-  color: var(--paper);
-  border-color: var(--accent);
+  background: var(--wash-2);
+  color: var(--ink-soft);
 }
 
-.ai-mode-switch__pill button:hover,
-.ai-mode-switch__pill button:focus-visible { color: var(--ink); outline: none; }
-
-.ai-mode-switch__pill button.active:hover { color: var(--paper); }
-
-.ai-mode-switch__warning {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin: 6px 0 0;
-  width: max-content;
-  max-width: 260px;
-  font-size: 11px;
-  line-height: 1.4;
-  color: var(--accent);
-  text-align: right;
+@media (hover: hover) and (pointer: fine) {
+  .ai-mode-switch__pill button:hover { color: var(--ink-soft); }
 }
+
+.ai-mode-switch__pill button:focus-visible {
+  outline: 2px solid var(--accent-warm);
+  outline-offset: 2px;
+}
+
+.ai-mode-switch__pill button:active { transform: scale(.97); }
+
 
 .app-view-switch button {
   min-height: 34px;
-  border: 1px solid var(--line);
+  border: 0;
+  border-radius: var(--r-full);
   padding: 7px 16px;
   background: transparent;
   color: var(--muted);
   font-size: 11px;
-  font-weight: 500;
-  letter-spacing: .06em;
+  font-weight: 450;
+  letter-spacing: .05em;
   text-transform: uppercase;
   cursor: pointer;
+  transition:
+    background var(--dur-pop) var(--ease-out),
+    color var(--dur-pop) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
 }
-
-.app-view-switch button + button { border-left: 0; }
 
 .app-view-switch button.active {
-  background: var(--ink);
-  color: var(--paper);
-  border-color: var(--ink);
+  background: var(--paper-raised);
+  color: var(--ink-soft);
+  box-shadow: var(--shadow-sm);
 }
 
-.app-view-switch button:hover,
-.app-view-switch button:focus-visible { color: var(--ink); outline: none; }
+@media (hover: hover) and (pointer: fine) {
+  .app-view-switch button:hover { color: var(--ink-soft); }
+  .app-view-switch button:not(.active):hover { background: var(--wash-1); }
+}
 
-.app-view-switch button.active:hover { color: var(--paper); }
+.app-view-switch button:focus-visible {
+  outline: 2px solid var(--accent-warm);
+  outline-offset: 2px;
+}
+
+.app-view-switch button:active { transform: scale(.97); }
 
 .gallery-header {
-  padding: 60px 56px 0;
+  padding: 40px var(--page-x) 0;
 }
 
 .gallery-meta-row {
@@ -177,11 +531,14 @@ button { font: inherit; }
   gap: 24px;
 }
 
+/* Caps kept as the structural device, but at roughly half the volume:
+   tracking down from .1em, lighter weight, warm muted instead of ink. */
 .piece-count {
   margin: 0;
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: .1em;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 450;
+  letter-spacing: .05em;
   line-height: 1;
   text-transform: uppercase;
 }
@@ -192,141 +549,263 @@ button { font: inherit; }
   display: flex;
   align-items: center;
   flex-wrap: nowrap;
-  gap: 0;
-  margin: 48px 0 0;
+  gap: 6px;
+  margin: 28px 0 0;
   border: 0;
-  border-radius: 0;
   padding: 0;
   overflow-x: auto;
   background: transparent;
-  box-shadow: none;
   scrollbar-width: none;
 }
 
-.category-nav::-webkit-scrollbar { display: none; }
 
 .category-nav button {
   position: relative;
   flex: 0 0 auto;
-  min-height: 40px;
-  border: 0;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-  border-radius: 0;
-  padding: 10px 18px;
-  background: transparent;
+  min-height: 38px;
+  border: 1px solid transparent;
+  border-radius: var(--r-full);
+  padding: 9px 17px;
+  background: var(--wash-1);
   color: var(--muted);
-  font-size: 12px;
-  font-weight: 520;
-  letter-spacing: .055em;
+  font-size: 11px;
+  font-weight: 450;
+  letter-spacing: .05em;
   text-transform: uppercase;
   cursor: pointer;
-  transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+  transition:
+    background var(--dur-pop) var(--ease-out),
+    color var(--dur-pop) var(--ease-out),
+    border-color var(--dur-pop) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
 }
 
-.category-nav button:first-child { border-left: 1px solid var(--line); }
-.category-nav button + button { border-left: 1px solid var(--line); }
-.category-nav button:last-child { border-right: 1px solid var(--line); }
-.category-nav button:last-child {
-  border-right: 1px solid var(--line);
+@media (hover: hover) and (pointer: fine) {
+  .category-nav button:hover { color: var(--ink-soft); background: var(--wash-2); }
 }
-
-.category-nav button::after {
-  content: none;
-}
-
-.category-nav button:hover,
-.category-nav button:focus-visible { color: var(--ink); background: rgba(25, 25, 25, .07); }
 
 .category-nav button.active {
-  background: var(--ink);
-  color: var(--paper);
-  box-shadow: inset 0 0 0 1px var(--ink);
+  border-color: var(--glass-border);
+  background: var(--paper-raised);
+  color: var(--ink-soft);
+  box-shadow: var(--shadow-sm);
 }
 
 .category-nav button:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-warm);
   outline-offset: 2px;
 }
 
+.category-nav button:active { transform: scale(.97); }
+
+.category-nav::-webkit-scrollbar { display: none; }
+
 .gallery-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(165px, 1fr));
-  gap: 22px 26px;
-  padding: 43px 52px 70px;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 30px 24px;
+  /* Pad so the CARD edge lands on the page gutter, not the button box. */
+  padding: 40px var(--page-x) 96px;
 }
 
+/* ─── Gallery item ─────────────────────────────────────────────────────────
+   The card is what makes a white cutout visible: a bounded, tinted surface
+   with a lit top edge, plus a contact shadow on the garment so it sits ON
+   something rather than floating in the page. */
 .gallery-item {
   position: relative;
   appearance: none;
   width: 100%;
-  aspect-ratio: .78;
-  display: grid;
-  place-items: center;
-  border: 1px solid transparent;
-  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 0;
+  padding: 0;
   background: transparent;
+  color: inherit;
+  text-align: left;
   cursor: zoom-in;
-  transition: border-color 160ms ease;
 }
 
+.gallery-item__art {
+  position: relative;
+  width: 100%;
+  aspect-ratio: .84;
+  display: grid;
+  place-items: center;
+  padding: var(--item-pad);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  background: var(--glass-card);
+  box-shadow: var(--glass-edge), var(--shadow-sm);
+  overflow: hidden;
+  transition:
+    transform var(--dur-panel) var(--ease-out),
+    box-shadow var(--dur-panel) var(--ease-out),
+    background var(--dur-panel) var(--ease-out),
+    border-color var(--dur-pop) var(--ease-out);
+}
+
+/* A faint warm pool inside the card, so pure white still has something to
+   read against near the centre where garments sit. */
+.gallery-item__art::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(120% 90% at 50% 12%, rgba(255, 255, 255, .5), transparent 68%);
+  pointer-events: none;
+}
+
+/* Inspo pins are full-bleed lifestyle photos, not cutouts floating on a shelf
+   — no inset padding, no warm pool to read against, and cover instead of
+   contain. The contact-shadow filter that sells a cutout as "sitting on" the
+   card would just draw an ugly rectangle around a photo that already fills
+   the frame, so it's dropped too. */
+.gallery-item__art--photo { padding: 0; }
+.gallery-item__art--photo::before { display: none; }
+.gallery-item__art--photo img { object-fit: cover; filter: none; }
+
 .gallery-item img {
+  position: relative;
   width: 100%;
   height: 100%;
   object-fit: contain;
-  transform: scale(.94);
-  transition: transform 220ms cubic-bezier(.2, .7, .2, 1);
+  filter: var(--shadow-contact);
+  opacity: 0;
+  transition:
+    transform var(--dur-panel) var(--ease-out),
+    opacity 240ms var(--ease-out);
   -webkit-user-drag: none;
 }
 
-.gallery-item:hover img,
-.gallery-item:focus-visible img { transform: scale(1); }
+.gallery-item img[data-loaded] { opacity: 1; }
 
-.gallery-item.selected { border-color: var(--accent); }
+/* Optical size normalisation — object-fit: contain would otherwise render a
+   sock at the same footprint as a coat. Caps are relative to the card. */
+.gallery-item[data-part="shoes"] img,
+.gallery-item[data-part="socks"] img { max-height: 62%; }
+.gallery-item[data-part="accessories_up"] img { max-height: 68%; }
+.gallery-item[data-part="lowerbody"] img { max-height: 94%; }
 
-.gallery-item:focus-visible {
-  outline: 1px solid var(--ink);
+.gallery-item__label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 0 2px;
+  min-width: 0;
+}
+
+.gallery-item__name {
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -.005em;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gallery-item__type {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 450;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .gallery-item:hover .gallery-item__art {
+    transform: translateY(-3px);
+    background: var(--glass-card-hover);
+    border-color: rgba(255, 255, 255, .75);
+    box-shadow: var(--glass-edge), var(--shadow-md);
+  }
+
+  .gallery-item:hover img { transform: scale(1.04); }
+}
+
+.gallery-item:focus-visible { outline: none; }
+
+.gallery-item:focus-visible .gallery-item__art {
+  transform: translateY(-3px);
+  box-shadow: var(--glass-edge), var(--shadow-md);
+  outline: 2px solid var(--accent-warm);
   outline-offset: 3px;
 }
 
+.gallery-item:active .gallery-item__art { transform: scale(.97); }
+
+.gallery-item.selected .gallery-item__art {
+  border-color: var(--accent-warm);
+  box-shadow: var(--glass-edge), 0 0 0 1px var(--accent-warm), var(--shadow-md);
+}
+
+/* Staggered entry. Decorative only — never blocks interaction, and capped so
+   nothing below the fold sits waiting on a delay it will never be seen for. */
+@keyframes item-in {
+  from { opacity: 0; transform: translateY(10px); }
+}
+
+.gallery-item {
+  animation: item-in 380ms var(--ease-out) both;
+  animation-delay: calc(var(--stagger-index, 0) * 40ms);
+}
+
 .status {
-  margin: 70px 56px;
+  margin: 70px var(--page-x);
   color: var(--muted);
   font-size: 13px;
+  font-weight: 450;
   letter-spacing: .04em;
   text-transform: uppercase;
 }
 
-.status.error { color: var(--accent); }
+.status.error { color: var(--error); }
 
 .viewer-overlay {
   position: fixed;
   inset: 0;
-  z-index: 20;
+  z-index: 40;
   display: flex;
   justify-content: flex-end;
-  background: rgba(25, 24, 22, .28);
-  animation: overlay-in 180ms ease-out both;
+  padding: 12px;
+  background: var(--scrim);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  animation: overlay-in var(--dur-panel) var(--ease-out) both;
 }
 
 .viewer-entry {
   width: clamp(390px, 34vw, 520px);
-  height: 100vh;
-  animation: viewer-in 240ms cubic-bezier(.22, .8, .22, 1) both;
+  height: 100%;
+  animation: viewer-in var(--dur-panel) var(--ease-drawer) both;
 }
+
+/* Enter and exit travel the same path — a panel that slides in from the right
+   must leave to the right, or the two motions read as unrelated. */
+.viewer-overlay[data-closing="true"] { animation: overlay-out 160ms var(--ease-out) both; }
+.viewer-overlay[data-closing="true"] .viewer-entry { animation: viewer-out 160ms var(--ease-out) both; }
+
+/* Escape is a keyboard action — repeated, and always faster than an
+   animation. Closing by key skips the exit entirely. */
+.viewer-overlay[data-closing="instant"],
+.viewer-overlay[data-closing="instant"] .viewer-entry { animation: none; opacity: 0; }
 
 .viewer {
   position: relative;
   min-width: 0;
   width: 100%;
   height: 100%;
-  border-left: 1px solid var(--line);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-xl);
   display: flex;
   flex-direction: column;
   padding: 42px 34px 46px;
-  background: var(--paper);
+  background: var(--paper-warm);
   overflow: auto;
-  box-shadow: -18px 0 50px rgba(25, 24, 22, .08);
+  box-shadow: var(--glass-edge), var(--shadow-lg);
 }
 
 .viewer.has-modeled-image {
@@ -339,6 +818,7 @@ button { font: inherit; }
   flex: 0 0 410px;
   width: 100%;
   height: 410px;
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
   overflow: hidden;
 }
 
@@ -374,7 +854,7 @@ button { font: inherit; }
 .modeled-hero::after {
   z-index: 2;
   height: 124px;
-  background: linear-gradient(to bottom, rgba(246, 241, 232, 0), var(--paper) 82%);
+  background: linear-gradient(to bottom, rgba(247, 242, 233, 0), var(--paper-warm) 82%);
   -webkit-backdrop-filter: blur(17px);
   backdrop-filter: blur(17px);
   -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 60%);
@@ -382,14 +862,22 @@ button { font: inherit; }
 }
 
 @keyframes overlay-in {
-  from { background: rgba(25, 24, 22, 0); }
+  from { opacity: 0; }
+}
+
+@keyframes overlay-out {
+  to { opacity: 0; }
 }
 
 @keyframes viewer-in {
-  from { transform: translateX(24px); }
+  from { transform: translateX(28px); opacity: 0; }
 }
 
-.viewer.shake { animation: viewer-shake 360ms ease-in-out; }
+@keyframes viewer-out {
+  to { transform: translateX(28px); opacity: 0; }
+}
+
+.viewer.shake { animation: viewer-shake 360ms var(--ease-in-out); }
 
 @keyframes viewer-shake {
   0%, 100% { transform: translateX(0); }
@@ -399,26 +887,41 @@ button { font: inherit; }
   80% { transform: translateX(3px); }
 }
 
-.viewer-icon-close {
-  position: absolute;
-  top: 38px;
-  right: 38px;
-  width: 42px;
-  height: 42px;
+/* ─── Icon button primitive ─────────────────────────────────────────────────
+   The circular icon-only button (close, edit, delete, remove-tag, remove-
+   swatch...) was hand-styled per context in 6 files with near-identical
+   hover/focus/press rules. This carries the shared behaviour; each context
+   still sets its own size, color and position alongside it — add the class
+   `icon-button` next to the specific one in JSX. */
+.icon-button {
   display: grid;
   place-items: center;
   border: 0;
+  border-radius: 50%;
   padding: 0;
   background: transparent;
-  color: var(--ink);
   cursor: pointer;
-  z-index: 8;
+  transition:
+    background var(--dur-pop) var(--ease-out),
+    color var(--dur-pop) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
 }
 
-.viewer-icon-close:hover,
-.viewer-icon-close:focus-visible {
-  outline: 1px solid var(--ink);
-  outline-offset: 2px;
+@media (hover: hover) and (pointer: fine) {
+  .icon-button:hover { background: var(--wash-2); }
+}
+
+.icon-button:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 1px; }
+.icon-button:active { transform: scale(.92); }
+
+.viewer-icon-close {
+  position: absolute;
+  top: 32px;
+  right: 32px;
+  width: 42px;
+  height: 42px;
+  color: var(--ink-soft);
+  z-index: 8;
 }
 
 .viewer-heading {
@@ -441,12 +944,13 @@ button { font: inherit; }
 
 .modeled-heading {
   position: absolute;
+  border-radius: var(--r-md);
   top: 24px;
   left: 24px;
   z-index: 6;
   max-width: calc(100% - 108px);
   padding: 13px 16px 14px;
-  background: rgba(246, 241, 232, .88);
+  background: rgba(247, 242, 233, .82);
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
 }
@@ -462,7 +966,8 @@ button { font: inherit; }
 .has-modeled-image .viewer-icon-close {
   top: 24px;
   right: 24px;
-  background: rgba(246, 241, 232, .88);
+  border-radius: 50%;
+  background: rgba(247, 242, 233, .82);
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
 }
@@ -472,7 +977,8 @@ button { font: inherit; }
   height: 24px;
   display: block;
   margin-top: 2px;
-  border: 1px solid rgba(25, 25, 25, .12);
+  border: 1px solid var(--wash-3);
+  border-radius: var(--r-xs);
 }
 
 .viewer-art {
@@ -511,16 +1017,22 @@ button { font: inherit; }
   height: 178px;
   min-height: 0;
   padding: 0;
-  filter: drop-shadow(0 18px 18px rgba(39, 31, 23, .16));
+  filter: drop-shadow(0 18px 18px rgba(60, 47, 33, .16));
   transform: rotate(var(--piece-rotation));
   transform-origin: 62% 72%;
-  transition: transform 280ms cubic-bezier(.2, .75, .2, 1), filter 280ms ease;
+  transition: transform 280ms var(--ease-out), filter 280ms ease;
 }
 
-.viewer-art-floating:hover,
 .viewer-art-floating:focus-within {
-  filter: drop-shadow(0 24px 23px rgba(39, 31, 23, .21));
+  filter: drop-shadow(0 24px 23px rgba(60, 47, 33, .21));
   transform: translateY(-5px) scale(1.1) rotate(calc(var(--piece-rotation) + 2deg));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .viewer-art-floating:hover {
+    filter: drop-shadow(0 24px 23px rgba(60, 47, 33, .21));
+    transform: translateY(-5px) scale(1.1) rotate(calc(var(--piece-rotation) + 2deg));
+  }
 }
 
 .viewer-art-floating.sampling {
@@ -568,8 +1080,9 @@ button { font: inherit; }
 .details-label {
   margin: 0 0 24px;
   color: var(--muted);
-  font-size: 12px;
-  letter-spacing: .12em;
+  font-size: 11px;
+  font-weight: 450;
+  letter-spacing: .05em;
   text-transform: uppercase;
 }
 
@@ -596,7 +1109,7 @@ button { font: inherit; }
 
 .unsaved-notice {
   margin: 14px 0 -8px;
-  color: var(--accent);
+  color: var(--error);
   font-size: 11px;
   line-height: 1.4;
   text-align: right;
@@ -626,66 +1139,97 @@ button { font: inherit; }
 .secondary-button,
 .delete-button,
 .sample-button {
-  min-height: 36px;
+  min-height: 38px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
   border: 1px solid var(--line);
-  padding: 8px 12px;
-  background: transparent;
-  color: var(--ink);
+  border-radius: var(--r-full);
+  padding: 9px 16px;
+  background: var(--paper-raised);
+  color: var(--ink-soft);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
+  transition:
+    background var(--dur-pop) var(--ease-out),
+    border-color var(--dur-pop) var(--ease-out),
+    color var(--dur-pop) var(--ease-out),
+    box-shadow var(--dur-pop) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
 }
 
 .edit-button { margin-right: auto; }
-.primary-button { border-color: var(--ink); background: var(--ink); color: var(--paper); }
-.delete-button { border-color: transparent; padding-left: 0; color: var(--accent); }
-.sample-button.active { border-color: var(--accent); color: var(--accent); }
+.primary-button { border-color: var(--accent); background: var(--accent); color: var(--paper); box-shadow: var(--shadow-sm); }
+.delete-button { border-color: transparent; background: transparent; color: var(--error); }
+.sample-button.active { border-color: var(--accent-warm); color: var(--accent-warm); }
 .action-spacer { flex: 1; }
+
+/* Every pressable confirms the press. Instant feedback, subtle scale. */
+.edit-button:active,
+.primary-button:active,
+.secondary-button:active,
+.delete-button:active,
+.sample-button:active,
+.header-action-btn:active,
+.add-secondary-button:active { transform: scale(.97); }
 
 /* ─── Generic header action button — used across all view top bars ─────────── */
 .header-action-btn {
+  min-height: 36px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  border: 1px solid var(--line);
-  padding: 8px 14px;
-  background: transparent;
-  color: var(--ink);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-full);
+  padding: 8px 15px;
+  background: var(--paper-raised);
+  color: var(--ink-soft);
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 450;
   letter-spacing: .05em;
   text-transform: uppercase;
   cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition:
+    background var(--dur-pop) var(--ease-out),
+    border-color var(--dur-pop) var(--ease-out),
+    box-shadow var(--dur-pop) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
 }
 
-.header-action-btn:hover,
-.header-action-btn:focus-visible { border-color: var(--ink); outline: none; }
-.header-action-btn:disabled { opacity: .45; cursor: not-allowed; }
+@media (hover: hover) and (pointer: fine) {
+  .header-action-btn:hover { border-color: var(--line); box-shadow: var(--shadow-md); }
+}
 
-.edit-button:hover,
+.header-action-btn:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
+.header-action-btn:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
+
+@media (hover: hover) and (pointer: fine) {
+  .edit-button:hover,
+  .secondary-button:hover,
+  .sample-button:hover { border-color: var(--muted); box-shadow: var(--shadow-sm); }
+
+  .primary-button:hover { background: var(--accent-warm); border-color: var(--accent-warm); box-shadow: var(--shadow-md); }
+  .delete-button:hover { background: var(--wash-1); }
+}
+
 .edit-button:focus-visible,
-.secondary-button:hover,
 .secondary-button:focus-visible,
-.sample-button:hover,
-.sample-button:focus-visible {
-  border-color: var(--ink);
-  outline: none;
-}
-
-.primary-button:hover,
-.primary-button:focus-visible { background: var(--accent); border-color: var(--accent); outline: none; }
+.sample-button:focus-visible,
+.primary-button:focus-visible,
+.delete-button:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
 
 .modeled-photo-prompt {
   display: grid;
   gap: 12px;
   margin-bottom: 26px;
   padding: 16px;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, .28);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  background: var(--glass-card);
+  box-shadow: var(--glass-edge), var(--shadow-sm);
 }
 
 .modeled-photo-prompt.is-processing {
@@ -702,9 +1246,9 @@ button { font: inherit; }
 /* ─── Shared spinner keyframe — all spinner classes across the app use this ── */
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.modeled-photo-prompt__title { margin: 0; color: var(--ink); font-size: 13px; font-weight: 500; }
+.modeled-photo-prompt__title { margin: 0; color: var(--ink-soft); font-size: 13px; font-weight: 500; }
 .modeled-photo-prompt__detail { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
-.modeled-photo-prompt__error { margin: 0; color: var(--accent); font-size: 12px; line-height: 1.4; }
+.modeled-photo-prompt__error { margin: 0; color: var(--error); font-size: 12px; line-height: 1.4; }
 
 .modeled-tier-picker {
   display: grid;
@@ -715,39 +1259,107 @@ button { font: inherit; }
 .modeled-tier-picker button {
   display: grid;
   gap: 3px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-md);
   padding: 9px 11px;
+  background: var(--paper-raised);
+  color: var(--ink-soft);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-pop) var(--ease-out),
+    box-shadow var(--dur-pop) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
+}
+
+.modeled-tier-picker button span { font-size: 12px; font-weight: 500; }
+.modeled-tier-picker button small { color: var(--muted); font-size: 10px; line-height: 1.35; }
+
+@media (hover: hover) and (pointer: fine) {
+  .modeled-tier-picker button:hover { border-color: var(--line); box-shadow: var(--shadow-sm); }
+}
+
+.modeled-tier-picker button:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
+.modeled-tier-picker button:active { transform: scale(.98); }
+
+.modeled-tier-picker button.active { border-color: var(--accent-warm); box-shadow: inset 0 0 0 1px var(--accent-warm); }
+.modeled-tier-picker button.active small { color: var(--ink-soft); }
+
+.modeled-tier-picker button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+  border-color: var(--glass-border);
+  box-shadow: none;
+  transform: none;
+}
+.modeled-tier-picker button:disabled:hover { border-color: var(--glass-border); box-shadow: none; }
+
+.modeled-photo-prompt .primary-button { justify-self: start; }
+
+
+.item-editor {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px 14px;
+}
+
+.viewer-title {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  border: 0;
+  padding: 0;
   background: transparent;
   color: var(--ink);
   text-align: left;
   cursor: pointer;
 }
 
-.modeled-tier-picker button span { font-size: 12px; font-weight: 500; }
-.modeled-tier-picker button small { color: var(--muted); font-size: 10px; line-height: 1.35; }
-
-.modeled-tier-picker button:hover,
-.modeled-tier-picker button:focus-visible { border-color: var(--ink); outline: none; }
-
-.modeled-tier-picker button.active { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
-.modeled-tier-picker button.active small { color: var(--ink); }
-
-.modeled-tier-picker button:disabled {
-  cursor: not-allowed;
-  opacity: .45;
-  border-color: var(--line);
-  box-shadow: none;
+.viewer-title h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: .05em;
+  text-transform: uppercase;
 }
-.modeled-tier-picker button:disabled:hover { border-color: var(--line); }
 
-.modeled-photo-prompt .primary-button { justify-self: start; }
-.delete-button:hover,
-.delete-button:focus-visible { text-decoration: underline; outline: none; }
+.viewer-title svg {
+  flex: 0 0 auto;
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
 
-.item-editor {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px 14px;
+.viewer-title:hover svg,
+.viewer-title:focus-visible svg {
+  opacity: 1;
+}
+
+.viewer-title-input {
+  grid-column: 1 / -1;
+  width: 100%;
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid var(--ink);
+  padding: 0 0 4px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.viewer-title-input:focus { outline: none; }
+
+/* Outfit viewer: the title sits directly in the details flow (no grid to size it), so give it
+   its own bottom margin instead of relying on a grid gap. */
+.viewer-details > .viewer-title,
+.viewer-details > .viewer-title-input {
+  margin-bottom: 20px;
 }
 
 .field,
@@ -764,8 +1376,8 @@ button { font: inherit; }
   margin-bottom: 8px;
   color: var(--muted);
   font-size: 10px;
-  font-weight: 500;
-  letter-spacing: .1em;
+  font-weight: 450;
+  letter-spacing: .05em;
   text-transform: uppercase;
 }
 
@@ -773,19 +1385,24 @@ button { font: inherit; }
 .field select,
 .tag-input-row input {
   width: 100%;
-  min-height: 40px;
+  min-height: 42px;
   border: 1px solid var(--line);
-  border-radius: 0;
-  padding: 9px 10px;
-  background: rgba(255, 255, 255, .18);
-  color: var(--ink);
+  border-radius: var(--r-sm);
+  padding: 10px 12px;
+  background: var(--paper-raised);
+  color: var(--ink-soft);
   font: inherit;
   font-size: 13px;
+  transition: border-color var(--dur-pop) var(--ease-out), box-shadow var(--dur-pop) var(--ease-out);
 }
 
 .field input:focus,
 .field select:focus,
-.tag-input-row input:focus { border-color: var(--ink); outline: none; }
+.tag-input-row input:focus {
+  border-color: var(--accent-warm);
+  box-shadow: 0 0 0 3px rgba(140, 68, 54, .12);
+  outline: none;
+}
 
 .color-field,
 .details-field { grid-column: 1 / -1; }
@@ -920,16 +1537,21 @@ button { font: inherit; }
 
 .add-secondary-button {
   min-height: 34px;
+  border-radius: var(--r-full);
   padding: 0 16px;
   border: 1px solid var(--line);
-  background: transparent;
-  color: var(--ink);
+  background: var(--paper-raised);
+  color: var(--ink-soft);
   font-size: 11px;
   cursor: pointer;
+  transition: border-color var(--dur-pop) var(--ease-out), box-shadow var(--dur-pop) var(--ease-out), transform var(--dur-press) var(--ease-out);
 }
 
-.add-secondary-button:hover,
-.add-secondary-button:focus-visible { border-color: var(--ink); outline: none; }
+@media (hover: hover) and (pointer: fine) {
+  .add-secondary-button:hover { border-color: var(--muted); box-shadow: var(--shadow-sm); }
+}
+
+.add-secondary-button:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
 
 .palette {
   display: flex;
@@ -941,13 +1563,20 @@ button { font: inherit; }
 .palette button {
   width: 30px;
   height: 30px;
-  border: 1px solid rgba(25, 25, 25, .16);
+  border: 1px solid var(--wash-3);
+  border-radius: var(--r-xs);
   padding: 0;
   cursor: pointer;
+  transition: transform var(--dur-press) var(--ease-out), box-shadow var(--dur-pop) var(--ease-out);
 }
 
-.palette button.active { outline: 2px solid var(--ink); outline-offset: 2px; }
-.palette button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) {
+  .palette button:hover { box-shadow: var(--shadow-sm); }
+}
+
+.palette button:active { transform: scale(.92); }
+.palette button.active { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
+.palette button:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
 
 .color-controls {
   display: flex;
@@ -977,10 +1606,14 @@ button { font: inherit; }
   width: 30px;
   height: 30px;
   border: 1px solid var(--line);
+  border-radius: var(--r-xs);
   padding: 2px;
   background: transparent;
   cursor: pointer;
 }
+
+.native-color input::-webkit-color-swatch-wrapper { padding: 2px; border-radius: var(--r-xs); }
+.native-color input::-webkit-color-swatch { border: 0; border-radius: calc(var(--r-xs) - 2px); }
 
 .color-help {
   min-height: 16px;
@@ -1004,67 +1637,75 @@ button { font: inherit; }
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  border: 1px solid var(--line);
-  padding: 5px 7px 5px 9px;
-  color: var(--ink);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-full);
+  padding: 5px 8px 5px 11px;
+  background: var(--wash-1);
+  color: var(--ink-soft);
   font-size: 11px;
 }
 
 .editable-tag button {
   width: 18px;
   height: 18px;
-  display: grid;
-  place-items: center;
-  border: 0;
-  padding: 0;
-  background: transparent;
   color: var(--muted);
-  cursor: pointer;
 }
 
-.editable-tag button:hover,
-.editable-tag button:focus-visible { color: var(--accent); outline: none; }
+@media (hover: hover) and (pointer: fine) {
+  .editable-tag button:hover { color: var(--error); }
+}
 
+/* Input and button share one seam — rounded only on their outer corners so
+   together they read as a single pill-shaped control, not two mismatched
+   rectangles glued together. */
 .tag-input-row { display: flex; }
-.tag-input-row input { min-width: 0; border-right: 0; }
+.tag-input-row input { min-width: 0; border-right: 0; border-radius: var(--r-sm) 0 0 var(--r-sm); }
 .tag-input-row button {
   width: 40px;
   border: 1px solid var(--line);
-  background: transparent;
-  color: var(--ink);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  background: var(--paper-raised);
+  color: var(--ink-soft);
   cursor: pointer;
+  transition: background var(--dur-pop) var(--ease-out), color var(--dur-pop) var(--ease-out), border-color var(--dur-pop) var(--ease-out);
 }
 .tag-input-row button:disabled { color: var(--line); cursor: default; }
-.tag-input-row button:not(:disabled):hover,
-.tag-input-row button:not(:disabled):focus-visible { background: var(--ink); color: var(--paper); outline: none; }
 
+@media (hover: hover) and (pointer: fine) {
+  .tag-input-row button:not(:disabled):hover { background: var(--accent); border-color: var(--accent); color: var(--paper); }
+}
+
+.tag-input-row button:not(:disabled):focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
+.tag-input-row button:not(:disabled):active { transform: scale(.94); }
+
+/* One --page-x drives header, grid and top bar together at every width. */
 @media (max-width: 1180px) {
-  .gallery-header { padding-inline: 34px; }
-  .gallery-grid { padding-inline: 32px; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap-inline: 18px; }
+  :root { --page-x: 34px; }
+  .gallery-grid { grid-template-columns: repeat(auto-fill, minmax(185px, 1fr)); }
   .category-nav { max-width: 100%; }
   .viewer { padding-inline: 30px; }
   .has-modeled-image .viewer-details.editing { padding-inline: 30px; }
 }
 
 @media (max-width: 860px) {
-  .gallery-header { padding: 38px 24px 0; }
-  .app-view-switch { margin: 20px 24px 0; }
-  .ai-mode-switch { margin: 20px 24px 0 0; }
-  .category-nav { width: 100%; margin: 38px 0 0; }
-  .category-nav button { min-height: 38px; padding: 9px 15px; font-size: 11px; }
+  :root { --page-x: 24px; --item-pad: 12px; }
+  .gallery-header { padding-top: 28px; }
+  .category-nav { width: 100%; margin: 22px 0 0; }
+  .category-nav button { min-height: 40px; padding: 9px 15px; }
   .gallery-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 18px 14px;
-    padding: 30px 20px 50px;
+    gap: 24px 14px;
+    padding-bottom: 90px;
   }
-  .gallery-item { padding: 5px; }
-  .viewer-overlay { background: rgba(25, 24, 22, .34); }
+  .viewer-overlay { padding: 0; }
   .viewer-entry { width: 100%; height: 100dvh; }
   .viewer {
     border: 0;
+    border-radius: 0;
     padding: 30px 30px 36px;
-    background: var(--paper);
+    background: var(--paper-warm);
   }
+  .modeled-hero { border-radius: 0; }
   .viewer-heading { padding-top: 0; }
   .viewer-icon-close { top: 18px; right: 18px; }
   .has-modeled-image .viewer-icon-close { top: 20px; right: 20px; }
@@ -1084,19 +1725,21 @@ button { font: inherit; }
 }
 
 @media (max-width: 520px) {
-  .gallery-header { padding: max(24px, env(safe-area-inset-top)) 18px 0; }
-  .app-view-switch { margin: max(16px, env(safe-area-inset-top)) 18px 0; }
-  .ai-mode-switch { margin: 0 18px 0 0; }
-  .ai-mode-switch__warning { position: static; text-align: left; max-width: none; margin: 4px 0 0; }
-  .piece-count { font-size: 12px; }
-  .category-nav { margin: 24px 0 0; }
-  .category-nav button { min-height: 44px; padding: 9px 14px; font-size: 10px; }
+  :root { --page-x: 16px; --item-pad: 10px; }
+  .app-top-bar { padding-top: max(10px, env(safe-area-inset-top)); gap: 8px 12px; }
+  .app-view-switch button { padding: 7px 12px; }
+  .gallery-header { padding-top: 22px; }
+  .piece-count { font-size: 11px; }
+  .category-nav { margin: 18px 0 0; }
+  /* 44px minimum hit target on touch. */
+  .category-nav button { min-height: 44px; padding: 11px 15px; font-size: 10px; }
   .gallery-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px 8px;
-    padding: 22px 12px 40px;
+    gap: 20px 10px;
+    padding-bottom: 96px;
   }
-  .gallery-item { aspect-ratio: .72; }
+  .gallery-item__art { aspect-ratio: .8; }
+  .gallery-item__name { font-size: 12px; }
   .viewer { padding: max(24px, env(safe-area-inset-top)) 22px max(28px, env(safe-area-inset-bottom)); }
   .modeled-hero { flex-basis: 360px; height: 360px; }
   .modeled-hero-photo { height: 326px; object-position: 49% 43%; }
@@ -1119,14 +1762,90 @@ button { font: inherit; }
   .gallery-meta-row { align-items: flex-start; }
 }
 
+/* ─── Accessibility ────────────────────────────────────────────────────────
+   Reduced motion means gentler, not none: opacity still carries meaning,
+   movement does not. */
 @media (prefers-reduced-motion: reduce) {
+  .gallery-item {
+    animation: none;
+    opacity: 1;
+  }
+
+  .gallery-item__art,
   .gallery-item img,
-  .category-nav button::after,
-  .viewer-art-floating { transition: none; }
+  .outfit-card-art,
+  .viewer-art-floating,
+  .outfit-card-hero img { transition-property: opacity, background, border-color, box-shadow; }
+
+  .gallery-item:hover .gallery-item__art,
+  .gallery-item:focus-visible .gallery-item__art,
+  .outfit-card:hover .outfit-card-art { transform: none; }
+
+  .gallery-item:active .gallery-item__art,
+  .edit-button:active,
+  .primary-button:active,
+  .secondary-button:active,
+  .delete-button:active,
+  .sample-button:active,
+  .header-action-btn:active,
+  .category-nav button:active,
+  .app-view-switch button:active { transform: none; }
+
+  .outfit-card-hero img { transform: none; filter: none; }
+
   .viewer-overlay,
   .viewer-entry { animation: none; }
+
   .viewer.shake {
     animation: none;
-    box-shadow: inset 3px 0 0 var(--accent), -18px 0 50px rgba(25, 24, 22, .08);
+    box-shadow: inset 3px 0 0 var(--accent), var(--shadow-lg);
   }
 }
+
+/* Translucency off: frost becomes solid rather than disappearing.
+   .top-action and the inspo card were never translucent (deliberately solid,
+   so they never wash out against a photo) — nothing to do for them here. */
+@media (prefers-reduced-transparency: reduce) {
+  .app-top-bar::before {
+    background: var(--paper-raised);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .gallery-item__art,
+  .outfit-card-art,
+  .inspo-card { background: var(--paper-raised); }
+
+  .viewer-overlay {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .modeled-heading,
+  .has-modeled-image .viewer-icon-close {
+    background: var(--paper-warm);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* High contrast: solid surfaces with a defined edge. */
+@media (prefers-contrast: more) {
+  .gallery-item__art,
+  .outfit-card-art,
+  .inspo-card {
+    background: var(--paper-raised);
+    border-color: var(--muted);
+  }
+
+  .app-top-bar::before {
+    background: var(--paper-raised);
+    border-bottom: 1px solid var(--muted);
+  }
+
+  .gallery-item__type,
+  .piece-count,
+  .details-label { color: var(--ink-soft); }
+}
+
+

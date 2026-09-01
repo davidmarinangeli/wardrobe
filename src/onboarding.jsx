@@ -11,6 +11,30 @@ export const RESUME_KEY = "open-wardrobe-onboarding-resume-v1";
 const STEPS = ["welcome", "provider", "keys", "photos", "done"];
 const STEP_LABELS = { welcome: "Welcome", provider: "Provider", keys: "API key", photos: "Reference photo", done: "Done" };
 
+// Lives on the "done" step (Settings, once setup is complete) rather than the
+// topbar — a developer setting shouldn't compete with primary navigation for
+// space. The gear button carries a small status dot (see AiModeBadge in
+// App.jsx) so the current mode is still visible without opening this panel.
+function AiModeToggle({ setup, onChange }) {
+  if (!setup || setup.provider !== "gemini") return null;
+  const mode = setup.mode;
+  const missingKey = mode === "test" ? !setup.hasTestKey : !setup.hasProdKey;
+  return (
+    <div className="onboarding-mode-switch">
+      <span className="onboarding-mode-switch__label">Gemini key</span>
+      <div className="ai-mode-switch__pill" role="radiogroup" aria-label="Gemini API mode">
+        <button type="button" className={mode === "test" ? "active" : ""} aria-pressed={mode === "test"} onClick={() => onChange("test")}>Test</button>
+        <button type="button" className={mode === "prod" ? "active" : ""} aria-pressed={mode === "prod"} onClick={() => onChange("prod")}>Prod</button>
+      </div>
+      {missingKey && (
+        <p className="onboarding-mode-switch__warning" role="alert">
+          {mode === "test" ? "Add GEMINI_API_KEY_TEST to .env, then restart." : "Add GEMINI_API_KEY_PROD (or GEMINI_API_KEY) to .env, then restart."}
+        </p>
+      )}
+    </div>
+  );
+}
+
 const PROVIDERS = [
   {
     id: "gemini",
@@ -173,8 +197,8 @@ function KeysStep({ provider, onSaved, onBack }) {
     try {
       sessionStorage.setItem(RESUME_KEY, "1");
       // Gemini checks the PROD key by default; a TEST-only key would otherwise stay unusable
-      // until someone flips the header toggle, so point the app at whichever key is being saved
-      // — before the .env write below, since that write restarts the dev server.
+      // until someone flips the mode switch on the done step, so point the app at whichever key
+      // is being saved — before the .env write below, since that write restarts the dev server.
       if (provider === "gemini") {
         await api("/api/import/mode", { method: "POST", body: JSON.stringify({ mode: values.GEMINI_API_KEY_TEST ? "test" : "prod" }) });
       }
@@ -308,17 +332,18 @@ function PhotosStep({ setup, onSetupChange, onNext, onBack }) {
   );
 }
 
-function DoneStep({ setup, onClose }) {
+function DoneStep({ setup, onModeChange, onClose }) {
   return (
     <div className="onboarding-step">
       <p className="onboarding-eyebrow">All set</p>
       <h2>Your wardrobe is ready</h2>
       <p className="onboarding-lede">Drag any clothing photo onto the gallery — or paste one — to start importing. Every item gets a clean cutout and, once you ask for it, a modeled photo of you wearing it.</p>
       <ul className="onboarding-highlights">
-        <li>Running on <strong>{setup?.provider}</strong>{setup?.provider === "gemini" && <> — use the TEST/PROD toggle in the header any time</>}</li>
+        <li>Running on <strong>{setup?.provider}</strong>{setup?.provider === "gemini" && <> — switch keys below any time</>}</li>
         <li>Try the bundled <code>$import-clothes</code> and <code>$generate-outfits</code> Codex skills for hands-off importing</li>
         <li>Have a whole camera roll? <code>npm run bulk-import -- --input ~/Pictures/outfits --dry-run</code></li>
       </ul>
+      <AiModeToggle setup={setup} onChange={onModeChange} />
       <div className="onboarding-actions">
         <span className="action-spacer" />
         <button className="primary-button" type="button" onClick={onClose}><Check size={14} weight="bold" /> Start building your wardrobe</button>
@@ -327,7 +352,7 @@ function DoneStep({ setup, onClose }) {
   );
 }
 
-export function Onboarding({ setup, onSetupChange, onClose }) {
+export function Onboarding({ setup, onSetupChange, onModeChange, onClose }) {
   const [step, setStep] = useState(() => initialStepFor(setup));
   // checkSetup() always resolves a provider — falling back to "openai" — even when nothing has
   // been configured yet, so that fallback can't be trusted as a real choice. Only treat
@@ -368,7 +393,7 @@ export function Onboarding({ setup, onSetupChange, onClose }) {
         />
       )}
       {step === "photos" && <PhotosStep setup={setup} onSetupChange={onSetupChange} onNext={() => setStep("done")} onBack={() => setStep(setup?.hasApiKey ? "welcome" : "keys")} />}
-      {step === "done" && <DoneStep setup={setup} onClose={finish} />}
+      {step === "done" && <DoneStep setup={setup} onModeChange={onModeChange} onClose={finish} />}
     </ViewerPanel>
   );
 }

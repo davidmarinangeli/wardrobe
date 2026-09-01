@@ -189,12 +189,12 @@ async function generateGarmentCutout({ provider, key, baseUrl, item }) {
   return removeChromaBackground(rawBytes, actualChromaKey);
 }
 
-async function generateModeledPhoto({ provider, key, baseUrl, garmentBuffer, modelBuffer, faceBuffer }) {
+async function generateModeledPhoto({ provider, key, baseUrl, garmentBuffer, modelBuffer, faceBuffer, metadata }) {
   const model = { data: modelBuffer, mime: "image/png", name: "model.png" };
   const garment = { data: garmentBuffer, mime: "image/png", name: "garment.png" };
   const face = faceBuffer ? { data: faceBuffer, mime: "image/png", name: "model-face.png" } : null;
   const referenceImages = face ? [model, face] : [model];
-  const prompt = buildModeledPrompt(1, { hasFaceReference: Boolean(face) });
+  const prompt = buildModeledPrompt([{ name: metadata?.name, tags: metadata?.tags }], { hasFaceReference: Boolean(face) });
   return provider === "gemini"
     ? await geminiEdit({ key, model: process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image", imageSize: process.env.GEMINI_IMAGE_SIZE || "1K", size: "1536x1024", images: [...referenceImages, garment], prompt })
     : await openAIEdit({ key, baseUrl, model: process.env.OPENAI_MODELED_MODEL || process.env.OPENAI_IMAGE_MODEL || "gpt-image-2", quality: process.env.OPENAI_IMAGE_QUALITY || "high", size: "1536x1024", images: [...referenceImages, garment], prompt });
@@ -329,7 +329,7 @@ async function main() {
       let modeledBuffer = null;
       if (modelBuffer) {
         try {
-          modeledBuffer = await generateModeledPhoto({ provider, key, baseUrl, garmentBuffer, modelBuffer, faceBuffer });
+          modeledBuffer = await generateModeledPhoto({ provider, key, baseUrl, garmentBuffer, modelBuffer, faceBuffer, metadata: representative.metadata });
         } catch (error) {
           console.warn(`  Modeled photo failed for "${representative.metadata.name}": ${error.message} (keeping the cutout)`);
         }

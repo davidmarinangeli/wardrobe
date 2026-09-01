@@ -1,4 +1,5 @@
 import { X } from "@phosphor-icons/react";
+import { useDismiss } from "../hooks/useDismiss.js";
 
 /**
  * Standard slide-in panel shell used by every modal/drawer in the app.
@@ -12,7 +13,8 @@ import { X } from "@phosphor-icons/react";
  * title          string   – If provided, renders a <div.viewer-heading><h2> above children.
  *                           Omit when the heading is rendered inside children (e.g. modeled-hero mode).
  * ariaLabel      string   – `aria-label` on the <aside>. Defaults to `title`.
- * onClose        fn       – Called when the close button or overlay is clicked.
+ * onClose        fn       – Called when the close button or overlay is clicked. The panel
+ *                           plays its exit animation first (see useDismiss).
  * closeRef       ref      – Forwarded to the close button (for initial focus).
  * overlayClassName string – Extra class(es) on viewer-overlay (e.g. to recenter a dialog-style panel).
  * entryClassName string   – Extra class(es) on viewer-entry (controls panel width via CSS).
@@ -31,11 +33,14 @@ export function ViewerPanel({
   entryStyle,
   children,
 }) {
+  const { closing, dismiss } = useDismiss(onClose);
+
   return (
     <div
       className={`viewer-overlay${overlayClassName ? ` ${overlayClassName}` : ""}`}
       role="presentation"
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+      data-closing={closing}
+      onMouseDown={(e) => e.target === e.currentTarget && dismiss()}
     >
       <div
         className={`viewer-entry${entryClassName ? ` ${entryClassName}` : ""}`}
@@ -48,9 +53,9 @@ export function ViewerPanel({
           aria-label={ariaLabel ?? title}
         >
           <button
-            className="viewer-icon-close"
+            className="icon-button viewer-icon-close"
             type="button"
-            onClick={onClose}
+            onClick={() => dismiss()}
             aria-label="Close"
             ref={closeRef}
           >

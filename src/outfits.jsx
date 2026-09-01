@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, PencilSimple, Plus, SpinnerGap, X, Lightbulb, MagicWand } from "@phosphor-icons/react";
+import { Check, PencilSimple, SpinnerGap, X, MagicWand } from "@phosphor-icons/react";
 import { OptimizedImage } from "./OptimizedImage.jsx";
 import { api } from "./api.js";
 import { OUTFIT_CATEGORIES as CATEGORIES } from "./categories.js";
@@ -7,6 +7,7 @@ import { ModeledPhotoPrompt } from "./item-editor.jsx";
 import { ViewerPanel } from "./components/ViewerPanel.jsx";
 import { ModeledHero } from "./components/ModeledHero.jsx";
 import { PanelActions } from "./components/PanelActions.jsx";
+import { EditableTitle } from "./components/EditableTitle.jsx";
 import { PageShell } from "./components/PageShell.jsx";
 import { PageStatus } from "./components/PageStatus.jsx";
 import { useViewerKeyboard } from "./hooks/useViewerKeyboard.js";
@@ -120,24 +121,37 @@ function hoverSlot(part, indexAmongPart, outfitId, itemId) {
   return slot;
 }
 
+// Shared by both the hover-reveal (over a photo) and always-on (no photo
+// yet) scatter layouts below — same slots, same per-piece element, just a
+// different wrapper class controlling whether it starts hidden or visible.
+function scatteredPieces(outfitId, pieces) {
+  const seenByPart = {};
+  return pieces.map((item) => {
+    const part = item.part || "upperbody";
+    const index = (seenByPart[part] = (seenByPart[part] || 0) + 1) - 1;
+    const slot = hoverSlot(part, index, outfitId, item.id);
+    const style = { "--rot": `${slot.rot}deg`, maxHeight: slot.maxH, maxWidth: slot.maxW };
+    if (slot.top != null) style.top = slot.top;
+    if (slot.bottom != null) style.bottom = slot.bottom;
+    if (slot.left != null) style.left = slot.left;
+    if (slot.right != null) style.right = slot.right;
+    return <img key={item.id} className="outfit-card-hover-piece" src={item.thumbnail || item.image} alt="" style={style} />;
+  });
+}
+
 // Scattered garment cutouts revealed on hover, layered over a faded hero photo.
 function OutfitHoverPieces({ outfitId, pieces }) {
-  const seenByPart = {};
-  return (
-    <div className="outfit-card-hover-pieces">
-      {pieces.map((item) => {
-        const part = item.part || "upperbody";
-        const index = (seenByPart[part] = (seenByPart[part] || 0) + 1) - 1;
-        const slot = hoverSlot(part, index, outfitId, item.id);
-        const style = { "--rot": `${slot.rot}deg`, maxHeight: slot.maxH, maxWidth: slot.maxW };
-        if (slot.top != null) style.top = slot.top;
-        if (slot.bottom != null) style.bottom = slot.bottom;
-        if (slot.left != null) style.left = slot.left;
-        if (slot.right != null) style.right = slot.right;
-        return <img key={item.id} className="outfit-card-hover-piece" src={item.thumbnail || item.image} alt="" style={style} />;
-      })}
-    </div>
-  );
+  return <div className="outfit-card-hover-pieces">{scatteredPieces(outfitId, pieces)}</div>;
+}
+
+// Same scattered flat-lay, but the permanent content for outfits with no
+// modeled photo yet — there's nothing to reveal pieces *over*, so they're
+// visible from the start. The card still lifts and the pieces still get a
+// hover flourish (see .outfit-card-flatlay in outfits.css), so hovering an
+// unphotographed outfit feels like the same family of interaction, not a
+// dead card next to lively ones.
+function OutfitFlatLay({ outfitId, pieces }) {
+  return <div className="outfit-card-flatlay">{scatteredPieces(outfitId, pieces)}</div>;
 }
 
 function OutfitBuilder({ items, initialOutfit, onCancel, onSave }) {
@@ -179,7 +193,7 @@ function OutfitBuilder({ items, initialOutfit, onCancel, onSave }) {
     <div className="viewer-overlay" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onCancel()}>
       <div className="viewer-entry outfit-builder-entry">
         <aside className="viewer outfit-builder" role="dialog" aria-modal="true" aria-label={initialOutfit ? "Edit outfit" : "New outfit"}>
-          <button className="viewer-icon-close" type="button" onClick={onCancel} aria-label="Close">
+          <button className="icon-button viewer-icon-close" type="button" onClick={onCancel} aria-label="Close">
             <X size={24} weight="light" aria-hidden="true" />
           </button>
           <div className="viewer-heading">
@@ -247,6 +261,8 @@ function OutfitCard({ outfit, itemMap, onOpen }) {
             </div>
             {!!pieces.length && <OutfitHoverPieces outfitId={outfit.id} pieces={pieces} />}
           </>
+        ) : pieces.length ? (
+          <OutfitFlatLay outfitId={outfit.id} pieces={pieces} />
         ) : (
           <OutfitStack items={pieces} />
         )}
@@ -261,7 +277,7 @@ function OutfitCard({ outfit, itemMap, onOpen }) {
   );
 }
 
-function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateModeled, premiumAllowed }) {
+function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateModeled, onRename, premiumAllowed }) {
   const closeButtonRef = useRef(null);
   const pieces = outfit.itemIds.map((id) => itemMap[id]).filter(Boolean);
   const [note, setNote] = useState("");
@@ -291,15 +307,18 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
       panelClassName={hasModeledImage ? "has-modeled-image" : undefined}
     >
       {hasModeledImage ? (
-        <ModeledHero src={outfit.modeledImage} alt={`${outfit.name} worn by a model`} name={outfit.name} />
+        <ModeledHero src={outfit.modeledImage} alt={`${outfit.name} worn by a model`} showHeading={false} />
       ) : (
-        <>
-          <div className="viewer-heading"><div><h2>{outfit.name}</h2></div></div>
-          <div className="viewer-art outfit-viewer-art"><OutfitStack items={pieces} /></div>
-        </>
+        <div className="viewer-art outfit-viewer-art"><OutfitStack items={pieces} /></div>
       )}
 
       <div className="viewer-details editing">
+        <EditableTitle
+          value={outfit.name}
+          placeholder="Outfit"
+          onChange={(name) => onRename(outfit, name)}
+          ariaLabel="Outfit name"
+        />
         {outfit.description && (
           <div className="outfit-style-summary">
             <p className="outfit-style-description">{outfit.description}</p>
@@ -422,7 +441,7 @@ function SuggestionPanel({ items, outfits, onSaveOutfit, onClose }) {
     <div className="viewer-overlay" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="viewer-entry outfit-builder-entry" style={{ width: 'clamp(390px, 80vw, 900px)' }}>
         <aside className="viewer outfit-builder suggestion-panel" role="dialog" aria-modal="true" aria-label="Suggest outfits">
-          <button className="viewer-icon-close" type="button" onClick={onClose} aria-label="Close">
+          <button className="icon-button viewer-icon-close" type="button" onClick={onClose} aria-label="Close">
             <X size={24} weight="light" aria-hidden="true" />
           </button>
           <div className="viewer-heading">
@@ -498,14 +517,17 @@ function SuggestionPanel({ items, outfits, onSaveOutfit, onClose }) {
   );
 }
 
-export function Outfits({ items, premiumAllowed = true }) {
+// Add outfit / Suggest outfit trigger from the topbar (see App.jsx's
+// .top-actions) — showBuilder/showSuggestions are controlled from there so
+// there's exactly one "add" and one "AI action" button per view, not a
+// second pair duplicated on the page itself. builderOutfit (which outfit,
+// if any, is being edited) stays local — the topbar doesn't need to know.
+export function Outfits({ items, premiumAllowed = true, showBuilder, onOpenBuilder, onCloseBuilder, showSuggestions, onCloseSuggestions }) {
   const [outfits, setOutfits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [builderOutfit, setBuilderOutfit] = useState(null);
-  const [showBuilder, setShowBuilder] = useState(false);
   const [viewingOutfitId, setViewingOutfitId] = useState(null);
-  const [showSuggestions, setShowSuggestions] = useState(false);
 
   useEffect(() => {
     api("/api/outfits")
@@ -550,9 +572,11 @@ export function Outfits({ items, premiumAllowed = true }) {
       : item));
   };
 
-  const openNewOutfit = () => { setBuilderOutfit(null); setShowBuilder(true); };
-  const openEditOutfit = (outfit) => { setViewingOutfitId(null); setBuilderOutfit(outfit); setShowBuilder(true); };
-  const closeBuilder = () => setShowBuilder(false);
+  const openEditOutfit = (outfit) => { setViewingOutfitId(null); setBuilderOutfit(outfit); onOpenBuilder(); };
+  // The topbar's "Add outfit" opens the same builder directly (see App.jsx),
+  // bypassing openEditOutfit entirely — so builderOutfit must reset to null
+  // on every close, or a stale edit target would linger into the next "new".
+  const closeBuilder = () => { setBuilderOutfit(null); onCloseBuilder(); };
 
   const saveOutfit = async (draft) => {
     const saved = builderOutfit
@@ -561,7 +585,7 @@ export function Outfits({ items, premiumAllowed = true }) {
     setOutfits((current) => builderOutfit
       ? current.map((outfit) => outfit.id === saved.id ? saved : outfit)
       : [...current, saved]);
-    setShowBuilder(false);
+    closeBuilder();
   };
 
   const deleteOutfit = async (id) => {
@@ -574,22 +598,22 @@ export function Outfits({ items, premiumAllowed = true }) {
     }
   };
 
+  const renameOutfit = async (outfit, name) => {
+    if (!name) return;
+    try {
+      const saved = await api(`/api/outfits/${outfit.id}`, { method: "PATCH", body: JSON.stringify({ name }) });
+      setOutfits((current) => current.map((item) => item.id === saved.id ? saved : item));
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  };
+
   const viewingOutfit = outfits.find((outfit) => outfit.id === viewingOutfitId) || null;
 
   return (
     <PageShell
       count={outfits.length}
       noun="outfit"
-      actions={(
-        <>
-          <button type="button" className="header-action-btn suggest-trigger" onClick={() => setShowSuggestions(true)} disabled={items.length < 5}>
-            <Lightbulb size={13} weight="bold" aria-hidden="true" /> Suggest outfits
-          </button>
-          <button type="button" className="header-action-btn" onClick={openNewOutfit} disabled={!items.length}>
-            <Plus size={13} weight="bold" aria-hidden="true" /> New outfit
-          </button>
-        </>
-      )}
     >
       <PageStatus
         loading={loading}
@@ -619,6 +643,7 @@ export function Outfits({ items, premiumAllowed = true }) {
           onEdit={openEditOutfit}
           onDelete={deleteOutfit}
           onGenerateModeled={generateOutfitModeled}
+          onRename={renameOutfit}
           premiumAllowed={premiumAllowed}
         />
       )}
@@ -634,7 +659,7 @@ export function Outfits({ items, premiumAllowed = true }) {
             setOutfits((current) => [...current, saved]);
             return saved;
           }}
-          onClose={() => setShowSuggestions(false)}
+          onClose={onCloseSuggestions}
         />
       )}
     </PageShell>

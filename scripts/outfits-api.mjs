@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { atomicJson, buildModeledPrompt, checkSetup, geminiAnalyzeOutfitStyle, geminiEdit, isPremiumAllowed, loadFaceReference, miniMaxEdit, openAIAnalyzeOutfitStyle, openAIEdit, readAiMode, resolveApiKey, resolveModeledModel, resolveProvider } from "./import-job-api.mjs";
+import { atomicJson, buildModeledPrompt, checkSetup, computeIdentityProfile, geminiAnalyzeOutfitStyle, geminiEdit, isLikelyBottom, isLikelyCroppedOrShortBottom, isLikelySocks, isPremiumAllowed, loadFaceReference, miniMaxEdit, openAIAnalyzeOutfitStyle, openAIEdit, readAiMode, resolveApiKey, resolveModeledModel, resolveProvider } from "./import-job-api.mjs";
 
 const OUTFIT_ASSET_ROOT = "/api/outfits/assets";
 
@@ -64,6 +64,11 @@ export function outfitsApi(options = {}) {
     catch (error) { if (error.code === "ENOENT") return []; throw error; }
   }
 
+  async function loadLibrary() {
+    try { return JSON.parse(await readFile(path.join(dataDir, "library.json"), "utf8")); }
+    catch (error) { if (error.code === "ENOENT") return []; throw error; }
+  }
+
   async function generateModeledForOutfit(id, { tier, prompt }) {
     if (running.has(id)) return running.get(id);
     const task = (async () => {
@@ -78,10 +83,21 @@ export function outfitsApi(options = {}) {
         const outfits = await loadOutfits();
         const outfit = outfits.find((item) => item.id === id);
         if (!outfit) throw new Error("Outfit not found");
+        const libraryRecords = await loadLibrary();
+        const recordsById = new Map(libraryRecords.map((record) => [record.id, record]));
+        // Socks won't be visible under full-length trousers — rather than trust a weaker model to
+        // follow a "don't cuff the trousers to expose them" instruction, just don't send the socks
+        // image at all when the outfit's bottoms are actual long trousers (not shorts/cropped).
+        const outfitRecords = outfit.itemIds.map((itemId) => recordsById.get(itemId)).filter(Boolean);
+        const hasFullLengthBottom = outfitRecords.some((record) => isLikelyBottom(record) && !isLikelySocks(record) && !isLikelyCroppedOrShortBottom(record));
         const garments = [];
+        const garmentMeta = [];
         for (const itemId of outfit.itemIds) {
+          const record = recordsById.get(itemId);
+          if (hasFullLengthBottom && isLikelySocks(record)) continue;
           try {
             garments.push({ data: await readFile(path.join(libraryAssetDir, `${itemId}-garment.png`)), mime: "image/png", name: `${itemId}.png` });
+            garmentMeta.push({ name: record?.name, tags: record?.tags, part: record?.part });
           } catch (error) {
             if (error.code !== "ENOENT") throw error;
           }
@@ -98,8 +114,16 @@ export function outfitsApi(options = {}) {
         const model = { data: modelData, mime: "image/png", name: "model.png" };
         const face = await loadFaceReference(root, setting);
         const referenceImages = face ? [model, face] : [model];
-        const basePrompt = options.modeledPrompt || buildModeledPrompt(garments.length, { hasFaceReference: Boolean(face) });
-        const modeledPrompt = prompt ? `${basePrompt}\nUser regeneration direction: ${prompt}` : basePrompt;
+        // Tried dropping the face closeup on standard tier on the theory that two "person" images
+        // were competing — tested against the same outfit and it was still an unreliable draw either
+        // way, so the face closeup isn't the cause. Reverted; keeping this for reference in case it's
+        // worth revisiting once standard tier itself changes.
+        // const useFaceReference = tier === "premium" && Boolean(face);
+        // const referenceImages = useFaceReference ? [model, face] : [model];
+        const basePrompt = options.modeledPrompt || buildModeledPrompt(garmentMeta, { hasFaceReference: Boolean(face) });
+        const identityProfile = await computeIdentityProfile({ root, dataDir, setting, provider, mode });
+        const withIdentity = identityProfile ? `${basePrompt}\nAdditional identity notes for consistency: ${identityProfile}` : basePrompt;
+        const modeledPrompt = prompt ? `${withIdentity}\nUser regeneration direction: ${prompt}` : withIdentity;
         const resolved = resolveModeledModel(provider, tier, setting);
         let bytes;
         if (provider === "gemini") {

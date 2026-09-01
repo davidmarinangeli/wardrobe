@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowCounterClockwise, Check, Plus, Sparkle, SpinnerGap, X } from "@phosphor-icons/react";
 import { OptimizedImage } from "./OptimizedImage.jsx";
 import { useViewerKeyboard } from "./hooks/useViewerKeyboard.js";
+import { useDismiss } from "./hooks/useDismiss.js";
 import { ModeledHero } from "./components/ModeledHero.jsx";
 import { PanelActions } from "./components/PanelActions.jsx";
+import { EditableTitle } from "./components/EditableTitle.jsx";
 
 export const TYPES = [
   { id: "all", label: "All" },
@@ -110,7 +112,7 @@ function sampleImageColor(image, canvas, event) {
   return null;
 }
 
-export function GalleryItem({ item, selected, onOpen, seasonMatch }) {
+export function GalleryItem({ item, selected, onOpen, seasonMatch, index = 0 }) {
   const type = TYPE_MAP[item.part]?.singular || "wardrobe item";
 
   return (
@@ -120,15 +122,25 @@ export function GalleryItem({ item, selected, onOpen, seasonMatch }) {
       onClick={() => onOpen(item.id)}
       aria-label={`View ${item.name || type}`}
       aria-pressed={selected}
+      data-part={item.part}
+      // Stagger is capped: past the first screenful the delay would only ever
+      // fire off-screen, so it just adds latency to scrolling into view.
+      style={{ "--stagger-index": Math.min(index, 11) }}
       data-testid={`wardrobe-item-${item.id}`}
     >
-      {seasonMatch && <span className="gallery-item-badge" style={{ backgroundColor: seasonMatch.accent }} title={`Matches your ${seasonMatch.label} palette`} />}
-      <OptimizedImage
-        src={item.thumbnail || item.image}
-        alt=""
-        sizes="(max-width: 520px) calc(50vw - 16px), (max-width: 860px) calc(33vw - 18px), 180px"
-        breakpoints={[120, 180, 240, 320, 480]}
-      />
+      <span className="gallery-item__art">
+        {seasonMatch && <span className="gallery-item-badge" style={{ backgroundColor: seasonMatch.accent }} title={`Matches your ${seasonMatch.label} palette`} />}
+        <OptimizedImage
+          src={item.thumbnail || item.image}
+          alt=""
+          sizes="(max-width: 520px) calc(50vw - 16px), (max-width: 860px) calc(33vw - 18px), 220px"
+          breakpoints={[120, 180, 240, 320, 480]}
+        />
+      </span>
+      <span className="gallery-item__label">
+        <span className="gallery-item__name">{item.name || type}</span>
+        <span className="gallery-item__type">{type}</span>
+      </span>
     </button>
   );
 }
@@ -149,7 +161,7 @@ export function TagEditor({ tags, onChange }) {
         {tags.map((tag) => (
           <span className="editable-tag" key={tag}>
             {tag}
-            <button type="button" onClick={() => onChange(tags.filter((existing) => existing !== tag))} aria-label={`Remove ${tag}`}>
+            <button type="button" className="icon-button" onClick={() => onChange(tags.filter((existing) => existing !== tag))} aria-label={`Remove ${tag}`}>
               <X size={12} weight="regular" aria-hidden="true" />
             </button>
           </span>
@@ -241,14 +253,12 @@ export function ItemEditor({ draft, setDraft, palette, sampling, setSampling, sa
 
   return (
     <div className="item-editor">
-      <label className="field">
-        <span>Name</span>
-        <input
-          value={draft.name}
-          onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
-          placeholder={TYPE_MAP[draft.part]?.singular || "Wardrobe item"}
-        />
-      </label>
+      <EditableTitle
+        value={draft.name}
+        placeholder={TYPE_MAP[draft.part]?.singular || "Wardrobe item"}
+        onChange={(name) => setDraft((current) => ({ ...current, name }))}
+        ariaLabel="Item name"
+      />
 
       <label className="field">
         <span>Category</span>
@@ -367,13 +377,20 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
   const [shaking, setShaking] = useState(false);
   const [closeBlocked, setCloseBlocked] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [modeledNote, setModeledNote] = useState("");
   const type = TYPE_MAP[item.part]?.singular || "Wardrobe item";
   const hasModeledImage = Boolean(item.modeledImage);
 
   const handleGenerateModeled = async (tier) => {
     setGenerating(true);
-    try { await onGenerateModeled(item, tier); }
-    finally { setGenerating(false); }
+    try {
+      await onGenerateModeled(item, tier, modeledNote.trim());
+      setModeledNote("");
+    } catch {
+      // surfaced via item.modeledError once the request settles
+    } finally {
+      setGenerating(false);
+    }
   };
   const pieceRotation = useMemo(() => {
     const hash = [...item.id].reduce((total, character) => total + character.charCodeAt(0), 0);
@@ -407,10 +424,12 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
     shakeTimerRef.current = setTimeout(() => setShaking(false), 420);
   }, []);
 
-  const requestClose = useCallback(() => {
+  const { closing, dismiss } = useDismiss(onClose);
+
+  const requestClose = useCallback((options) => {
     if (isDirty) nudgeUnsaved();
-    else onClose();
-  }, [isDirty, nudgeUnsaved, onClose]);
+    else dismiss(options);
+  }, [isDirty, nudgeUnsaved, dismiss]);
 
   useViewerKeyboard(requestClose, closeButtonRef);
 
@@ -436,7 +455,7 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
     setDraft({ name: item.name || "", part: item.part, color: item.color || "#9a9286", secondaryColor: item.secondaryColor || null, tags: [...(item.tags || [])] });
     setSampling(null);
     setSampleStatus("");
-    onClose();
+    dismiss();
   };
 
   const saveEditing = () => {
@@ -485,37 +504,33 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
   );
 
   return (
-    <div className="viewer-overlay" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && requestClose()}>
+    <div className="viewer-overlay" role="presentation" data-closing={closing} onMouseDown={(event) => event.target === event.currentTarget && requestClose()}>
     <div className="viewer-entry">
     <aside className={`viewer editing${hasModeledImage ? " has-modeled-image" : ""}${shaking ? " shake" : ""}`} role="dialog" aria-modal="true" aria-label="Selected wardrobe item">
-      <button className="viewer-icon-close" type="button" onClick={requestClose} aria-label="Close viewer" ref={closeButtonRef}>
+      <button className="icon-button viewer-icon-close" type="button" onClick={() => requestClose()} aria-label="Close viewer" ref={closeButtonRef}>
         <X size={24} weight="light" aria-hidden="true" />
       </button>
 
       {hasModeledImage ? (
-        <>
-          <ModeledHero src={item.modeledImage} alt={`${draft.name || type} worn by a model`} name={draft.name || TYPE_MAP[draft.part]?.singular} />
+        <ModeledHero src={item.modeledImage} alt={`${draft.name || type} worn by a model`} showHeading={false}>
           {garmentArtwork}
-        </>
+        </ModeledHero>
       ) : (
-        <>
-          <div className="viewer-heading">
-            <div>
-              <h2>{draft.name || TYPE_MAP[draft.part]?.singular}</h2>
-            </div>
-          </div>
-          {garmentArtwork}
-        </>
+        garmentArtwork
       )}
 
       <div className="viewer-details editing">
-        {showModeledPhoto && !hasModeledImage && (
+        {showModeledPhoto && (
           <ModeledPhotoPrompt
             status={item.modeledStatus}
             error={item.modeledError}
             busy={generating}
             onGenerate={handleGenerateModeled}
             premiumAllowed={premiumAllowed}
+            hasImage={hasModeledImage}
+            initialTier={item.modeledTier || "standard"}
+            note={modeledNote}
+            onNoteChange={setModeledNote}
           />
         )}
         <ItemEditor

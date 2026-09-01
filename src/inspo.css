@@ -1,178 +1,39 @@
-/* ─── Grid ─────────────────────────────────────────────────────────────────── */
+/* Pins and wishlist pieces render as .gallery-item / .gallery-item__art--photo
+   (styles.css) in one merged .gallery-grid, so this file no longer needs its
+   own card/grid rules — only the importer, the pin detail panel's detect
+   action, and the pin's notes field are Inspo-specific. */
 
-.inspo-grid {
+/* ─── Pin detail panel — detect action ──────────────────────────────────────── */
+
+.pin-detect {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 22px 26px;
-  padding: 43px 52px 70px;
-}
-
-/* ─── Card ──────────────────────────────────────────────────────────────────── */
-
-.inspo-card {
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, .18);
-}
-
-.inspo-card-image {
-  aspect-ratio: 3 / 4;
-  overflow: hidden;
-  background: var(--paper);
-  position: relative;
-}
-
-.inspo-card-image img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: 50% 15%;
-}
-
-.inspo-card-badge {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  padding: 3px 7px;
-  background: var(--ink);
-  color: var(--paper);
-  font-size: 9px;
-  font-weight: 500;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  pointer-events: none;
-}
-
-.inspo-card-badge.unclassified {
-  background: var(--line);
-  color: var(--muted);
-}
-
-.inspo-card-body {
-  padding: 10px 12px 12px;
-}
-
-.inspo-card-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   gap: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--line);
+  margin: 4px 0 22px;
 }
 
-.inspo-card-name {
+.pin-detect__error {
   margin: 0;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.inspo-card-name.empty {
-  color: var(--muted);
-  font-style: italic;
-  font-weight: 400;
-}
-
-.inspo-card-actions {
-  display: flex;
-  flex: none;
-  gap: 2px;
-}
-
-.inspo-card-actions button {
-  width: 26px;
-  height: 26px;
-  display: grid;
-  place-items: center;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.inspo-card-actions button:hover,
-.inspo-card-actions button:focus-visible { color: var(--accent); outline: none; }
-
-/* Classify CTA inside card body, above footer */
-.inspo-card-classify {
-  display: grid;
-  gap: 6px;
-  padding: 8px 0 10px;
-}
-
-.inspo-card-classify-error {
-  margin: 0;
-  color: var(--accent);
-  font-size: 10px;
+  color: var(--error);
+  font-size: 11px;
   line-height: 1.4;
 }
 
-.inspo-card-wishlist-count {
-  color: var(--muted);
-  font-size: 10px;
-  letter-spacing: .04em;
-}
-
-.inspo-classify-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 30px;
-  border: 1px solid var(--ink);
-  padding: 5px 10px;
-  background: var(--ink);
-  color: var(--paper);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: .04em;
-  cursor: pointer;
-  justify-self: start;
-}
-
-.inspo-classify-btn:disabled { opacity: .5; cursor: default; }
-.inspo-classify-btn:hover:not(:disabled),
-.inspo-classify-btn:focus-visible:not(:disabled) { background: var(--accent); border-color: var(--accent); outline: none; }
-
-.inspo-classify-spinner { animation: spin 900ms linear infinite; }
-/* inspo-spin removed — uses shared @keyframes spin from styles.css */
-
-/* ─── Edit modal ────────────────────────────────────────────────────────────── */
-
-.inspo-editor-entry { width: clamp(340px, 34vw, 480px); }
-
-.inspo-editor-body {
-  padding-top: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.inspo-editor-preview {
-  width: 100%;
-  max-height: 240px;
-  object-fit: cover;
-  object-position: 50% 20%;
-}
+.pin-detect .secondary-button { justify-self: start; }
 
 .inspo-notes-field textarea {
   width: 100%;
   min-height: 72px;
   border: 1px solid var(--line);
-  border-radius: 0;
+  border-radius: var(--r-sm);
   padding: 9px 10px;
-  background: rgba(255, 255, 255, .18);
-  color: var(--ink);
+  background: var(--paper-raised);
+  color: var(--ink-soft);
   font: inherit;
   font-size: 13px;
   resize: vertical;
 }
 
-.inspo-notes-field textarea:focus { border-color: var(--ink); outline: none; }
+.inspo-notes-field textarea:focus { border-color: var(--accent-warm); box-shadow: 0 0 0 3px rgba(140, 68, 54, .12); outline: none; }
 
 /* ─── Importer modal ────────────────────────────────────────────────────────── */
 
@@ -208,12 +69,15 @@
 }
 
 .inspo-tabs button.active {
-  border-bottom-color: var(--ink);
-  color: var(--ink);
+  border-bottom-color: var(--accent-warm);
+  color: var(--ink-soft);
 }
 
-.inspo-tabs button:hover:not(.active),
-.inspo-tabs button:focus-visible:not(.active) { color: var(--ink); outline: none; }
+@media (hover: hover) and (pointer: fine) {
+  .inspo-tabs button:hover:not(.active) { color: var(--ink-soft); }
+}
+
+.inspo-tabs button:focus-visible:not(.active) { color: var(--ink-soft); outline: none; }
 
 /* URL textarea */
 .inspo-url-field {
@@ -234,16 +98,16 @@
   width: 100%;
   min-height: 120px;
   border: 1px solid var(--line);
-  border-radius: 0;
+  border-radius: var(--r-sm);
   padding: 9px 10px;
-  background: rgba(255, 255, 255, .18);
-  color: var(--ink);
+  background: var(--paper-raised);
+  color: var(--ink-soft);
   font: inherit;
   font-size: 12px;
   resize: vertical;
 }
 
-.inspo-url-field textarea:focus { border-color: var(--ink); outline: none; }
+.inspo-url-field textarea:focus { border-color: var(--accent-warm); box-shadow: 0 0 0 3px rgba(140, 68, 54, .12); outline: none; }
 
 .inspo-url-hint {
   margin: 0;
@@ -261,16 +125,17 @@
   gap: 10px;
   min-height: 160px;
   border: 1px dashed var(--line);
+  border-radius: var(--r-lg);
   padding: 24px;
-  background: rgba(255, 255, 255, .12);
+  background: var(--glass-card);
   cursor: pointer;
-  transition: border-color 160ms ease, background 160ms ease;
+  transition: border-color var(--dur-pop) var(--ease-out), background var(--dur-pop) var(--ease-out);
   text-align: center;
 }
 
 .inspo-dropzone.over {
-  border-color: var(--ink);
-  background: rgba(255, 255, 255, .3);
+  border-color: var(--accent-warm);
+  background: var(--glass-card-hover);
 }
 
 .inspo-dropzone input[type="file"] {
@@ -289,7 +154,7 @@
 
 .inspo-dropzone-label strong {
   display: block;
-  color: var(--ink);
+  color: var(--ink-soft);
   font-size: 13px;
   font-weight: 500;
 }
@@ -297,16 +162,20 @@
 .inspo-drop-btn {
   min-height: 32px;
   border: 1px solid var(--line);
+  border-radius: var(--r-full);
   padding: 6px 14px;
-  background: transparent;
-  color: var(--ink);
+  background: var(--paper-raised);
+  color: var(--ink-soft);
   font-size: 11px;
   font-weight: 500;
   cursor: pointer;
 }
 
-.inspo-drop-btn:hover,
-.inspo-drop-btn:focus-visible { border-color: var(--ink); outline: none; }
+@media (hover: hover) and (pointer: fine) {
+  .inspo-drop-btn:hover { border-color: var(--muted); box-shadow: var(--shadow-sm); }
+}
+
+.inspo-drop-btn:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
 
 /* Queued previews in importer */
 .inspo-queue {
@@ -333,6 +202,7 @@
   flex: none;
   width: 32px;
   height: 32px;
+  border-radius: var(--r-xs);
   object-fit: cover;
   background: var(--line);
 }
@@ -352,20 +222,28 @@
   display: grid;
   place-items: center;
   border: 0;
+  border-radius: 50%;
   padding: 0;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
+  transition: color var(--dur-pop) var(--ease-out), background var(--dur-pop) var(--ease-out);
 }
 
-.inspo-queue-remove:hover { color: var(--accent); }
+@media (hover: hover) and (pointer: fine) {
+  .inspo-queue-remove:hover { color: var(--error); background: var(--wash-2); }
+}
+
+.inspo-queue-remove:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 1px; }
 
 /* Import results */
 .inspo-import-errors {
   margin: 0;
-  padding: 8px 10px;
-  border: 1px solid var(--accent);
-  color: var(--accent);
+  border-radius: var(--r-sm);
+  padding: 9px 12px;
+  border: 1px solid var(--error);
+  background: rgba(138, 63, 53, .07);
+  color: var(--error);
   font-size: 11px;
   line-height: 1.5;
 }
@@ -373,8 +251,13 @@
 /* ─── Responsive ────────────────────────────────────────────────────────────── */
 
 @media (max-width: 860px) {
-  .inspo-importer-entry,
-  .inspo-editor-entry { width: 100%; }
+  .inspo-importer-entry { width: 100%; }
+}
 
-  .inspo-grid { padding: 24px 16px 60px; }
+.inspo-drop-btn { transition: transform var(--dur-press) var(--ease-out), background var(--dur-pop) var(--ease-out), border-color var(--dur-pop) var(--ease-out); }
+.inspo-drop-btn:active { transform: scale(.97); }
+
+@media (prefers-reduced-motion: reduce) {
+  .inspo-drop-btn:active,
+  .inspo-queue-remove:active { transform: none; }
 }

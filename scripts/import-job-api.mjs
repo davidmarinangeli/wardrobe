@@ -1,7 +1,8 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
+import { COLOR_NAMES } from "./style-rules.mjs";
 
 const API_ROOT = "/api/import/jobs";
 const ASSET_ROOT = "/api/import/assets";
@@ -250,6 +251,94 @@ export async function loadFaceReference(root, setting) {
   }
 }
 
+const IDENTITY_PROFILE_PROMPT = "Describe this person's visible physical identity in 2-4 factual, neutral sentences, to be used as a text-based redundancy alongside their photo when an AI image generator depicts them: apparent build/body type, apparent height impression, visible skin tone, hair color/length/style, face shape, apparent ethnicity, and any distinguishing features. Do not describe clothing, mood, or attractiveness — be direct and descriptive, not flattering.";
+
+async function geminiDescribeIdentity({ key, model, images }) {
+  const parts = [
+    { text: IDENTITY_PROFILE_PROMPT },
+    ...images.map((image) => ({ inlineData: { mimeType: "image/png", data: image.toString("base64") } })),
+  ];
+  const schema = { type: "object", properties: { profile: { type: "string" } }, required: ["profile"] };
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+    method: "POST",
+    headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts }],
+      generationConfig: { responseMimeType: "application/json", responseSchema: schema },
+    }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error?.message || `Gemini identity analysis failed (${response.status})`);
+  const outputText = result.candidates?.[0]?.content?.parts?.find((part) => typeof part.text === "string")?.text;
+  if (!outputText) throw new Error("Gemini identity analysis returned no structured result");
+  const parsed = JSON.parse(outputText);
+  if (typeof parsed.profile !== "string") throw new Error("Gemini identity analysis returned an invalid result");
+  return parsed.profile;
+}
+
+async function openAIDescribeIdentity({ key, baseUrl, model, images }) {
+  const content = [
+    { type: "input_text", text: IDENTITY_PROFILE_PROMPT },
+    ...images.map((image) => ({ type: "input_image", image_url: `data:image/png;base64,${image.toString("base64")}` })),
+  ];
+  const response = await fetch(`${baseUrl}/responses`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      input: [{ role: "user", content }],
+      text: { format: { type: "json_schema", name: "identity_profile", strict: true, schema: { type: "object", additionalProperties: false, properties: { profile: { type: "string" } }, required: ["profile"] } } },
+    }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error?.message || `OpenAI identity analysis failed (${response.status})`);
+  const outputText = result.output_text || result.output?.flatMap((item) => item.content || []).find((item) => item.type === "output_text")?.text;
+  if (!outputText) throw new Error("OpenAI identity analysis returned no structured result");
+  const parsed = JSON.parse(outputText);
+  if (typeof parsed.profile !== "string") throw new Error("OpenAI identity analysis returned an invalid result");
+  return parsed.profile;
+}
+
+// One-time, cached text description of the reference photos' visible identity (build, skin tone,
+// hair, ethnicity, etc.), reused as a redundant text signal alongside the images themselves in
+// buildModeledPrompt — a small face crop can be misread by the image model, but a text anchor
+// survives even when that happens. Re-derived only when the reference photos change (same
+// hash-then-cache pattern as suggestions-api.mjs's computeStyleDNA).
+export async function computeIdentityProfile({ root, dataDir, setting, provider, mode }) {
+  const modelPath = path.resolve(root, setting("WARDROBE_MODEL_REFERENCE", "data/model-reference.png"));
+  let modelData;
+  try { modelData = await readFile(modelPath); }
+  catch { return null; }
+  const face = await loadFaceReference(root, setting);
+  const hash = createHash("md5").update(modelData);
+  if (face) hash.update(face.data);
+  const digest = hash.digest("hex");
+  const cacheFile = path.join(dataDir, "identity-profile.json");
+  try {
+    const cached = JSON.parse(await readFile(cacheFile, "utf8"));
+    if (cached.hash === digest && typeof cached.profile === "string") return cached.profile;
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  // Vision analysis has no MiniMax path, so fall back to OpenAI the same way outfit style
+  // analysis does (outfits-api.mjs) — a MiniMax setup can still get an identity profile.
+  const identityProvider = provider === "gemini" ? "gemini" : "openai";
+  const identityKey = identityProvider === "gemini" ? resolveApiKey(setting, "gemini", mode).key : setting("OPENAI_API_KEY");
+  if (!identityKey) return null;
+  const images = face ? [modelData, face.data] : [modelData];
+  let profile;
+  try {
+    profile = identityProvider === "gemini"
+      ? await geminiDescribeIdentity({ key: identityKey, model: setting("GEMINI_VISION_MODEL", "gemini-3.6-flash"), images })
+      : await openAIDescribeIdentity({ key: identityKey, baseUrl: setting("OPENAI_API_BASE_URL", "https://api.openai.com/v1").replace(/\/$/, ""), model: setting("OPENAI_VISION_MODEL", "gpt-5.4-mini"), images });
+  } catch (error) {
+    console.warn(`Identity profile generation failed (${error.message})`);
+    return null;
+  }
+  await atomicJson(cacheFile, { hash: digest, profile });
+  return profile;
+}
+
 // "standard" = Gemini 2.5 Flash Image / OpenAI medium quality (cheap). "premium" = Nano Banana 2 (gemini-3.1-flash-image) / OpenAI high quality.
 // MiniMax has no documented quality tiers, so both fall back to the same model unless a premium override is set.
 export function resolveModeledModel(provider, tier, setting) {
@@ -275,23 +364,84 @@ export function resolveModeledModel(provider, tier, setting) {
   };
 }
 
-export function buildModeledPrompt(garmentCount = 1, { hasFaceReference = false } = {}) {
-  const multi = garmentCount > 1;
+function describeGarment(meta = {}) {
+  const label = meta?.name ? meta.name : "garment";
+  const details = Array.isArray(meta?.tags) && meta.tags.length ? ` (${meta.tags.join(", ")})` : "";
+  return `${label}${details}`;
+}
+
+// A flat-lay/product photo's sleeve foreshortens unpredictably, so the model needs an explicit
+// anatomical anchor or it drifts toward a longer sleeve than the garment actually has — "oversized"
+// especially gets misread as "longer sleeve" when it should only mean extra width/drop. Only fires
+// for garments that read as short-sleeve from their own name/tags, so it never fights a genuine
+// 3/4- or long-sleeve piece.
+function isLikelyShortSleeve(meta = {}) {
+  const text = `${meta?.name || ""} ${(Array.isArray(meta?.tags) ? meta.tags : []).join(" ")}`.toLowerCase();
+  if (/3\s*\/\s*4|three.?quarter|long.?sleeve|elbow.?sleeve/.test(text)) return false;
+  return /\bt-?shirt\b|\btee\b|\bpolo\b|\btank\b|\bshort.?sleeve\b/.test(text);
+}
+
+// Adding socks to an outfit alongside full-length trousers made the model invent a cuffed/rolled
+// hem so the socks would show, which isn't the fit the trousers actually have. Socks should only
+// become visible at the ankle when the bottoms are themselves cropped/ankle-length or are shorts —
+// otherwise the trousers keep their natural full length and the socks stay hidden beneath the hem.
+export function isLikelySocks(meta = {}) {
+  if (meta?.part === "socks") return true;
+  const text = `${meta?.name || ""} ${(Array.isArray(meta?.tags) ? meta.tags : []).join(" ")}`.toLowerCase();
+  return /\bsocks?\b/.test(text);
+}
+
+export function isLikelyBottom(meta = {}) {
+  if (meta?.part === "lowerbody") return true;
+  const text = `${meta?.name || ""} ${(Array.isArray(meta?.tags) ? meta.tags : []).join(" ")}`.toLowerCase();
+  return /\btrousers?\b|\bpants?\b|\bjeans?\b|\bchinos?\b|\bslacks?\b|\bleggings?\b|\bskirt\b/.test(text);
+}
+
+export function isLikelyCroppedOrShortBottom(meta = {}) {
+  const text = `${meta?.name || ""} ${(Array.isArray(meta?.tags) ? meta.tags : []).join(" ")}`.toLowerCase();
+  return /\bankle\b|\bcropped\b|\bcapri\b|\bbermuda\b|\bculottes?\b|\bshorts?\b|3\s*\/\s*4|three.?quarter/.test(text);
+}
+
+// garments: array of { name, tags } metadata, one per garment image, in the same order those
+// images are attached — used to name every reference image explicitly (per Google's own Nano
+// Banana prompting guidance: assign each input image a role rather than a bare "Image N") and to
+// carry fit/length words (e.g. "cropped", "ankle-length", "oversized") from the item's own tags
+// into the prompt, since the model otherwise has nothing but a loose "preserve fit" to go on.
+export function buildModeledPrompt(garments = [{}], { hasFaceReference = false } = {}) {
+  const list = garments.length ? garments : [{}];
+  const multi = list.length > 1;
   let nextImage = 2;
-  let faceNote = "";
+
+  const imageRoles = ["Image 1 is the exact person who must appear in the output — use it as the ground truth for their identity, body proportions, and pose."];
   if (hasFaceReference) {
-    faceNote = ` Image ${nextImage} is a close-up reference of that same person's face — treat it as the primary source for their exact facial identity (face shape, eyes, nose, mouth, skin tone, hairline, and any distinguishing features like facial hair, moles, or freckles); do not idealize, beautify, or alter it.`;
+    imageRoles.push(`Image ${nextImage} is a close-up reference of that same person's face — the primary, overriding source for their exact facial identity: face shape, eyes, nose, mouth, skin tone, ethnicity, hairline, and any distinguishing features like facial hair, moles, or freckles. Do not idealize, beautify, lighten, or otherwise alter it.`);
     nextImage += 1;
   }
   const garmentStart = nextImage;
-  const garmentEnd = nextImage + garmentCount - 1;
-  const garmentRef = multi
-    ? `the exact ${garmentCount} garments from Images ${garmentStart} through ${garmentEnd}, worn together as one complete outfit`
-    : `the exact garment from Image ${garmentStart}`;
+  list.forEach((meta, index) => {
+    imageRoles.push(`Image ${garmentStart + index} is the exact ${describeGarment(meta)} to depict — reproduce it pixel-faithful to this photo.`);
+  });
+  const garmentEnd = garmentStart + list.length - 1;
+  const garmentImagesPhrase = multi ? `Images ${garmentStart} through ${garmentEnd}` : `Image ${garmentStart}`;
+  const wearingPhrase = multi
+    ? `all ${list.length} garments from ${garmentImagesPhrase}, worn together as one complete outfit`
+    : `the garment from ${garmentImagesPhrase}`;
+
+  const shortSleeveNote = list.some(isLikelyShortSleeve)
+    ? " A short-sleeve t-shirt, tee, or polo — even an oversized one — ends above the elbow, never at or past it; oversized fit reads as extra width and drop through the body, not a longer sleeve reaching further down the arm."
+    : "";
+  const bottomItem = list.find((meta) => isLikelyBottom(meta) && !isLikelySocks(meta));
+  const sockNote = list.some(isLikelySocks) && bottomItem && !isLikelyCroppedOrShortBottom(bottomItem)
+    ? " Do not cuff, roll up, or shorten the trousers to expose the socks — the trousers keep their natural full length reaching down to the shoe, with the socks staying hidden beneath the hem; only let socks show at the ankle if the bottoms are themselves cropped, ankle-length, or shorts."
+    : "";
+  const relationship = `Composite these into one photorealistic scene: the person from Image 1 (identity anchored by Image ${hasFaceReference ? 2 : 1}) wearing ${wearingPhrase}, reproduced pixel-faithful to ${garmentImagesPhrase} — same hem length, same sleeve or pant length, same looseness or tightness, same silhouette, judged against realistic human anatomy rather than an idealized average.${shortSleeveNote}${sockNote} If a garment is cropped, oversized, ankle-length, or any other specific cut in its reference photo, it must remain exactly that cut in the output. When genuinely uncertain about a length, render the shorter, tighter reading rather than a longer, looser one. Never lengthen, shorten, tighten, loosen, or otherwise "correct" a garment's proportions toward a more generic fit.`;
+
   const supportingClothes = multi
     ? "use understated neutral supporting clothes only for any part of the body the selected pieces don't already cover"
     : "use understated neutral supporting clothes";
-  return `Create a professional horizontal 3:2 editorial fashion photograph of the person in Image 1 wearing ${garmentRef}. Preserve the person's recognizable identity, face, hair, age and proportions exactly.${faceNote} Preserve every garment color, material, fit, construction, graphic, logo and distinctive detail. Keep ${multi ? "every featured piece" : "the complete featured item"} clearly visible and unobstructed, ${supportingClothes}, realistic anatomy, natural light, authentic fabric, a tasteful real-world setting, and leave environmental space around the model. No text, watermark, product mockup, or synthetic appearance.`;
+  const scenario = `Create a professional horizontal 3:2 editorial fashion photograph. Preserve the person's recognizable identity, face, hair, age, ethnicity, skin tone, and body proportions exactly — this must read as the same individual, not a reinterpretation. Preserve every garment's color, material, construction, graphic, logo, and distinctive detail exactly as photographed. Keep ${multi ? "every featured piece" : "the complete featured item"} clearly visible and unobstructed, ${supportingClothes}, realistic anatomy, natural light, authentic fabric drape, a tasteful real-world setting, and leave environmental space around the model. No text, watermark, product mockup, or synthetic appearance.`;
+
+  return `Reference images:\n${imageRoles.join("\n")}\n\nRelationship instruction:\n${relationship}\n\nNew scenario:\n${scenario}`;
 }
 
 function cleanupTolerance(value) {
@@ -770,6 +920,115 @@ export async function openAIAnalyzeOutfitStyle({ key, baseUrl, model, image, mim
   return { description: parsed.description, tags: parsed.tags.filter((tag) => typeof tag === "string").slice(0, 4) };
 }
 
+const MIRROR_REGIONS = ["upperbody", "lowerbody", "outerwear", "footwear", "accessory"];
+const MIRROR_VOLUMES = ["fitted", "regular", "relaxed", "oversized"];
+const MIRROR_HEM_SEVERITIES = ["slight", "moderate", "severe"];
+
+// Perception-only prompt: the vision model reports what it sees (garment, color,
+// silhouette, hem behavior) and nothing else. All judgment — what's actually a
+// problem, what single fix addresses it — happens afterward in the deterministic
+// style-rules engine, so the critique can never contradict itself the way a single
+// free-form "describe and judge in one shot" call could.
+function buildMirrorPerceptionPrompt() {
+  return `You are looking at a photo of a person wearing an outfit. Identify each distinct visible garment and describe ONLY what you observe — do not judge, critique, rate, or suggest anything.
+
+For each visible garment, report:
+- region: one of "upperbody", "lowerbody", "outerwear", "footwear", "accessory" (use "outerwear" for a jacket/overshirt worn open over another top, "accessory" for belts/bags/hats/scarves/jewelry)
+- description: a short 2-4 word description, e.g. "open-collar shirt" or "wide-leg cargo pants"
+- color: the closest match from this exact list: ${COLOR_NAMES.join(", ")}
+- volume: how the piece sits on the body — one of "fitted", "regular", "relaxed", "oversized"
+- hemNotes: for lowerbody garments ONLY, a short factual note if the hem visibly pools, stacks, or bunches at the shoe (e.g. "pools over the shoe"); otherwise null
+- hemSeverity: only when hemNotes is set — one of "slight" (a light break/rest on the shoe, barely bunching), "moderate" (visibly bunches but doesn't obstruct the shoe), "severe" (heavy bunching, fabric mostly covers the shoe or drags); otherwise null. Judge this purely on how much fabric is stacked, not on whether the trouser is a wide-leg or relaxed cut — a wide-leg trouser can have a slight, normal amount of break just like a slim one.
+
+List every clearly visible garment. Do not invent garments you can't see, and do not add commentary.`;
+}
+
+const MIRROR_PERCEPTION_SCHEMA_GEMINI = {
+  type: "object",
+  properties: {
+    garments: {
+      type: "array",
+      maxItems: 8,
+      items: {
+        type: "object",
+        properties: {
+          region: { type: "string", enum: MIRROR_REGIONS },
+          description: { type: "string" },
+          color: { type: "string", enum: COLOR_NAMES },
+          volume: { type: "string", enum: MIRROR_VOLUMES },
+          hemNotes: { type: "string", nullable: true },
+          hemSeverity: { type: "string", enum: MIRROR_HEM_SEVERITIES, nullable: true },
+        },
+        required: ["region", "description", "color", "volume", "hemNotes", "hemSeverity"],
+      },
+    },
+  },
+  required: ["garments"],
+};
+
+export async function geminiPerceiveOutfit({ key, model, image, mime }) {
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+    method: "POST",
+    headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts: [
+        { text: buildMirrorPerceptionPrompt() },
+        { inlineData: { mimeType: mime, data: image.toString("base64") } },
+      ] }],
+      generationConfig: { responseMimeType: "application/json", responseSchema: MIRROR_PERCEPTION_SCHEMA_GEMINI },
+    }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error?.message || `Gemini perception failed (${response.status})`);
+  const outputText = result.candidates?.[0]?.content?.parts?.find((part) => typeof part.text === "string")?.text;
+  if (!outputText) throw new Error("Gemini perception returned no structured result");
+  const parsed = JSON.parse(outputText);
+  if (!Array.isArray(parsed.garments)) throw new Error("Gemini perception returned an invalid result");
+  return parsed.garments;
+}
+
+export async function openAIPerceiveOutfit({ key, baseUrl, model, image, mime }) {
+  const response = await fetch(`${baseUrl}/responses`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      input: [{ role: "user", content: [
+        { type: "input_text", text: buildMirrorPerceptionPrompt() },
+        { type: "input_image", image_url: `data:${mime};base64,${image.toString("base64")}` },
+      ] }],
+      text: { format: { type: "json_schema", name: "mirror_perception", strict: true, schema: {
+        type: "object", additionalProperties: false,
+        properties: {
+          garments: {
+            type: "array", maxItems: 8,
+            items: {
+              type: "object", additionalProperties: false,
+              properties: {
+                region: { type: "string", enum: MIRROR_REGIONS },
+                description: { type: "string" },
+                color: { type: "string", enum: COLOR_NAMES },
+                volume: { type: "string", enum: MIRROR_VOLUMES },
+                hemNotes: { type: ["string", "null"] },
+                hemSeverity: { type: ["string", "null"], enum: [...MIRROR_HEM_SEVERITIES, null] },
+              },
+              required: ["region", "description", "color", "volume", "hemNotes", "hemSeverity"],
+            },
+          },
+        },
+        required: ["garments"],
+      } } },
+    }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error?.message || `OpenAI perception failed (${response.status})`);
+  const outputText = result.output_text || result.output?.flatMap((item) => item.content || []).find((item) => item.type === "output_text")?.text;
+  if (!outputText) throw new Error("OpenAI perception returned no structured result");
+  const parsed = JSON.parse(outputText);
+  if (!Array.isArray(parsed.garments)) throw new Error("OpenAI perception returned an invalid result");
+  return parsed.garments;
+}
+
 export function wardrobeImportApi(options = {}) {
   let root;
   let dataDir;
@@ -848,6 +1107,7 @@ export function wardrobeImportApi(options = {}) {
           throw new Error("Premium quality needs PROD mode — the free TEST key has no billing enabled for Nano Banana 2. Switch to PROD to generate this.");
         }
         const garment = { data: await readFile(path.join(libraryAssetDir, `${id}-garment.png`)), mime: "image/png", name: "garment.png" };
+        const itemRecord = (await loadImported()).find((record) => record.id === id);
         const modelPath = path.resolve(root, setting("WARDROBE_MODEL_REFERENCE", "data/model-reference.png"));
         let modelData;
         try {
@@ -859,8 +1119,16 @@ export function wardrobeImportApi(options = {}) {
         const model = { data: modelData, mime: "image/png", name: "model.png" };
         const face = await loadFaceReference(root, setting);
         const referenceImages = face ? [model, face] : [model];
-        const basePrompt = options.modeledPrompt || buildModeledPrompt(1, { hasFaceReference: Boolean(face) });
-        const modeledPrompt = prompt ? `${basePrompt}\nUser regeneration direction: ${prompt}` : basePrompt;
+        // Tried dropping the face closeup on standard tier on the theory that two "person" images
+        // were competing — tested against the same outfit and it was still an unreliable draw either
+        // way, so the face closeup isn't the cause. Reverted; keeping this for reference in case it's
+        // worth revisiting once standard tier itself changes.
+        // const useFaceReference = tier === "premium" && Boolean(face);
+        // const referenceImages = useFaceReference ? [model, face] : [model];
+        const basePrompt = options.modeledPrompt || buildModeledPrompt([{ name: itemRecord?.name, tags: itemRecord?.tags }], { hasFaceReference: Boolean(face) });
+        const identityProfile = await computeIdentityProfile({ root, dataDir, setting, provider, mode });
+        const withIdentity = identityProfile ? `${basePrompt}\nAdditional identity notes for consistency: ${identityProfile}` : basePrompt;
+        const modeledPrompt = prompt ? `${withIdentity}\nUser regeneration direction: ${prompt}` : withIdentity;
         const resolved = resolveModeledModel(provider, tier, setting);
         let bytes;
         if (provider === "gemini") {

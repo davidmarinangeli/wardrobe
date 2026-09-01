@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Gear } from "@phosphor-icons/react";
+import { useCallback, useEffect, useState } from "react";
+import { Gear, Lightbulb } from "@phosphor-icons/react";
 import { WardrobeImportFlow } from "./import-flow.jsx";
 import { ColorProfileModal, SEASONS, itemMatchesPalette, readColorProfile } from "./color-profile.jsx";
 import { Outfits } from "./outfits.jsx";
+import { Mirror } from "./mirror.jsx";
 import { Inspo } from "./inspo.jsx";
-import { Wishlist } from "./wishlist.jsx";
 import { GalleryItem, ItemViewer } from "./item-editor.jsx";
-import { WARDROBE_TYPES as TYPES, TYPE_MAP, TYPE_ORDER } from "./categories.js";
+import { WARDROBE_TYPES as TYPES, TYPE_MAP } from "./categories.js";
 import { PageShell } from "./components/PageShell.jsx";
 import { PageStatus } from "./components/PageStatus.jsx";
+import { useTypeFilteredItems } from "./hooks/useTypeFilteredItems.js";
 import { DISMISS_KEY as ONBOARDING_DISMISS_KEY, Onboarding, RESUME_KEY as ONBOARDING_RESUME_KEY } from "./onboarding.jsx";
 
 const STORAGE_KEY = "open-wardrobe-edits-v1";
@@ -56,23 +57,20 @@ function persistDeletedItem(id) {
   localStorage.setItem(DELETED_STORAGE_KEY, JSON.stringify([...deleted]));
 }
 
-function AiModeToggle({ setup, onChange }) {
+// A developer setting, findable but quiet: a small dot on the gear button
+// reporting the current Gemini mode, nothing more. The actual switch lives in
+// Settings (Onboarding's DoneStep) — see AiModeToggle there.
+function AiModeBadge({ setup }) {
   if (!setup || setup.provider !== "gemini") return null;
-  const mode = setup.mode;
-  const missingKey = mode === "test" ? !setup.hasTestKey : !setup.hasProdKey;
+  const missingKey = setup.mode === "test" ? !setup.hasTestKey : !setup.hasProdKey;
   return (
-    <div className="ai-mode-switch">
-      <span className="ai-mode-switch__label">Gemini key</span>
-      <div className="ai-mode-switch__pill" role="radiogroup" aria-label="Gemini API mode">
-        <button type="button" className={mode === "test" ? "active" : ""} aria-pressed={mode === "test"} onClick={() => onChange("test")}>Test</button>
-        <button type="button" className={mode === "prod" ? "active" : ""} aria-pressed={mode === "prod"} onClick={() => onChange("prod")}>Prod</button>
-      </div>
-      {missingKey && (
-        <p className="ai-mode-switch__warning" role="alert">
-          {mode === "test" ? "Add GEMINI_API_KEY_TEST to .env, then restart." : "Add GEMINI_API_KEY_PROD (or GEMINI_API_KEY) to .env, then restart."}
-        </p>
-      )}
-    </div>
+    <span
+      className={`setup-trigger__badge${missingKey ? " is-warning" : ""}`}
+      aria-hidden="true"
+      title={`Gemini: ${setup.mode === "prod" ? "Prod" : "Test"}${missingKey ? " (key missing)" : ""}`}
+    >
+      {setup.mode === "prod" ? "P" : "T"}
+    </span>
   );
 }
 
@@ -88,6 +86,9 @@ export function App() {
   const [onlyMatches, setOnlyMatches] = useState(false);
   const [aiSetup, setAiSetup] = useState(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showInspoImporter, setShowInspoImporter] = useState(false);
+  const [showOutfitBuilder, setShowOutfitBuilder] = useState(false);
+  const [showOutfitSuggestions, setShowOutfitSuggestions] = useState(false);
 
   useEffect(() => {
     fetch("/api/import/config", { cache: "no-store" })
@@ -133,17 +134,11 @@ export function App() {
 
   const selectedItem = items.find((item) => item.id === selectedId) || null;
 
-  const visibleItems = useMemo(() => {
-    let filtered = activeType === "all" ? items : items.filter((item) => item.part === activeType);
-    if (onlyMatches && colorProfile) filtered = filtered.filter((item) => itemMatchesPalette(item, colorProfile));
-    return [...filtered].sort((a, b) => {
-      if (activeType === "all") {
-        const typeDifference = (TYPE_ORDER[a.part] ?? 99) - (TYPE_ORDER[b.part] ?? 99);
-        if (typeDifference) return typeDifference;
-      }
-      return a.id.localeCompare(b.id);
-    });
-  }, [activeType, items, onlyMatches, colorProfile]);
+  const paletteFilter = useCallback(
+    (item) => itemMatchesPalette(item, colorProfile),
+    [colorProfile],
+  );
+  const visibleItems = useTypeFilteredItems(items, activeType, onlyMatches && colorProfile ? paletteFilter : undefined);
 
   const chooseType = (typeId) => {
     setActiveType(typeId);
@@ -175,11 +170,11 @@ export function App() {
     setItems((current) => current.some((item) => item.id === newItem.id) ? current : [...current, newItem]);
   }, []);
 
-  const generateModeledPhoto = useCallback(async (item, tier) => {
+  const generateModeledPhoto = useCallback(async (item, tier, prompt) => {
     const response = await fetch(`/api/import/wardrobe/${item.id}/modeled`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tier }),
+      body: JSON.stringify({ tier, prompt }),
     });
     const value = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(value.error || "Could not start generating a model photo.");
@@ -210,31 +205,77 @@ export function App() {
   return (
     <div className={`app-shell${selectedItem ? " has-selection" : ""}`}>
       <div className="app-top-bar">
-        <nav className="app-view-switch" aria-label="Switch between wardrobe, outfits, inspo, and wishlist">
+        <nav className="app-view-switch" aria-label="Switch between wardrobe, outfits, and inspo">
           <button type="button" className={view === "wardrobe" ? "active" : ""} onClick={() => setView("wardrobe")} aria-pressed={view === "wardrobe"}>Wardrobe</button>
           <button type="button" className={view === "outfits" ? "active" : ""} onClick={() => setView("outfits")} aria-pressed={view === "outfits"}>Outfits</button>
           <button type="button" className={view === "inspo" ? "active" : ""} onClick={() => setView("inspo")} aria-pressed={view === "inspo"}>Inspo</button>
-          <button type="button" className={view === "wishlist" ? "active" : ""} onClick={() => setView("wishlist")} aria-pressed={view === "wishlist"}>Wishlist</button>
         </nav>
         <div className="app-top-bar__right">
-          <AiModeToggle setup={aiSetup} onChange={setAiMode} />
+          {/* Global tools, always in the same place — but each view gets
+              exactly one "add" and one "AI action" button, not a duplicate
+              pair layered on top of the page's own. The primary action's
+              idle state relabels to whatever the current view actually adds;
+              the second slot swaps between Mirror (Wardrobe/Inspo) and
+              Suggest outfit (Outfits) entirely, since those aren't the same
+              action wearing a different label. */}
+          <div className="top-actions">
+            <WardrobeImportFlow
+              onGarmentApproved={addImportedItem}
+              externalSetup={aiSetup}
+              idleLabel={view === "inspo" ? "Add Inspo" : view === "outfits" ? "Add outfit" : undefined}
+              onIdleActivate={
+                view === "inspo" ? () => setShowInspoImporter(true)
+                : view === "outfits" ? () => setShowOutfitBuilder(true)
+                : undefined
+              }
+            />
+            {view === "outfits" ? (
+              <button
+                type="button"
+                className="top-action top-action--secondary ai-action"
+                onClick={() => setShowOutfitSuggestions(true)}
+                disabled={items.length < 5}
+              >
+                <Lightbulb size={17} weight="bold" aria-hidden="true" />
+                <span className="top-action__label">Suggest outfit</span>
+                <span className="ai-action-beam-mask" aria-hidden="true">
+                  <span className="ai-action-beam" />
+                </span>
+              </button>
+            ) : (
+              // Remounts on every view change (key={view}) so the spark
+              // animation replays on arrival, same as a fresh Suggest-outfit
+              // button does when its whole branch mounts.
+              <Mirror key={view} items={items} />
+            )}
+          </div>
           <button type="button" className="setup-trigger" onClick={() => setShowOnboarding(true)} aria-label="Open setup guide">
             <Gear size={16} />
+            <AiModeBadge setup={aiSetup} />
           </button>
         </div>
       </div>
 
       {view === "inspo" ? (
-        <Inspo />
-      ) : view === "wishlist" ? (
-        <Wishlist />
+        <Inspo showImporter={showInspoImporter} onImporterClose={() => setShowInspoImporter(false)} />
       ) : view === "outfits" ? (
-        <Outfits items={items} premiumAllowed={premiumAllowed} />
+        <Outfits
+          items={items}
+          premiumAllowed={premiumAllowed}
+          showBuilder={showOutfitBuilder}
+          onOpenBuilder={() => setShowOutfitBuilder(true)}
+          onCloseBuilder={() => setShowOutfitBuilder(false)}
+          showSuggestions={showOutfitSuggestions}
+          onCloseSuggestions={() => setShowOutfitSuggestions(false)}
+        />
       ) : (
         <PageShell
           count={items.length}
           noun="piece"
           actions={(
+            // A profile setting ("what's my season?"), not a filter — it belongs
+            // up here with the page-level actions, not among the category-nav
+            // pills below. "Matches my colors" stays there since it IS a filter.
             <button type="button" className="header-action-btn" onClick={() => setShowColorQuiz(true)}>
               {colorProfile ? <><span className="season-dot" style={{ backgroundColor: SEASONS[colorProfile.season].accent }} />{SEASONS[colorProfile.season].label}</> : "My Colors"}
             </button>
@@ -264,10 +305,11 @@ export function App() {
 
           {!!items.length && (
             <section className="gallery-grid" aria-label={`${TYPE_MAP[activeType]?.label || "All"} wardrobe items`}>
-              {visibleItems.map((item) => (
+              {visibleItems.map((item, index) => (
                 <GalleryItem
                   key={item.id}
                   item={item}
+                  index={index}
                   selected={selectedId === item.id}
                   onOpen={setSelectedId}
                   seasonMatch={colorProfile?.showBadges && itemMatchesPalette(item, colorProfile) ? SEASONS[colorProfile.season] : null}
@@ -286,11 +328,11 @@ export function App() {
           onSave={(profile) => { setColorProfile(profile); setShowColorQuiz(false); }}
         />
       )}
-      <WardrobeImportFlow onGarmentApproved={addImportedItem} externalSetup={aiSetup} />
       {showOnboarding && (
         <Onboarding
           setup={aiSetup}
           onSetupChange={setAiSetup}
+          onModeChange={setAiMode}
           onClose={() => setShowOnboarding(false)}
         />
       )}

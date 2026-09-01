@@ -8,11 +8,16 @@ import { OptimizedImage } from "../OptimizedImage.jsx";
  *
  * Props
  * ─────
- * src      string – Image URL.
- * alt      string – Alt text for the photo (e.g. "Weekend casual worn by a model").
- * name     string – Displayed in the floating badge.
+ * src         string – Image URL.
+ * alt         string – Alt text for the photo (e.g. "Weekend casual worn by a model").
+ * name        string – Displayed in the floating badge (ignored when showHeading is false).
+ * showHeading boolean – Whether to render the floating name badge over the photo. Defaults
+ *             to true; pass false when the name is edited elsewhere so it isn't shown twice
+ *             and doesn't sit over the photo.
+ * children    ReactNode – Optional content positioned within the photo's bounds,
+ *             e.g. a floating garment thumbnail anchored to its bottom-right corner.
  */
-export function ModeledHero({ src, alt, name }) {
+export function ModeledHero({ src, alt, name, showHeading = true, children }) {
   return (
     <div className="modeled-hero">
       <OptimizedImage
@@ -24,11 +29,14 @@ export function ModeledHero({ src, alt, name }) {
         quality={82}
         priority
       />
-      <div className="viewer-heading modeled-heading">
-        <div>
-          <h2>{name}</h2>
+      {showHeading && (
+        <div className="viewer-heading modeled-heading">
+          <div>
+            <h2>{name}</h2>
+          </div>
         </div>
-      </div>
+      )}
+      {children}
     </div>
   );
 }
