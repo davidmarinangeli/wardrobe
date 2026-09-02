@@ -3,6 +3,9 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { atomicJson, readAiMode, resolveApiKey, resolveProvider } from "./import-job-api.mjs";
 import { PART_TO_REGION, classifyColor, describeColorHarmonyRules, evaluateColorHarmony } from "./style-rules.mjs";
+import { NO_JUDGMENT_PROMPT } from "../shared/prompt-guardrails.mjs";
+import { describePreferences } from "./preferences.mjs";
+import { loadDerivedPreferences } from "./preferences-api.mjs";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -186,6 +189,9 @@ async function computeStyleDNA(inspoFile, styleDnaFile, setting, mode) {
 
   const prompt = `You are a fashion analyst. Based on these inspiration references saved by a user, describe their personal style in 2-3 sentences. Identify their style archetype (minimalist, streetwear, classic, Scandinavian, preppy, old money, etc.), recurring patterns (color preferences, silhouette preferences, textures they gravitate toward), and anything they consistently avoid if detectable. Be specific and direct. No filler.
 
+${NO_JUDGMENT_PROMPT}
+- Describe the aesthetic they are drawn to. Do not rate it, date it, or place it on a timeline.
+
 Inspiration pins:
 ${pinSummaries}`;
 
@@ -242,7 +248,7 @@ const SUGGESTION_SCHEMA = {
   required: ["outfits"],
 };
 
-async function generateSuggestions({ filteredItems, weather, occasion, colorProfile, styleDna, existingOutfits, setting, mode }) {
+async function generateSuggestions({ filteredItems, weather, occasion, colorProfile, styleDna, preferences, existingOutfits, setting, mode }) {
   const { key, keyName } = resolveApiKey(setting, "gemini", mode);
   if (!key) throw new Error(`${keyName} is not configured for ${mode.toUpperCase()} mode`);
 
@@ -277,7 +283,14 @@ async function generateSuggestions({ filteredItems, weather, occasion, colorProf
   // Style DNA text
   const styleText = styleDna || "No style profile available. Use balanced, versatile suggestions.";
 
+  // Behaviour-derived taste profile. Omitted entirely when nothing has been
+  // learned yet, so a cold-start user gets no section rather than an empty one.
+  const preferencesText = describePreferences(preferences);
+  const preferencesBlock = preferencesText ? `\nWHAT THIS USER KEEPS CHOOSING:\n${preferencesText}\n` : "";
+
   const prompt = `You are a personal fashion stylist. Suggest 3 to 5 outfit combinations from the user's wardrobe for today.
+
+${NO_JUDGMENT_PROMPT}
 
 WEATHER TODAY:
 ${weatherText}
@@ -289,7 +302,7 @@ ${colorText}
 
 STYLE PROFILE:
 ${styleText}
-
+${preferencesBlock}
 EXISTING OUTFITS (don't duplicate these):
 ${existingText}
 
@@ -305,8 +318,10 @@ Rules:
 - ${describeColorHarmonyRules()}
 - If a color profile is set, prefer items that work with that seasonal palette.
 - If a style profile is set, match its aesthetic sensibility.
+- If a "what this user keeps choosing" section is present, weight it above generic styling convention — it is evidence from their own actions. Combinations they turned down must not reappear.
 - Weather must be appropriate: no heavy layers in heat, proper coverage in cold.
-- Each outfit needs a short name (2-4 words) and a "reasoning" object with style, color, weather, and occasion explanations. Keep each explanation to 1-2 sentences.`;
+- Each outfit needs a short name (2-4 words) and a "reasoning" object with style, color, weather, and occasion explanations. Keep each explanation to 1-2 sentences.
+- Reasoning explains why these pieces work together. It never comments on how current the wardrobe is, and never suggests buying or replacing anything.`;
 
   const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: "POST",
@@ -415,6 +430,9 @@ export function suggestionsApi(options = {}) {
         try { existingOutfits = JSON.parse(await readFile(outfitsFile, "utf8")); }
         catch { /* no outfits yet */ }
 
+        // Behaviour-derived taste profile (never throws; degrades to null)
+        const preferences = await loadDerivedPreferences(dataDir);
+
         // Generate
         const suggestions = await generateSuggestions({
           filteredItems,
@@ -422,12 +440,18 @@ export function suggestionsApi(options = {}) {
           occasion,
           colorProfile,
           styleDna,
+          preferences,
           existingOutfits,
           setting,
           mode,
         });
 
-        return json(res, 200, { suggestions, weather, styleDna: styleDna ? true : false });
+        return json(res, 200, {
+          suggestions,
+          weather,
+          styleDna: styleDna ? true : false,
+          personalized: Boolean(preferences?.signalCount),
+        });
       }
 
       return json(res, 404, { error: "Not found" });

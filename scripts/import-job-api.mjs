@@ -4,6 +4,7 @@ import path from "node:path";
 import sharp from "sharp";
 import { COLOR_NAMES } from "./style-rules.mjs";
 import { GARMENT_DISAMBIGUATION_PROSE, GARMENT_PART_ID_SET, GARMENT_PART_IDS, GARMENT_PART_IDS_PROSE, MIRROR_REGIONS } from "../shared/garments.mjs";
+import { NO_JUDGMENT_PROMPT } from "../shared/prompt-guardrails.mjs";
 
 const API_ROOT = "/api/import/jobs";
 const ASSET_ROOT = "/api/import/assets";
@@ -803,7 +804,9 @@ const IMPORT_ITEMS_PROMPT = `Identify every distinct wearable clothing item visi
 
 ${GARMENT_DISAMBIGUATION_PROSE}
 
-Suggest a concise specific name, primary hex color, optional genuinely distinct secondary hex color, and 1-4 useful lowercase detail tags. Also set worn to true if a person is actually wearing the item in this photo, or false if it's an unworn product shot such as a flat lay, ghost mannequin, hanging, or floating on a plain backdrop with no person. And set rotationDegrees to the clockwise degrees (-180 to 180) needed to make the item appear upright — 0 if it's already upright, non-zero if the photo shows it tilted, sideways, or upside-down.`;
+Suggest a concise specific name, primary hex color, optional genuinely distinct secondary hex color, and 1-4 useful lowercase detail tags. Also set worn to true if a person is actually wearing the item in this photo, or false if it's an unworn product shot such as a flat lay, ghost mannequin, hanging, or floating on a plain backdrop with no person. And set rotationDegrees to the clockwise degrees (-180 to 180) needed to make the item appear upright — 0 if it's already upright, non-zero if the photo shows it tilted, sideways, or upside-down.
+
+Name and tag each item descriptively, never evaluatively: record what it is, its cut and its color. Skinny jeans are "skinny jeans" tagged skinny — not dated, not out of style, not anything about whether people wear them now.`;
 
 export async function geminiAnalyze({ key, model, image, mime }) {
   const schema = {
@@ -881,7 +884,12 @@ export async function openAIAnalyze({ key, baseUrl, model, image, mime }) {
   return parsed.items;
 }
 
-const OUTFIT_STYLE_PROMPT = "Write a short one-sentence editorial description of this outfit as it would appear in a fashion lookbook caption, plus 2-4 concise lowercase style tags (such as minimal, street, business casual, evening). Base it only on what's visible in the photo.";
+// "Lookbook caption" is exactly the register where era and trend language lives,
+// so this surface carries the guardrail explicitly.
+const OUTFIT_STYLE_PROMPT = `Write a short one-sentence editorial description of this outfit as it would appear in a fashion lookbook caption, plus 2-4 concise lowercase style tags (such as minimal, street, business casual, evening). Base it only on what's visible in the photo.
+
+${NO_JUDGMENT_PROMPT}
+- Describe the outfit. Never date it, rate it, or say anything about whether it is current.`;
 
 export async function geminiAnalyzeOutfitStyle({ key, model, image, mime }) {
   const schema = { type: "object", properties: { description: { type: "string" }, tags: { type: "array", items: { type: "string" }, maxItems: 4 } }, required: ["description", "tags"] };
@@ -1095,6 +1103,10 @@ export function wardrobeImportApi(options = {}) {
       modeledError: existing?.modeledError || null,
       modeledTier: existing?.modeledTier || null,
       importJobId: job.id,
+      // When the piece entered the wardrobe. Without it there is no honest way
+      // to tell "never worn" from "only just arrived", so the dead-stock signal
+      // stays silent for items that predate this field rather than guessing.
+      createdAt: existing?.createdAt || new Date().toISOString(),
     };
     const next = [...records.filter((item) => item.id !== id), record];
     await atomicJson(importedFile, next);

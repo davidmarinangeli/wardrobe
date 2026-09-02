@@ -3,6 +3,8 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { atomicJson, buildModeledPrompt, checkSetup, computeIdentityProfile, geminiAnalyzeOutfitStyle, geminiEdit, isLikelyBottom, isLikelyCroppedOrShortBottom, isLikelySocks, isPremiumAllowed, loadFaceReference, miniMaxEdit, openAIAnalyzeOutfitStyle, openAIEdit, readAiMode, resolveApiKey, resolveModeledModel, resolveProvider } from "./import-job-api.mjs";
 
+import { recordSignal } from "./preferences-api.mjs";
+
 const OUTFIT_ASSET_ROOT = "/api/outfits/assets";
 
 function json(res, status, value) {
@@ -188,6 +190,14 @@ export function outfitsApi(options = {}) {
         const outfit = normalizeOutfit(input);
         const outfits = await loadOutfits();
         await atomicJson(outfitsFile, [...outfits, outfit]);
+        // Saving an outfit is the strongest positive signal the app can observe:
+        // the user is stating they will wear this combination.
+        await recordSignal(dataDir, {
+          type: "outfit_saved",
+          itemIds: outfit.itemIds,
+          name: outfit.name,
+          source: typeof input.source === "string" ? input.source : undefined,
+        });
         return json(res, 201, outfit);
       }
       const match = url.pathname.match(/^\/api\/outfits\/([a-f0-9-]{36})$/i);

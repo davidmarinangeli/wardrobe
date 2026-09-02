@@ -5,6 +5,7 @@ import sharp from "sharp";
 import { atomicJson } from "./import-job-api.mjs";
 import { detectAndCreateWishlistItems, wishlistPaths } from "./wishlist-api.mjs";
 import { GARMENT_PART_IDS } from "../shared/garments.mjs";
+import { recordSignal } from "./preferences-api.mjs";
 
 const INSPO_ASSET_ROOT = "/api/inspo/assets";
 const VALID_PARTS = new Set([...GARMENT_PART_IDS, "full_look"]);
@@ -171,6 +172,8 @@ export function inspoApi(options = {}) {
             const pin = newPin(id, imageUrl, sourceUrl);
             const pins = await loadPins();
             await atomicJson(inspoFile, [...pins, pin]);
+            // An aesthetic reference the user chose to keep.
+            await recordSignal(dataDir, { type: "inspo_added", pinId: pin.id, category: pin.category, colors: pin.colors });
             created.push(pin);
           } catch (entryError) {
             errors.push({ input: entry, error: entryError.message });

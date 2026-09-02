@@ -20,6 +20,7 @@ import {
   resolveProvider,
 } from "./import-job-api.mjs";
 import { GARMENT_PART_ID_SET } from "../shared/garments.mjs";
+import { recordSignal } from "./preferences-api.mjs";
 
 const ASSET_ROOT = "/api/wishlist/assets";
 const PARTS = GARMENT_PART_ID_SET;
@@ -120,6 +121,10 @@ export async function detectAndCreateWishlistItems({ imageBytes, sourcePinId = n
 
   const existing = await loadWishlist(wishlistFile);
   await atomicJson(wishlistFile, [...existing, ...records]);
+  // Buy intent: the user asked for these to be pulled out of a reference they saved.
+  for (const record of records) {
+    await recordSignal(dataDir, { type: "wishlist_added", itemId: record.id, part: record.part, color: record.color, name: record.name });
+  }
   return { created: records, aggregate };
 }
 
@@ -228,6 +233,8 @@ export function wishlistApi(options = {}) {
         if (!item) return json(res, 404, { error: "Wishlist item not found" });
         const remaining = items.filter((entry) => entry.id !== id);
         await atomicJson(wishlistFile, remaining);
+        // The reversal of buy intent — an explicit negative the user produced.
+        await recordSignal(dataDir, { type: "wishlist_removed", itemId: id, part: item.part, color: item.color, name: item.name });
         await Promise.all([
           rm(path.join(wishlistAssetDir, path.basename(item.cropImage)), { force: true }),
           rm(path.join(wishlistAssetDir, `${id}-cutout.png`), { force: true }),

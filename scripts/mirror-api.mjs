@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { geminiPerceiveOutfit, normalizeImage, openAIPerceiveOutfit, readAiMode, resolveApiKey, resolveProvider } from "./import-job-api.mjs";
 import { buildMirrorCritique } from "./style-rules.mjs";
+import { recordSignal } from "./preferences-api.mjs";
 
 function json(res, status, value) {
   res.statusCode = status;
@@ -69,6 +70,9 @@ export function mirrorApi(options = {}) {
         // Judgment happens locally, deterministically, from the perceived facts —
         // not a second model call — so the critique and its swaps can't drift apart.
         const critique = buildMirrorCritique(garments, items);
+
+        // Ground truth of what is actually being worn, not just planned.
+        await recordSignal(dataDir, { type: "mirror_submitted" });
 
         return json(res, 200, { critique });
       }
