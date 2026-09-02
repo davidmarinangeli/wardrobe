@@ -185,19 +185,34 @@ function preFilterWardrobe(items, weather, occasion) {
 // Style DNA from inspo board
 // ---------------------------------------------------------------------------
 
+// Bumped whenever the analyst prompt below changes. The cache key has to cover
+// the question as well as the pins, or a reworded prompt silently keeps serving
+// answers to the old one.
+const STYLE_DNA_PROMPT_VERSION = 2;
+
 function inspoHash(pins) {
   const hash = createHash("md5");
+  hash.update(`v${STYLE_DNA_PROMPT_VERSION}`);
   for (const pin of pins) hash.update(`${pin.id}:${pin.category || ""}:${pin.name || ""}`);
   return hash.digest("hex");
 }
 
-async function computeStyleDNA(inspoFile, styleDnaFile, setting, mode) {
+// A board of two pins is a coincidence; three is the first point at which a
+// recurring aesthetic can honestly be claimed. Exported so the UI can tell the
+// user how close their board is to being read, instead of silently doing
+// nothing with it.
+export const STYLE_DNA_MIN_PINS = 3;
+
+/** The pins detection has actually understood. Missing file means an empty board, not an error. */
+async function readClassifiedPins(inspoFile) {
   let pins;
   try { pins = JSON.parse(await readFile(inspoFile, "utf8")); }
-  catch (error) { if (error.code === "ENOENT") return null; throw error; }
+  catch (error) { if (error.code === "ENOENT") return []; throw error; }
+  return Array.isArray(pins) ? pins.filter((pin) => pin.category && pin.name) : [];
+}
 
-  const classified = pins.filter((pin) => pin.category && pin.name);
-  if (classified.length < 3) return null;
+async function computeStyleDNA(classified, styleDnaFile, setting, mode) {
+  if (classified.length < STYLE_DNA_MIN_PINS) return null;
 
   const hash = inspoHash(classified);
 
@@ -221,10 +236,16 @@ async function computeStyleDNA(inspoFile, styleDnaFile, setting, mode) {
 
   const model = setting("GEMINI_SUGGESTIONS_MODEL", "gemini-3.6-flash");
 
-  const prompt = `You are a fashion analyst. Based on these inspiration references saved by a user, describe their personal style in 2-3 sentences. Identify their style archetype (minimalist, streetwear, classic, Scandinavian, preppy, old money, etc.), recurring patterns (color preferences, silhouette preferences, textures they gravitate toward), and anything they consistently avoid if detectable. Be specific and direct. No filler.
+  // This text is shown back to the user as well as injected into the suggestion
+  // prompt, so it has to read as a description of an aesthetic rather than as a
+  // clinical note about a subject — "Anchored in muted neutrals…", never "This
+  // user's personal style aligns with…".
+  const prompt = `You are a fashion analyst. Based on these inspiration references someone saved, describe the aesthetic itself in 2-3 sentences. Identify the style archetype (minimalist, streetwear, classic, Scandinavian, preppy, old money, etc.), recurring patterns (color preferences, silhouette preferences, textures it gravitates toward), and anything it consistently avoids if detectable. Be specific and direct. No filler.
+
+Write it as a direct description of the aesthetic, with no grammatical subject. Do not open with "This user", "You", "The user", "Their style" or any equivalent — start with the aesthetic itself.
 
 ${NO_JUDGMENT_PROMPT}
-- Describe the aesthetic they are drawn to. Do not rate it, date it, or place it on a timeline.
+- Describe the aesthetic that is present. Do not rate it, date it, or place it on a timeline.
 
 Inspiration pins:
 ${pinSummaries}`;
@@ -459,12 +480,20 @@ export function suggestionsApi(options = {}) {
         // Pre-filter
         const filteredItems = preFilterWardrobe(items, weather, occasion);
 
-        // Style DNA
+        // Style DNA — the aesthetic read off the inspo board. Pinning a look is
+        // the strongest taste statement in the app (nobody pins by accident),
+        // so the board is treated as a standing memo about the user's style
+        // rather than as a gallery. Optional: a failure here degrades the
+        // suggestions, it never fails them.
         const inspoFile = path.join(dataDir, "inspo.json");
         const styleDnaFile = path.join(dataDir, "style-dna.json");
         let styleDna = null;
-        try { styleDna = await computeStyleDNA(inspoFile, styleDnaFile, setting, mode); }
-        catch { /* style DNA is optional */ }
+        let pinCount = 0;
+        try {
+          const classified = await readClassifiedPins(inspoFile);
+          pinCount = classified.length;
+          styleDna = await computeStyleDNA(classified, styleDnaFile, setting, mode);
+        } catch { /* style DNA is optional */ }
 
         // Color profile (passed from frontend)
         const colorProfile = input.colorProfile || null;
@@ -491,12 +520,39 @@ export function suggestionsApi(options = {}) {
           mode,
         });
 
+        // The style read is returned in full, not as a boolean. Showing the user
+        // the sentence their pins produced is what makes the board feel like it
+        // is doing something; a flag they cannot see teaches them nothing.
         return json(res, 200, {
           suggestions,
           weather,
-          styleDna: styleDna ? true : false,
+          styleDna,
+          pinCount,
+          minPins: STYLE_DNA_MIN_PINS,
           personalized: Boolean(preferences?.signalCount),
         });
+      }
+
+      // Read-only view of the same style read, for surfaces that want to show
+      // what the board says without paying for a suggestion run. Never triggers
+      // a fresh analysis: it answers from the cache written by a generate call,
+      // so opening a panel is free.
+      if (url.pathname === "/api/suggestions/style-dna" && req.method === "GET") {
+        const inspoFile = path.join(dataDir, "inspo.json");
+        const styleDnaFile = path.join(dataDir, "style-dna.json");
+        let classified = [];
+        try { classified = await readClassifiedPins(inspoFile); }
+        catch { /* an unreadable board reads as an empty one */ }
+
+        let styleDna = null;
+        if (classified.length >= STYLE_DNA_MIN_PINS) {
+          try {
+            const cached = JSON.parse(await readFile(styleDnaFile, "utf8"));
+            if (cached.hash === inspoHash(classified) && cached.styleDna) styleDna = cached.styleDna;
+          } catch { /* no cache yet — the next generate will write one */ }
+        }
+
+        return json(res, 200, { styleDna, pinCount: classified.length, minPins: STYLE_DNA_MIN_PINS });
       }
 
       return json(res, 404, { error: "Not found" });

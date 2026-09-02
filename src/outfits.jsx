@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, PencilSimple, SpinnerGap, X, MagicWand } from "@phosphor-icons/react";
+import { Check, PencilSimple, SpinnerGap, X } from "@phosphor-icons/react";
 import { OptimizedImage } from "./OptimizedImage.jsx";
 import { api } from "./api.js";
 import { OUTFIT_CATEGORIES as CATEGORIES } from "./categories.js";
+import { GARMENT_PART_MAP } from "../shared/garments.mjs";
 import { ModeledPhotoPrompt } from "./item-editor.jsx";
+import { SuggestionPanel } from "./suggestions.jsx";
+import { OutfitStack } from "./components/OutfitStack.jsx";
 import { ViewerPanel } from "./components/ViewerPanel.jsx";
 import { ModeledHero } from "./components/ModeledHero.jsx";
 import { PanelActions } from "./components/PanelActions.jsx";
@@ -14,55 +17,9 @@ import { useViewerKeyboard } from "./hooks/useViewerKeyboard.js";
 import "./outfits.css";
 import "./suggestions.css";
 
-const OCCASIONS = [
-  { id: "casual", label: "Casual", emoji: "👕" },
-  { id: "work", label: "Work", emoji: "💼" },
-  { id: "date", label: "Date", emoji: "🌹" },
-  { id: "sport", label: "Sport", emoji: "🏃" },
-  { id: "event", label: "Event", emoji: "🎉" },
-];
-
-// Groups garments into worn-order zones (top of the body first) so a picked
-// tee and a picked jacket read as layered rather than as an unordered pile.
-const STACK_ZONES = [
-  { id: "top", parts: ["accessories_up", "upperbody", "wholebody_up"] },
-  { id: "bottom", parts: ["lowerbody"] },
-  { id: "feet", parts: ["socks", "shoes"] },
-];
-
-function OutfitStack({ items, compact = false }) {
-  const byPart = useMemo(() => {
-    const groups = {};
-    for (const item of items) (groups[item.part] ||= []).push(item);
-    return groups;
-  }, [items]);
-
-  return (
-    <div className={`outfit-stack${compact ? " compact" : ""}`}>
-      {STACK_ZONES.map((zone) => {
-        const zoneItems = zone.parts.flatMap((part) => byPart[part] || []);
-        if (!zoneItems.length) return null;
-        return (
-          <div className="outfit-stack-zone" key={zone.id}>
-            {zoneItems.map((item, index) => (
-              <div
-                key={item.id}
-                className="outfit-stack-item"
-                style={{ transform: `translateX(${index * 12}px) rotate(${index ? (index * 4) - 2 : 0}deg)`, zIndex: index + 1 }}
-              >
-                <OptimizedImage src={item.thumbnail || item.image} alt="" sizes={compact ? "70px" : "96px"} breakpoints={[70, 96, 140]} />
-              </div>
-            ))}
-          </div>
-        );
-      })}
-      {!items.length && <p className="status empty">Add pieces below to build the look.</p>}
-    </div>
-  );
-}
-
 // Fixed spots (per body part) where a hovered card scatters its composing
-// pieces. Mirrors the flat-lay layout from the OutfitStack zones above.
+// pieces. Mirrors the flat-lay layout from the OutfitStack zones
+// (see components/OutfitStack.jsx).
 const HOVER_SLOTS = {
   upperbody: [
     { top: "6%", left: "8%", maxH: "50%", maxW: "42%", rot: -6 },
@@ -457,122 +414,6 @@ function SuggestionNudges({ items }) {
   );
 }
 
-function SuggestionPanel({ items, outfits, onSaveOutfit, onClose }) {
-  const [occasion, setOccasion] = useState("casual");
-  const [suggestions, setSuggestions] = useState([]);
-  const [generating, setGenerating] = useState(false);
-  const [error, setError] = useState("");
-  const [savedIds, setSavedIds] = useState(() => new Set());
-  
-  const generate = async () => {
-    setGenerating(true);
-    setError("");
-    try {
-      const colorProfile = JSON.parse(localStorage.getItem('open-wardrobe-color-profile-v1') || 'null');
-      const res = await api("/api/suggestions/generate", {
-        method: "POST",
-        body: JSON.stringify({ occasion, colorProfile })
-      });
-      setSuggestions(res.suggestions || []);
-      setSavedIds(new Set());
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  const handleSave = async (suggestion, index) => {
-    try {
-      await onSaveOutfit({ name: suggestion.name, itemIds: suggestion.itemIds });
-      setSavedIds(prev => new Set(prev).add(index));
-    } catch (e) {
-      setError(e.message);
-    }
-  };
-
-  const itemMap = useMemo(() => Object.fromEntries(items.map(i => [i.id, i])), [items]);
-
-  return (
-    <div className="viewer-overlay" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="viewer-entry outfit-builder-entry" style={{ width: 'clamp(390px, 80vw, 900px)' }}>
-        <aside className="viewer outfit-builder suggestion-panel" role="dialog" aria-modal="true" aria-label="Suggest outfits">
-          <button className="icon-button viewer-icon-close" type="button" onClick={onClose} aria-label="Close">
-            <X size={24} weight="light" aria-hidden="true" />
-          </button>
-          <div className="viewer-heading">
-            <h2>Suggest Outfits</h2>
-          </div>
-          
-          <div className="outfit-builder-body">
-            <div className="occasion-picker">
-              {OCCASIONS.map(occ => (
-                <button
-                  key={occ.id}
-                  type="button"
-                  className={occasion === occ.id ? "active" : ""}
-                  onClick={() => setOccasion(occ.id)}
-                >
-                  {occ.emoji} {occ.label}
-                </button>
-              ))}
-            </div>
-            
-            <button className="primary-button" type="button" onClick={generate} disabled={generating}>
-              <MagicWand size={15} weight="bold" /> Generate suggestions
-            </button>
-            
-            {error && <p className="status error">{error}</p>}
-            
-            {generating && (
-              <div className="suggestion-loading">
-                <SpinnerGap size={24} className="outfit-card-spinner" />
-                Finding outfit ideas...
-              </div>
-            )}
-            
-            {!generating && suggestions.length > 0 && (
-              <div className="suggestion-cards">
-                {suggestions.map((sugg, i) => {
-                  const pieces = sugg.itemIds.map(id => itemMap[id]).filter(Boolean);
-                  const isSaved = savedIds.has(i);
-                  return (
-                    <div key={i} className="suggestion-card">
-                      <h3>{sugg.name}</h3>
-                      <OutfitStack items={pieces} />
-                      <div className="suggestion-reasoning">
-                        <div className="suggestion-reasoning-item"><strong>Style:</strong> {sugg.reasoning?.style || sugg.styleReasoning}</div>
-                        <div className="suggestion-reasoning-item"><strong>Color:</strong> {sugg.reasoning?.color || sugg.colorReasoning}</div>
-                        <div className="suggestion-reasoning-item"><strong>Weather:</strong> {sugg.reasoning?.weather || sugg.weatherReasoning}</div>
-                        <div className="suggestion-reasoning-item"><strong>Occasion:</strong> {sugg.reasoning?.occasion || sugg.occasionReasoning}</div>
-                      </div>
-                      <div className="suggestion-actions">
-                        <button 
-                          type="button"
-                          className={isSaved ? "secondary-button" : "primary-button"}
-                          onClick={() => !isSaved && handleSave(sugg, i)}
-                          disabled={isSaved}
-                        >
-                          {isSaved ? <><Check size={15} /> Saved</> : "Save to outfits"}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            
-            <div className="viewer-actions">
-              <span className="action-spacer" />
-              <button className="secondary-button" type="button" onClick={onClose}>Done</button>
-            </div>
-          </div>
-        </aside>
-      </div>
-    </div>
-  );
-}
-
 // Add outfit / Suggest outfit trigger from the topbar (see App.jsx's
 // .top-actions) — showBuilder/showSuggestions are controlled from there so
 // there's exactly one "add" and one "AI action" button per view, not a
@@ -709,7 +550,6 @@ export function Outfits({ items, premiumAllowed = true, showBuilder, onOpenBuild
       {showSuggestions && (
         <SuggestionPanel
           items={items}
-          outfits={outfits}
           onSaveOutfit={async (draft) => {
             const saved = await api("/api/outfits", { method: "POST", body: JSON.stringify(draft) });
             setOutfits((current) => [...current, saved]);
