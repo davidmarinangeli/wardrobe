@@ -61,8 +61,10 @@ export { REGION_TO_PART, PART_TO_REGION };
 // Most-replaceable-first: which garment to target when an issue could point at
 // either of two pieces (e.g. a color clash between an accessory and a top should
 // point at the accessory, not ask the user to replace their shirt).
-const REGION_PRIORITY = ["accessory", "footwear", "lowerbody", "outerwear", "upperbody"];
-const PART_LABEL = { upperbody: "top", outerwear: "jacket", lowerbody: "bottoms", accessory: "accessory", footwear: "shoes" };
+// A full-coverage garment sits last: it IS the outfit, so asking someone to
+// swap their dress is the biggest change the critique can propose.
+const REGION_PRIORITY = ["accessory", "footwear", "lowerbody", "outerwear", "upperbody", "fullbody"];
+const PART_LABEL = { upperbody: "top", outerwear: "jacket", lowerbody: "bottoms", accessory: "accessory", footwear: "shoes", fullbody: "dress" };
 
 function hexToHsl(hex) {
   const clean = String(hex || "").replace("#", "");
@@ -231,8 +233,13 @@ export function evaluateColorHarmony(garments) {
 export function evaluateProportion(garments) {
   if (!garments || !garments.length) return { note: null, issue: null };
 
-  const top = garments.find((g) => g.region === "upperbody" || g.region === "outerwear");
-  const bottom = garments.find((g) => g.region === "lowerbody");
+  // A dress or jumpsuit dresses both halves at once, so it stands in for
+  // whichever side has no garment of its own. Without this, an outfit built
+  // around a dress matches neither `top` nor `bottom` and proportion feedback
+  // silently disappears — the user asks to be looked at and hears nothing.
+  const full = garments.find((g) => g.region === "fullbody");
+  const top = garments.find((g) => g.region === "upperbody" || g.region === "outerwear") || full;
+  const bottom = garments.find((g) => g.region === "lowerbody") || full;
 
   if (bottom?.hemNotes) {
     // A wide-leg/relaxed/oversized trouser is DESIGNED to carry some break at
@@ -263,6 +270,11 @@ export function evaluateProportion(garments) {
   }
 
   if (!top || !bottom) return { note: null, issue: null };
+
+  // One garment covering both halves cannot fight itself: an oversized dress is
+  // a silhouette, not a double-volume mistake. Only compare genuinely separate
+  // pieces (a dress still gets judged against a jacket layered over it).
+  if (top === bottom) return { note: null, issue: null };
 
   const loose = new Set(["relaxed", "oversized"]);
   if (loose.has(top.volume) && loose.has(bottom.volume)) {

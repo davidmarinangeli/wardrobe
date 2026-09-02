@@ -33,6 +33,25 @@ export const GARMENT_PART_IDS = GARMENT_PARTS.map((part) => part.id);
 export const GARMENT_PART_ID_SET = new Set(GARMENT_PART_IDS);
 export const GARMENT_PART_MAP = Object.fromEntries(GARMENT_PARTS.map((part) => [part.id, part]));
 
+export const partsWithCoverage = (coverage) => GARMENT_PARTS.filter((part) => part.coverage === coverage);
+
+export const FULL_COVERAGE_PART_IDS = partsWithCoverage("full").map((part) => part.id);
+export const FULL_COVERAGE_PART_SET = new Set(FULL_COVERAGE_PART_IDS);
+
+/** True when one garment dresses both halves of the body on its own. */
+export const isFullCoverage = (partId) => FULL_COVERAGE_PART_SET.has(partId);
+
+/**
+ * The rule every outfit has to satisfy, generated from the vocabulary rather
+ * than typed out. The old wording ("at least 1 top and 1 bottom") made a dress
+ * outfit structurally impossible to express no matter what categories existed —
+ * this states the thing that is actually required, which is coverage.
+ */
+export function describeCoverageRule() {
+  const ids = (coverage) => partsWithCoverage(coverage).map((part) => part.id).join(", ");
+  return `Each outfit MUST cover both the upper and the lower body. Satisfy that in one of two ways: a single full-coverage garment (${ids("full")}) worn on its own, OR one upper-body garment (${ids("upper")}) together with one lower-body garment (${ids("lower")}). This is mandatory. Never combine a full-coverage garment with a separate lower-body garment — a dress is not worn over trousers.`;
+}
+
 // "Use only these category ids: upperbody, bodysuit, ..." — generated so
 // detection prompts can never drift from the schema enum above them.
 export const GARMENT_PART_IDS_PROSE = GARMENT_PART_IDS.join(", ");
@@ -55,8 +74,8 @@ export const GARMENT_DISAMBIGUATION_PROSE = GARMENT_DISAMBIGUATION_RULES.map((ru
 
 // Mirror perception region <-> wardrobe part vocabulary. Only parts carrying a
 // mirrorRegion participate. Region -> part keeps the first part listed for that
-// region, so adding another part sharing a region never steals the canonical
-// target the critique offers as a replacement.
+// region, so adding e.g. `skirt` alongside `lowerbody` never steals the
+// canonical target the critique offers as a replacement.
 export const REGION_TO_PART = GARMENT_PARTS.reduce((map, part) => {
   if (part.mirrorRegion && !(part.mirrorRegion in map)) map[part.mirrorRegion] = part.id;
   return map;

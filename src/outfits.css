@@ -372,6 +372,20 @@
 .outfit-piece:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
 .outfit-piece:active { transform: scale(.96); }
 
+/* Greyed rather than hidden: the piece is still in the wardrobe, it just can't
+   join this particular outfit (a dress already covers that half). */
+.outfit-piece.blocked {
+  opacity: .32;
+  cursor: not-allowed;
+  filter: grayscale(1);
+}
+
+.outfit-piece.blocked:active { transform: none; }
+
+@media (hover: hover) and (pointer: fine) {
+  .outfit-piece.blocked:hover { border-color: var(--line); box-shadow: var(--glass-edge); }
+}
+
 .outfit-error { margin: 0; text-align: right; }
 
 @media (max-width: 860px) {

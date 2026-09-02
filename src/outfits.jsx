@@ -76,6 +76,28 @@ const HOVER_SLOTS = {
     { bottom: "6%", right: "8%", maxH: "50%", maxW: "42%", rot: 6 },
     { bottom: "6%", left: "8%", maxH: "50%", maxW: "42%", rot: -6 },
   ],
+  // Full-length pieces get the tall centre of the card, since they are the
+  // whole outfit rather than one half of it.
+  dress: [
+    { top: "8%", left: "50%", maxH: "78%", maxW: "46%", rot: -3 },
+    { top: "8%", right: "10%", maxH: "78%", maxW: "46%", rot: 4 },
+  ],
+  jumpsuit: [
+    { top: "8%", left: "50%", maxH: "78%", maxW: "46%", rot: -3 },
+    { top: "8%", right: "10%", maxH: "78%", maxW: "46%", rot: 4 },
+  ],
+  skirt: [
+    { bottom: "6%", right: "8%", maxH: "46%", maxW: "42%", rot: 6 },
+    { bottom: "6%", left: "8%", maxH: "46%", maxW: "42%", rot: -6 },
+  ],
+  shorts: [
+    { bottom: "6%", right: "8%", maxH: "40%", maxW: "40%", rot: 6 },
+    { bottom: "6%", left: "8%", maxH: "40%", maxW: "40%", rot: -6 },
+  ],
+  bodysuit: [
+    { top: "6%", left: "8%", maxH: "50%", maxW: "42%", rot: -6 },
+    { top: "6%", right: "8%", maxH: "50%", maxW: "42%", rot: 6 },
+  ],
   shoes: [
     { bottom: "8%", left: "16%", maxH: "24%", maxW: "30%", rot: -4 },
     { bottom: "8%", right: "16%", maxH: "24%", maxW: "30%", rot: 4 },
@@ -176,6 +198,30 @@ function OutfitBuilder({ items, initialOutfit, onCancel, onSave }) {
 
   const selectedItems = items.filter((item) => selected.has(item.id));
 
+  // A dress or jumpsuit already dresses both halves, so the halves it covers
+  // stop being available — and once a top or bottom is picked, a full garment
+  // no longer fits the outfit either. Blocking the combination here is kinder
+  // than letting someone build dress-plus-trousers and discover it in the
+  // rendered photo.
+  // Layering pieces are exempt in both directions: a jacket goes over a shirt or
+  // over a dress equally well, so it never blocks and is never blocked.
+  const blockedCoverages = useMemo(() => {
+    const coverages = new Set(
+      selectedItems
+        .filter((item) => !GARMENT_PART_MAP[item.part]?.layer)
+        .map((item) => GARMENT_PART_MAP[item.part]?.coverage),
+    );
+    if (coverages.has("full")) return new Set(["upper", "lower"]);
+    if (coverages.has("upper") || coverages.has("lower")) return new Set(["full"]);
+    return new Set();
+  }, [selectedItems]);
+
+  const isBlocked = (item) => {
+    const part = GARMENT_PART_MAP[item.part];
+    if (!part || part.layer) return false;
+    return blockedCoverages.has(part.coverage);
+  };
+
   const save = async () => {
     setError("");
     if (!name.trim()) return setError("Give this outfit a name.");
@@ -213,18 +259,24 @@ function OutfitBuilder({ items, initialOutfit, onCancel, onSave }) {
                 <div className="outfit-category" key={category.id}>
                   <p className="outfit-category-label">{category.label}</p>
                   <div className="outfit-category-row">
-                    {itemsByCategory[category.id].map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        className={`outfit-piece${selected.has(item.id) ? " active" : ""}`}
-                        onClick={() => toggleItem(item.id)}
-                        aria-pressed={selected.has(item.id)}
-                        title={item.name}
-                      >
-                        <OptimizedImage src={item.thumbnail || item.image} alt="" sizes="72px" breakpoints={[72, 108]} />
-                      </button>
-                    ))}
+                    {itemsByCategory[category.id].map((item) => {
+                      const blocked = !selected.has(item.id) && isBlocked(item);
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className={`outfit-piece${selected.has(item.id) ? " active" : ""}${blocked ? " blocked" : ""}`}
+                          onClick={() => !blocked && toggleItem(item.id)}
+                          aria-pressed={selected.has(item.id)}
+                          aria-disabled={blocked}
+                          title={blocked
+                            ? `${item.name} — a full-length piece already covers this`
+                            : item.name}
+                        >
+                          <OptimizedImage src={item.thumbnail || item.image} alt="" sizes="72px" breakpoints={[72, 108]} />
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )
@@ -372,8 +424,12 @@ function SuggestionNudges({ items }) {
   const dismiss = (id) => setDismissed(prev => new Set(prev).add(id));
   
   const hasColorProfile = !!localStorage.getItem('open-wardrobe-color-profile-v1');
-  const hasTops = items.some(i => i.part === 'upperbody' || i.part === 'wholebody_up');
-  const hasBottoms = items.some(i => i.part === 'lowerbody');
+  // Coverage, not category: a wardrobe of dresses can already make complete
+  // outfits, so telling it that it "has no bottoms" would be both wrong and a
+  // criticism of a wardrobe that is working fine.
+  const coverages = new Set(items.map((i) => GARMENT_PART_MAP[i.part]?.coverage));
+  const hasTops = coverages.has('upper') || coverages.has('full');
+  const hasBottoms = coverages.has('lower') || coverages.has('full');
   
   const nudges = [];
   

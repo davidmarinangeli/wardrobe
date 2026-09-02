@@ -4,6 +4,7 @@ import path from "node:path";
 import { atomicJson, readAiMode, resolveApiKey, resolveProvider } from "./import-job-api.mjs";
 import { PART_TO_REGION, classifyColor, describeColorHarmonyRules, evaluateColorHarmony } from "./style-rules.mjs";
 import { NO_JUDGMENT_PROMPT } from "../shared/prompt-guardrails.mjs";
+import { GARMENT_PART_MAP, describeCoverageRule, isFullCoverage } from "../shared/garments.mjs";
 import { describePreferences } from "./preferences.mjs";
 import { loadDerivedPreferences } from "./preferences-api.mjs";
 
@@ -85,6 +86,19 @@ const COLD_EXCLUDE_SHORTS = true;
 const FORMAL_EXCLUDE_TAGS = new Set(["gym", "athletic", "sport", "sweatpants", "jogger", "running", "track"]);
 const SPORT_PREFER_TAGS = new Set(["athletic", "sport", "gym", "running", "track", "jogger", "performance"]);
 
+/** Which halves of the body a set of garments can dress. */
+export function coverageState(items) {
+  const parts = new Set(items.map((item) => item.part));
+  const has = (coverage) => [...parts].some((part) => GARMENT_PART_MAP[part]?.coverage === coverage);
+  return { full: has("full"), upper: has("upper"), lower: has("lower") };
+}
+
+/** A body is covered by one full garment, or by an upper plus a lower. */
+export function canCoverBody(items) {
+  const state = coverageState(items);
+  return state.full || (state.upper && state.lower);
+}
+
 function preFilterWardrobe(items, weather, occasion) {
   let filtered = [...items];
 
@@ -103,8 +117,10 @@ function preFilterWardrobe(items, weather, occasion) {
         });
       }
       if (temp < 10) {
-        // Cold: remove summer-only items
+        // Cold: remove summer-only items. `shorts` is a first-class part now, so
+        // the old tag sniffing is only kept for items imported before it existed.
         filtered = filtered.filter((item) => {
+          if (COLD_EXCLUDE_SHORTS && item.part === "shorts") return false;
           if (COLD_EXCLUDE_SHORTS && item.part === "lowerbody" && item.tags?.some((t) => t === "shorts" || t === "short")) return false;
           return !item.tags?.some((t) => COLD_EXCLUDE_TAGS.has(t));
         });
@@ -124,6 +140,24 @@ function preFilterWardrobe(items, weather, occasion) {
     const athleticParts = new Set(athletic.map((item) => item.part));
     const needed = rest.filter((item) => !athleticParts.has(item.part));
     filtered = [...athletic, ...needed];
+  }
+
+  // Weather and occasion rules can strip a small or specialised wardrobe past
+  // the point where any valid outfit exists — a closet of linen dresses on a
+  // cold day. When our own filtering is what made dressing impossible, put back
+  // the minimum that restores coverage: an imperfect suggestion the user can
+  // judge beats an empty panel with no explanation.
+  if (items.length && !canCoverBody(filtered) && canCoverBody(items)) {
+    const kept = new Set(filtered.map((item) => item.id));
+    const missing = coverageState(filtered);
+    filtered = [...filtered, ...items.filter((item) => {
+      if (kept.has(item.id)) return false;
+      const coverage = GARMENT_PART_MAP[item.part]?.coverage;
+      if (coverage === "full") return true;
+      if (coverage === "upper") return !missing.upper;
+      if (coverage === "lower") return !missing.lower;
+      return false;
+    })];
   }
 
   // Cap at 45 items if still too many: ensure category diversity
@@ -310,8 +344,8 @@ AVAILABLE WARDROBE ITEMS:
 ${wardrobeText}
 
 Rules:
-- Each outfit MUST include at least 1 top (upperbody) and 1 bottom (lowerbody). This is mandatory.
-- Optionally add a jacket (wholebody_up), shoes, socks, or 1 accessory (accessories_up).
+- ${describeCoverageRule()}
+- Optionally add a jacket (wholebody_up), shoes, socks, or 1 accessory (accessories_up). A jacket layers over a full-coverage garment perfectly well.
 - Maximum 6 pieces per outfit.
 - Only use item IDs from the list above. Do not invent IDs.
 - Don't repeat an outfit that already exists.
@@ -348,13 +382,24 @@ Rules:
   for (const outfit of parsed.outfits) {
     outfit.itemIds = outfit.itemIds.filter((id) => validIds.has(id));
   }
-  // Remove outfits with no valid items
-  parsed.outfits = parsed.outfits.filter((outfit) => outfit.itemIds.length >= 2);
+  const itemById = new Map(filteredItems.map((item) => [item.id, item]));
+
+  // Defense in depth on structure: the coverage rule is stated in the prompt,
+  // but a model that has spent its life on "1 top + 1 bottom" will still hand
+  // back a dress worn over trousers. Drop anything that doesn't actually dress
+  // the person, rather than render it.
+  parsed.outfits = parsed.outfits.filter((outfit) => {
+    const garments = outfit.itemIds.map((id) => itemById.get(id)).filter(Boolean);
+    if (!garments.length) return false;
+    const hasFull = garments.some((garment) => isFullCoverage(garment.part));
+    const hasLower = garments.some((garment) => GARMENT_PART_MAP[garment.part]?.coverage === "lower");
+    if (hasFull && hasLower) return false;
+    return canCoverBody(garments);
+  });
 
   // Defense in depth: even with the harmony rules stated in the prompt, re-check
   // each proposed outfit against the same deterministic engine Mirror uses, and
   // drop any that still violate a grounded rule rather than surface a bad call.
-  const itemById = new Map(filteredItems.map((item) => [item.id, item]));
   parsed.outfits = parsed.outfits.filter((outfit) => {
     const garments = outfit.itemIds
       .map((id) => itemById.get(id))

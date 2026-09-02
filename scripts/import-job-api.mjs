@@ -947,11 +947,11 @@ function buildMirrorPerceptionPrompt() {
   return `You are looking at a photo of a person wearing an outfit. Identify each distinct visible garment and describe ONLY what you observe — do not judge, critique, rate, or suggest anything.
 
 For each visible garment, report:
-- region: one of ${MIRROR_REGIONS.map((region) => `"${region}"`).join(", ")} (use "outerwear" for a jacket/overshirt worn open over another top, "accessory" for belts/bags/hats/scarves/jewelry)
+- region: one of ${MIRROR_REGIONS.map((region) => `"${region}"`).join(", ")} (use "outerwear" for a jacket/overshirt worn open over another top, "accessory" for belts/bags/hats/scarves/jewelry, and "fullbody" for a single garment that dresses both halves at once, such as a dress or a jumpsuit — never report a dress as an upperbody plus a lowerbody)
 - description: a short 2-4 word description, e.g. "open-collar shirt" or "wide-leg cargo pants"
 - color: the closest match from this exact list: ${COLOR_NAMES.join(", ")}
 - volume: how the piece sits on the body — one of "fitted", "regular", "relaxed", "oversized"
-- hemNotes: for lowerbody garments ONLY, a short factual note if the hem visibly pools, stacks, or bunches at the shoe (e.g. "pools over the shoe"); otherwise null
+- hemNotes: for lowerbody and fullbody garments ONLY, a short factual note if the hem visibly pools, stacks, or bunches at the shoe or drags on the ground (e.g. "pools over the shoe"); otherwise null
 - hemSeverity: only when hemNotes is set — one of "slight" (a light break/rest on the shoe, barely bunching), "moderate" (visibly bunches but doesn't obstruct the shoe), "severe" (heavy bunching, fabric mostly covers the shoe or drags); otherwise null. Judge this purely on how much fabric is stacked, not on whether the trouser is a wide-leg or relaxed cut — a wide-leg trouser can have a slight, normal amount of break just like a slim one.
 
 List every clearly visible garment. Do not invent garments you can't see, and do not add commentary.`;
