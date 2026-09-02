@@ -3,7 +3,7 @@ import { copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 
 import path from "node:path";
 import sharp from "sharp";
 import { COLOR_NAMES } from "./style-rules.mjs";
-import { GARMENT_PART_ID_SET, GARMENT_PART_IDS, MIRROR_REGIONS } from "../shared/garments.mjs";
+import { GARMENT_DISAMBIGUATION_PROSE, GARMENT_PART_ID_SET, GARMENT_PART_IDS, GARMENT_PART_IDS_PROSE, MIRROR_REGIONS } from "../shared/garments.mjs";
 
 const API_ROOT = "/api/import/jobs";
 const ASSET_ROOT = "/api/import/assets";
@@ -799,6 +799,12 @@ export async function miniMaxEdit({ key, baseUrl, model, prompt, images, size, a
   throw new Error("MiniMax response did not contain image data");
 }
 
+const IMPORT_ITEMS_PROMPT = `Identify every distinct wearable clothing item visible in this image. A photo may show one isolated garment or a person wearing several items. Return one record per actual item that should enter a wardrobe. Ignore the person's body and non-wearable background objects. For each item, include a tight bounding box around only that item using integer coordinates normalized to a 1000 by 1000 image: x and y are the top-left corner, followed by width and height. Boxes may overlap when garments overlap, but each box must focus on one distinct item. Use only these category ids: ${GARMENT_PART_IDS_PROSE}.
+
+${GARMENT_DISAMBIGUATION_PROSE}
+
+Suggest a concise specific name, primary hex color, optional genuinely distinct secondary hex color, and 1-4 useful lowercase detail tags. Also set worn to true if a person is actually wearing the item in this photo, or false if it's an unworn product shot such as a flat lay, ghost mannequin, hanging, or floating on a plain backdrop with no person. And set rotationDegrees to the clockwise degrees (-180 to 180) needed to make the item appear upright — 0 if it's already upright, non-zero if the photo shows it tilted, sideways, or upside-down.`;
+
 export async function geminiAnalyze({ key, model, image, mime }) {
   const schema = {
     type: "object",
@@ -838,7 +844,7 @@ export async function geminiAnalyze({ key, model, image, mime }) {
     headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
     body: JSON.stringify({
       contents: [{ role: "user", parts: [
-        { text: "Identify every distinct wearable clothing item visible in this image. A photo may show one isolated garment or a person wearing several items. Return one record per actual item that should enter a wardrobe. Ignore the person's body and non-wearable background objects. For each item, include a tight bounding box around only that item using integer coordinates normalized to a 1000 by 1000 image: x and y are the top-left corner, followed by width and height. Boxes may overlap when garments overlap, but each box must focus on one distinct item. Use only these category ids: upperbody, wholebody_up, lowerbody, accessories_up, shoes, socks. Suggest a concise specific name, primary hex color, optional genuinely distinct secondary hex color, and 1-4 useful lowercase detail tags. Also set worn to true if a person is actually wearing the item in this photo, or false if it's an unworn product shot such as a flat lay, ghost mannequin, hanging, or floating on a plain backdrop with no person. And set rotationDegrees to the clockwise degrees (-180 to 180) needed to make the item appear upright — 0 if it's already upright, non-zero if the photo shows it tilted, sideways, or upside-down." },
+        { text: IMPORT_ITEMS_PROMPT },
         { inlineData: { mimeType: mime, data: image.toString("base64") } },
       ] }],
       generationConfig: { responseMimeType: "application/json", responseSchema: schema },
@@ -860,7 +866,7 @@ export async function openAIAnalyze({ key, baseUrl, model, image, mime }) {
     body: JSON.stringify({
       model,
       input: [{ role: "user", content: [
-        { type: "input_text", text: "Identify every distinct wearable clothing item visible in this image. A photo may show one isolated garment or a person wearing several items. Return one record per actual item that should enter a wardrobe. Ignore the person's body and non-wearable background objects. For each item, include a tight bounding box around only that item using integer coordinates normalized to a 1000 by 1000 image: x and y are the top-left corner, followed by width and height. Boxes may overlap when garments overlap, but each box must focus on one distinct item. Use only these category ids: upperbody, wholebody_up, lowerbody, accessories_up, shoes, socks. Suggest a concise specific name, primary hex color, optional genuinely distinct secondary hex color, and 1-4 useful lowercase detail tags. Also set worn to true if a person is actually wearing the item in this photo, or false if it's an unworn product shot such as a flat lay, ghost mannequin, hanging, or floating on a plain backdrop with no person. And set rotationDegrees to the clockwise degrees (-180 to 180) needed to make the item appear upright — 0 if it's already upright, non-zero if the photo shows it tilted, sideways, or upside-down." },
+        { type: "input_text", text: IMPORT_ITEMS_PROMPT },
         { type: "input_image", image_url: `data:${mime};base64,${image.toString("base64")}` },
       ] }],
       text: { format: { type: "json_schema", name: "wardrobe_items", strict: true, schema: { type: "object", additionalProperties: false, properties: { items: { type: "array", minItems: 0, maxItems: 8, items: { type: "object", additionalProperties: false, properties: { name: { type: "string" }, part: { type: "string", enum: GARMENT_PART_IDS }, color: { type: "string", pattern: "^#[0-9A-Fa-f]{6}$" }, secondaryColor: { anyOf: [{ type: "string", pattern: "^#[0-9A-Fa-f]{6}$" }, { type: "null" }] }, tags: { type: "array", items: { type: "string" }, maxItems: 4 }, worn: { type: "boolean" }, rotationDegrees: { type: "integer", minimum: -180, maximum: 180 }, boundingBox: { type: "object", additionalProperties: false, properties: { x: { type: "integer", minimum: 0, maximum: 999 }, y: { type: "integer", minimum: 0, maximum: 999 }, width: { type: "integer", minimum: 1, maximum: 1000 }, height: { type: "integer", minimum: 1, maximum: 1000 } }, required: ["x", "y", "width", "height"] } }, required: ["name", "part", "color", "secondaryColor", "tags", "worn", "rotationDegrees", "boundingBox"] } } }, required: ["items"] } } },

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Gear, Lightbulb } from "@phosphor-icons/react";
 import { WardrobeImportFlow } from "./import-flow.jsx";
 import { ColorProfileModal, SEASONS, itemMatchesPalette, readColorProfile } from "./color-profile.jsx";
@@ -140,6 +140,16 @@ export function App() {
   );
   const visibleItems = useTypeFilteredItems(items, activeType, onlyMatches && colorProfile ? paletteFilter : undefined);
 
+  // The vocabulary covers garments this wardrobe may not own (nobody's closet
+  // has every category), so a type only earns a filter pill once something is
+  // filed under it — otherwise widening the vocabulary just adds dead chips.
+  // "All", and whatever is currently selected, always stay so the nav can't
+  // drop the pill you're standing on.
+  const availableTypes = useMemo(() => {
+    const filled = new Set(items.map((item) => item.part));
+    return TYPES.filter((type) => type.id === "all" || type.id === activeType || filled.has(type.id));
+  }, [items, activeType]);
+
   const chooseType = (typeId) => {
     setActiveType(typeId);
     setSelectedId(null);
@@ -280,7 +290,7 @@ export function App() {
               {colorProfile ? <><span className="season-dot" style={{ backgroundColor: SEASONS[colorProfile.season].accent }} />{SEASONS[colorProfile.season].label}</> : "My Colors"}
             </button>
           )}
-          categories={TYPES}
+          categories={availableTypes}
           activeCategory={activeType}
           onCategory={chooseType}
           navLabel="Filter wardrobe by item type"
