@@ -3,13 +3,14 @@ import { copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 
 import path from "node:path";
 import sharp from "sharp";
 import { COLOR_NAMES } from "./style-rules.mjs";
+import { GARMENT_PART_ID_SET, GARMENT_PART_IDS, MIRROR_REGIONS } from "../shared/garments.mjs";
 
 const API_ROOT = "/api/import/jobs";
 const ASSET_ROOT = "/api/import/assets";
 const LIBRARY_ASSET_ROOT = "/api/import/library";
 const STAGES = new Set(["crop", "garment"]);
 const DECISIONS = new Set(["approve", "reject"]);
-const PARTS = new Set(["upperbody", "wholebody_up", "lowerbody", "accessories_up", "shoes", "socks"]);
+const PARTS = GARMENT_PART_ID_SET;
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 
 function json(res, status, value) {
@@ -809,7 +810,7 @@ export async function geminiAnalyze({ key, model, image, mime }) {
           type: "object",
           properties: {
             name: { type: "string" },
-            part: { type: "string", enum: ["upperbody", "wholebody_up", "lowerbody", "accessories_up", "shoes", "socks"] },
+            part: { type: "string", enum: GARMENT_PART_IDS },
             color: { type: "string", description: "6-digit hex color, such as #d8d0c2" },
             secondaryColor: { type: "string", description: "optional distinct 6-digit hex color" },
             tags: { type: "array", items: { type: "string" }, maxItems: 4 },
@@ -862,7 +863,7 @@ export async function openAIAnalyze({ key, baseUrl, model, image, mime }) {
         { type: "input_text", text: "Identify every distinct wearable clothing item visible in this image. A photo may show one isolated garment or a person wearing several items. Return one record per actual item that should enter a wardrobe. Ignore the person's body and non-wearable background objects. For each item, include a tight bounding box around only that item using integer coordinates normalized to a 1000 by 1000 image: x and y are the top-left corner, followed by width and height. Boxes may overlap when garments overlap, but each box must focus on one distinct item. Use only these category ids: upperbody, wholebody_up, lowerbody, accessories_up, shoes, socks. Suggest a concise specific name, primary hex color, optional genuinely distinct secondary hex color, and 1-4 useful lowercase detail tags. Also set worn to true if a person is actually wearing the item in this photo, or false if it's an unworn product shot such as a flat lay, ghost mannequin, hanging, or floating on a plain backdrop with no person. And set rotationDegrees to the clockwise degrees (-180 to 180) needed to make the item appear upright — 0 if it's already upright, non-zero if the photo shows it tilted, sideways, or upside-down." },
         { type: "input_image", image_url: `data:${mime};base64,${image.toString("base64")}` },
       ] }],
-      text: { format: { type: "json_schema", name: "wardrobe_items", strict: true, schema: { type: "object", additionalProperties: false, properties: { items: { type: "array", minItems: 0, maxItems: 8, items: { type: "object", additionalProperties: false, properties: { name: { type: "string" }, part: { type: "string", enum: ["upperbody", "wholebody_up", "lowerbody", "accessories_up", "shoes", "socks"] }, color: { type: "string", pattern: "^#[0-9A-Fa-f]{6}$" }, secondaryColor: { anyOf: [{ type: "string", pattern: "^#[0-9A-Fa-f]{6}$" }, { type: "null" }] }, tags: { type: "array", items: { type: "string" }, maxItems: 4 }, worn: { type: "boolean" }, rotationDegrees: { type: "integer", minimum: -180, maximum: 180 }, boundingBox: { type: "object", additionalProperties: false, properties: { x: { type: "integer", minimum: 0, maximum: 999 }, y: { type: "integer", minimum: 0, maximum: 999 }, width: { type: "integer", minimum: 1, maximum: 1000 }, height: { type: "integer", minimum: 1, maximum: 1000 } }, required: ["x", "y", "width", "height"] } }, required: ["name", "part", "color", "secondaryColor", "tags", "worn", "rotationDegrees", "boundingBox"] } } }, required: ["items"] } } },
+      text: { format: { type: "json_schema", name: "wardrobe_items", strict: true, schema: { type: "object", additionalProperties: false, properties: { items: { type: "array", minItems: 0, maxItems: 8, items: { type: "object", additionalProperties: false, properties: { name: { type: "string" }, part: { type: "string", enum: GARMENT_PART_IDS }, color: { type: "string", pattern: "^#[0-9A-Fa-f]{6}$" }, secondaryColor: { anyOf: [{ type: "string", pattern: "^#[0-9A-Fa-f]{6}$" }, { type: "null" }] }, tags: { type: "array", items: { type: "string" }, maxItems: 4 }, worn: { type: "boolean" }, rotationDegrees: { type: "integer", minimum: -180, maximum: 180 }, boundingBox: { type: "object", additionalProperties: false, properties: { x: { type: "integer", minimum: 0, maximum: 999 }, y: { type: "integer", minimum: 0, maximum: 999 }, width: { type: "integer", minimum: 1, maximum: 1000 }, height: { type: "integer", minimum: 1, maximum: 1000 } }, required: ["x", "y", "width", "height"] } }, required: ["name", "part", "color", "secondaryColor", "tags", "worn", "rotationDegrees", "boundingBox"] } } }, required: ["items"] } } },
     }),
   });
   const result = await response.json().catch(() => ({}));
@@ -920,7 +921,6 @@ export async function openAIAnalyzeOutfitStyle({ key, baseUrl, model, image, mim
   return { description: parsed.description, tags: parsed.tags.filter((tag) => typeof tag === "string").slice(0, 4) };
 }
 
-const MIRROR_REGIONS = ["upperbody", "lowerbody", "outerwear", "footwear", "accessory"];
 const MIRROR_VOLUMES = ["fitted", "regular", "relaxed", "oversized"];
 const MIRROR_HEM_SEVERITIES = ["slight", "moderate", "severe"];
 
@@ -933,7 +933,7 @@ function buildMirrorPerceptionPrompt() {
   return `You are looking at a photo of a person wearing an outfit. Identify each distinct visible garment and describe ONLY what you observe — do not judge, critique, rate, or suggest anything.
 
 For each visible garment, report:
-- region: one of "upperbody", "lowerbody", "outerwear", "footwear", "accessory" (use "outerwear" for a jacket/overshirt worn open over another top, "accessory" for belts/bags/hats/scarves/jewelry)
+- region: one of ${MIRROR_REGIONS.map((region) => `"${region}"`).join(", ")} (use "outerwear" for a jacket/overshirt worn open over another top, "accessory" for belts/bags/hats/scarves/jewelry)
 - description: a short 2-4 word description, e.g. "open-collar shirt" or "wide-leg cargo pants"
 - color: the closest match from this exact list: ${COLOR_NAMES.join(", ")}
 - volume: how the piece sits on the body — one of "fitted", "regular", "relaxed", "oversized"

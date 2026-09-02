@@ -4,9 +4,10 @@ import path from "node:path";
 import sharp from "sharp";
 import { atomicJson } from "./import-job-api.mjs";
 import { detectAndCreateWishlistItems, wishlistPaths } from "./wishlist-api.mjs";
+import { GARMENT_PART_IDS } from "../shared/garments.mjs";
 
 const INSPO_ASSET_ROOT = "/api/inspo/assets";
-const VALID_PARTS = new Set(["upperbody", "wholebody_up", "lowerbody", "accessories_up", "shoes", "socks", "full_look"]);
+const VALID_PARTS = new Set([...GARMENT_PART_IDS, "full_look"]);
 
 function json(res, status, value) {
   res.statusCode = status;

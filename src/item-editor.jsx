@@ -6,19 +6,7 @@ import { useDismiss } from "./hooks/useDismiss.js";
 import { ModeledHero } from "./components/ModeledHero.jsx";
 import { PanelActions } from "./components/PanelActions.jsx";
 import { EditableTitle } from "./components/EditableTitle.jsx";
-
-export const TYPES = [
-  { id: "all", label: "All" },
-  { id: "upperbody", label: "Tops", singular: "Top" },
-  { id: "wholebody_up", label: "Jackets", singular: "Jacket" },
-  { id: "lowerbody", label: "Bottoms", singular: "Bottom" },
-  { id: "accessories_up", label: "Accessories", singular: "Accessory" },
-  { id: "shoes", label: "Shoes", singular: "Shoes" },
-  { id: "socks", label: "Socks", singular: "Socks" },
-];
-
-export const TYPE_MAP = Object.fromEntries(TYPES.map((type) => [type.id, type]));
-export const TYPE_ORDER = Object.fromEntries(TYPES.slice(1).map((type, index) => [type.id, index]));
+import { WARDROBE_TYPES as TYPES, TYPE_MAP } from "./categories.js";
 
 function rgbToHex(red, green, blue) {
   return `#${[red, green, blue].map((value) => Math.max(0, Math.min(255, value)).toString(16).padStart(2, "0")).join("")}`;

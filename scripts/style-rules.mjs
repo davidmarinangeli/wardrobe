@@ -19,6 +19,8 @@
 // - Pooling/stacking hems are a real, commonly-named fit problem, distinct from color.
 //   https://suitablee.com/en/perspective/post/how-men-wear-their-trousers-and-what-it-says-about-them
 
+import { REGION_TO_PART, PART_TO_REGION } from "../shared/garments.mjs";
+
 // ---------------------------------------------------------------------------
 // Color vocabulary
 // ---------------------------------------------------------------------------
@@ -53,15 +55,8 @@ export const COLOR_TABLE = {
 
 export const COLOR_NAMES = Object.keys(COLOR_TABLE);
 
-// Perception region vocabulary <-> wardrobe library `part` vocabulary (src/categories.js).
-export const REGION_TO_PART = {
-  upperbody: "upperbody",
-  lowerbody: "lowerbody",
-  outerwear: "wholebody_up",
-  footwear: "shoes",
-  accessory: "accessories_up",
-};
-export const PART_TO_REGION = Object.fromEntries(Object.entries(REGION_TO_PART).map(([region, part]) => [part, region]));
+// Perception region vocabulary <-> wardrobe part vocabulary (shared/garments.mjs).
+export { REGION_TO_PART, PART_TO_REGION };
 
 // Most-replaceable-first: which garment to target when an issue could point at
 // either of two pieces (e.g. a color clash between an accessory and a top should

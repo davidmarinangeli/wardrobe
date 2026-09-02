@@ -2,17 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowCounterClockwise, Check, Plus, SpinnerGap, Trash, UploadSimple, WarningCircle, X } from "@phosphor-icons/react";
 import { api } from "./api.js";
 import { useViewerKeyboard } from "./hooks/useViewerKeyboard.js";
+import { BASE_GARMENT_CATEGORIES } from "./categories.js";
 import "./import-flow.css";
 
 const API = "/api/import/jobs";
 const CONFIG_API = "/api/import/config";
-const PARTS = [
-  ["upperbody", "Tops"],
-  ["wholebody_up", "Jackets"],
-  ["lowerbody", "Bottoms"],
-  ["accessories_up", "Accessories"],
-  ["shoes", "Shoes"],
-];
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 
 const fileToDataUrl = (file) => new Promise((resolve, reject) => {
@@ -66,7 +60,7 @@ function ReviewEditor({ job, stage, draft, setDraft, regenPrompt, setRegenPrompt
         {isCrop ? <p className="import-card__detail">Check that this crop contains the complete intended item. Approving it starts the clean garment-image generation.</p> : (
           <>
             <div className="import-field"><label htmlFor={`name-${job.id}`}>Name</label><input id={`name-${job.id}`} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></div>
-            <div className="import-field"><label htmlFor={`part-${job.id}`}>Category</label><select id={`part-${job.id}`} value={draft.part} onChange={(event) => setDraft({ ...draft, part: event.target.value })}>{PARTS.map(([id, label]) => <option value={id} key={id}>{label}</option>)}</select></div>
+            <div className="import-field"><label htmlFor={`part-${job.id}`}>Category</label><select id={`part-${job.id}`} value={draft.part} onChange={(event) => setDraft({ ...draft, part: event.target.value })}>{BASE_GARMENT_CATEGORIES.map(({ id, label }) => <option value={id} key={id}>{label}</option>)}</select></div>
             <div className="import-field"><label htmlFor={`primary-${job.id}`}>Primary color</label><div className="import-color-row"><input id={`primary-${job.id}`} type="color" value={primaryValid ? draft.color : "#000000"} onChange={(event) => setDraft({ ...draft, color: event.target.value })} /><input aria-label="Primary color hex" aria-invalid={!primaryValid} value={draft.color} onChange={(event) => setDraft({ ...draft, color: event.target.value })} /></div>{!primaryValid && <small className="import-field-error">Use a six-digit hex color, such as #d8d0c2.</small>}</div>
             <div className="import-field"><label htmlFor={`secondary-${job.id}`}>Secondary color <span>optional</span></label><input id={`secondary-${job.id}`} type="text" aria-invalid={!secondaryValid} placeholder="#hex or leave blank" value={draft.secondaryColor} onChange={(event) => setDraft({ ...draft, secondaryColor: event.target.value })} />{!secondaryValid && <small className="import-field-error">Use a six-digit hex color or leave this empty.</small>}</div>
             <div className="import-field"><label htmlFor={`tags-${job.id}`}>Details</label><input id={`tags-${job.id}`} value={draft.tags} placeholder="casual, cotton, striped" onChange={(event) => setDraft({ ...draft, tags: event.target.value })} /></div>

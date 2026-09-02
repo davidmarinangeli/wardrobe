@@ -19,9 +19,10 @@ import {
   resolveApiKey,
   resolveProvider,
 } from "./import-job-api.mjs";
+import { GARMENT_PART_ID_SET } from "../shared/garments.mjs";
 
 const ASSET_ROOT = "/api/wishlist/assets";
-const PARTS = new Set(["upperbody", "wholebody_up", "lowerbody", "accessories_up", "shoes", "socks"]);
+const PARTS = GARMENT_PART_ID_SET;
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 
 function json(res, status, value) {

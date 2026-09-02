@@ -1,14 +1,11 @@
 // Canonical garment category definitions.
 // Views import BASE_GARMENT_CATEGORIES and extend as needed rather than re-declaring.
+// The vocabulary itself lives in ../shared/garments.mjs (shared with the Node
+// API plugins) — this file just shapes it for the views that already import it.
 
-export const BASE_GARMENT_CATEGORIES = [
-  { id: "upperbody",      label: "Tops",        singular: "Top" },
-  { id: "wholebody_up",   label: "Jackets",     singular: "Jacket" },
-  { id: "lowerbody",      label: "Bottoms",     singular: "Bottom" },
-  { id: "accessories_up", label: "Accessories", singular: "Accessory" },
-  { id: "shoes",          label: "Shoes",       singular: "Shoes" },
-  { id: "socks",          label: "Socks",       singular: "Socks" },
-];
+import { GARMENT_PARTS } from "../shared/garments.mjs";
+
+export const BASE_GARMENT_CATEGORIES = GARMENT_PARTS.map(({ id, label, singular }) => ({ id, label, singular }));
 
 // Wardrobe + Wishlist: "All" first, then every garment type.
 export const WARDROBE_TYPES = [
