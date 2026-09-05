@@ -1,5 +1,7 @@
+import { useRef } from "react";
 import { X } from "@phosphor-icons/react";
 import { useDismiss } from "../hooks/useDismiss.js";
+import { useExpandOrigin } from "../hooks/useExpandOrigin.js";
 
 /**
  * Standard slide-in panel shell used by every modal/drawer in the app.
@@ -20,6 +22,11 @@ import { useDismiss } from "../hooks/useDismiss.js";
  * entryClassName string   – Extra class(es) on viewer-entry (controls panel width via CSS).
  * panelClassName string   – Extra class(es) on the <aside> (e.g. "has-modeled-image", "editing").
  * entryStyle     object   – Inline styles on viewer-entry (for one-off widths like SuggestionPanel).
+ * openedFrom     Element  – The card that opened this panel (event.currentTarget from its
+ *                           click). Given one, the panel grows out of that card instead of
+ *                           sliding in from the right edge. Omit for panels nothing on
+ *                           screen opened — a modal, a keyboard shortcut — which keep the
+ *                           edge-anchored entry.
  * children       node     – Panel body content.
  */
 export function ViewerPanel({
@@ -31,9 +38,12 @@ export function ViewerPanel({
   entryClassName,
   panelClassName,
   entryStyle,
+  openedFrom,
   children,
 }) {
   const { closing, dismiss } = useDismiss(onClose);
+  const entryRef = useRef(null);
+  useExpandOrigin(entryRef, openedFrom);
 
   return (
     <div
@@ -43,7 +53,8 @@ export function ViewerPanel({
       onMouseDown={(e) => e.target === e.currentTarget && dismiss()}
     >
       <div
-        className={`viewer-entry${entryClassName ? ` ${entryClassName}` : ""}`}
+        ref={entryRef}
+        className={`viewer-entry${openedFrom ? " viewer-entry--from-card" : ""}${entryClassName ? ` ${entryClassName}` : ""}`}
         style={entryStyle}
       >
         <aside

@@ -3,6 +3,7 @@ import { ArrowCounterClockwise, Check, Plus, Sparkle, SpinnerGap, X } from "@pho
 import { OptimizedImage } from "./OptimizedImage.jsx";
 import { useViewerKeyboard } from "./hooks/useViewerKeyboard.js";
 import { useDismiss } from "./hooks/useDismiss.js";
+import { useExpandOrigin } from "./hooks/useExpandOrigin.js";
 import { ModeledHero } from "./components/ModeledHero.jsx";
 import { PanelActions } from "./components/PanelActions.jsx";
 import { EditableTitle } from "./components/EditableTitle.jsx";
@@ -100,14 +101,14 @@ function sampleImageColor(image, canvas, event) {
   return null;
 }
 
-export function GalleryItem({ item, selected, onOpen, seasonMatch, index = 0 }) {
+export function GalleryItem({ item, index, selected, onOpen }) {
   const type = TYPE_MAP[item.part]?.singular || "wardrobe item";
 
   return (
     <button
       className={`gallery-item${selected ? " selected" : ""}`}
       type="button"
-      onClick={() => onOpen(item.id)}
+      onClick={(event) => onOpen(item.id, event.currentTarget)}
       aria-label={`View ${item.name || type}`}
       aria-pressed={selected}
       data-part={item.part}
@@ -117,7 +118,6 @@ export function GalleryItem({ item, selected, onOpen, seasonMatch, index = 0 }) 
       data-testid={`wardrobe-item-${item.id}`}
     >
       <span className="gallery-item__art">
-        {seasonMatch && <span className="gallery-item-badge" style={{ backgroundColor: seasonMatch.accent }} title={`Matches your ${seasonMatch.label} palette`} />}
         <OptimizedImage
           src={item.thumbnail || item.image}
           alt=""
@@ -353,8 +353,9 @@ export function ModeledPhotoPrompt({ status, error, busy, onGenerate, premiumAll
   );
 }
 
-export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled, premiumAllowed, showModeledPhoto = true }) {
+export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled, premiumAllowed, showModeledPhoto = true, openedFrom = null }) {
   const closeButtonRef = useRef(null);
+  const entryRef = useRef(null);
   const imageRef = useRef(null);
   const samplingCanvasRef = useRef(null);
   const shakeTimerRef = useRef(null);
@@ -363,6 +364,9 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
   const [palette, setPalette] = useState(item.palette || []);
   const [draft, setDraft] = useState({ name: item.name || "", part: item.part, color: item.color || "#9a9286", secondaryColor: item.secondaryColor || null, tags: [...(item.tags || [])] });
   const [shaking, setShaking] = useState(false);
+  // This viewer is hand-rolled rather than a ViewerPanel — it needs the
+  // unsaved-changes shake — so it opts into the card-anchored entry itself.
+  useExpandOrigin(entryRef, openedFrom);
   const [closeBlocked, setCloseBlocked] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [modeledNote, setModeledNote] = useState("");
@@ -493,7 +497,7 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
 
   return (
     <div className="viewer-overlay" role="presentation" data-closing={closing} onMouseDown={(event) => event.target === event.currentTarget && requestClose()}>
-    <div className="viewer-entry">
+    <div ref={entryRef} className={`viewer-entry${openedFrom ? " viewer-entry--from-card" : ""}`}>
     <aside className={`viewer editing${hasModeledImage ? " has-modeled-image" : ""}${shaking ? " shake" : ""}`} role="dialog" aria-modal="true" aria-label="Selected wardrobe item">
       <button className="icon-button viewer-icon-close" type="button" onClick={() => requestClose()} aria-label="Close viewer" ref={closeButtonRef}>
         <X size={24} weight="light" aria-hidden="true" />

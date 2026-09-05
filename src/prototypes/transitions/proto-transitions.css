@@ -1,0 +1,40 @@
+/* Stage chrome for the card → viewer prototypes. Deliberately thin: everything
+   that matters is the app's own CSS, so the variants are judged on the real
+   material and not on a prototype's approximation of it. */
+
+.proto-transition-stage {
+  position: relative;
+  min-height: 100vh;
+  background: var(--paper);
+}
+
+/* The grid entry stagger is decoration and it replays on every variant switch,
+   which makes it noise here rather than the thing under test. */
+.proto-grid .gallery-item { animation: none; }
+
+.proto-grid {
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  padding-top: 24px;
+}
+
+/* ─── Variant C: expand in place ────────────────────────────────────────────
+   The panel grows out of the card's centre instead of sliding in from the
+   right, so the origin is the card and the return path is the same one. */
+.proto-expand-entry {
+  transform-origin: var(--card-x, 50%) var(--card-y, 50%);
+  animation: proto-expand 320ms var(--ease-drawer) both;
+}
+
+@keyframes proto-expand {
+  from {
+    opacity: 0;
+    /* Never scale(0) — nothing in the real world appears from nothing. */
+    transform: scale(.92);
+  }
+}
+
+[data-expand-in-place] .viewer-overlay { justify-content: flex-end; }
+
+@media (prefers-reduced-motion: reduce) {
+  .proto-expand-entry { animation: none; opacity: 1; }
+}

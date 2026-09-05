@@ -79,6 +79,10 @@ export function App() {
   const [items, setItems] = useState([]);
   const [activeType, setActiveType] = useState("all");
   const [selectedId, setSelectedId] = useState(null);
+  // The card the viewer should grow out of. The element itself, not its
+  // coordinates — opening the viewer reflows the page behind it, so the rect is
+  // read later, once that has settled. See useExpandOrigin.
+  const [openedFrom, setOpenedFrom] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [colorProfile, setColorProfile] = useState(() => readColorProfile());
@@ -130,6 +134,28 @@ export function App() {
       })
       .catch((requestError) => setError(requestError.message))
       .finally(() => setLoading(false));
+  }, []);
+
+  // Sync color profile from server database on mount
+  useEffect(() => {
+    fetch("/api/color-profile/status", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.hasProfile && data.profile?.season) {
+          const resolvedSeason = SEASONS[data.profile.season] || SEASONS[data.profile.parentSeason] || SEASONS["autumn-deep"];
+          const fullProfile = {
+            ...data.profile,
+            season: resolvedSeason.id,
+            parentSeason: resolvedSeason.parentSeason,
+            palette: Array.isArray(data.profile.palette) && data.profile.palette.length ? data.profile.palette : (resolvedSeason.palette || []),
+          };
+          setColorProfile(fullProfile);
+          try {
+            localStorage.setItem("open-wardrobe-color-profile-v1", JSON.stringify(fullProfile));
+          } catch {}
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const selectedItem = items.find((item) => item.id === selectedId) || null;
@@ -272,6 +298,8 @@ export function App() {
         <Outfits
           items={items}
           premiumAllowed={premiumAllowed}
+          colorProfile={colorProfile}
+          onOpenColorQuiz={() => setShowColorQuiz(true)}
           showBuilder={showOutfitBuilder}
           onOpenBuilder={() => setShowOutfitBuilder(true)}
           onCloseBuilder={() => setShowOutfitBuilder(false)}
@@ -280,14 +308,24 @@ export function App() {
         />
       ) : (
         <PageShell
-          count={items.length}
-          noun="piece"
+          count={onlyMatches ? visibleItems.length : items.length}
+          noun={onlyMatches && colorProfile ? `${(SEASONS[colorProfile.season] || SEASONS[colorProfile.parentSeason])?.label || "palette"} match` : "piece"}
           actions={(
             // A profile setting ("what's my season?"), not a filter — it belongs
             // up here with the page-level actions, not among the category-nav
             // pills below. "Matches my colors" stays there since it IS a filter.
             <button type="button" className="header-action-btn" onClick={() => setShowColorQuiz(true)}>
-              {colorProfile ? <><span className="season-dot" style={{ backgroundColor: SEASONS[colorProfile.season].accent }} />{SEASONS[colorProfile.season].label}</> : "My Colors"}
+              {colorProfile && (SEASONS[colorProfile.season] || SEASONS[colorProfile.parentSeason]) ? (
+                <>
+                  <span
+                    className="season-dot"
+                    style={{ backgroundColor: (SEASONS[colorProfile.season] || SEASONS[colorProfile.parentSeason]).accent }}
+                  />
+                  {(SEASONS[colorProfile.season] || SEASONS[colorProfile.parentSeason]).label}
+                </>
+              ) : (
+                "My Colors"
+              )}
             </button>
           )}
           categories={availableTypes}
@@ -297,10 +335,16 @@ export function App() {
           navExtra={colorProfile && (
             <button
               type="button"
-              className={onlyMatches ? "active" : ""}
+              className={`color-filter-btn${onlyMatches ? " active" : ""}`}
               onClick={() => setOnlyMatches((current) => !current)}
               aria-pressed={onlyMatches}
+              title={onlyMatches ? "Show all pieces" : `Show only pieces matching your ${(SEASONS[colorProfile.season] || SEASONS[colorProfile.parentSeason])?.label || "palette"}`}
             >
+              <span
+                className="season-dot"
+                style={{ backgroundColor: (SEASONS[colorProfile.season] || SEASONS[colorProfile.parentSeason])?.accent }}
+                aria-hidden="true"
+              />
               Matches my colors
             </button>
           )}
@@ -314,23 +358,28 @@ export function App() {
           />
 
           {!!items.length && (
-            <section className="gallery-grid" aria-label={`${TYPE_MAP[activeType]?.label || "All"} wardrobe items`}>
-              {visibleItems.map((item, index) => (
-                <GalleryItem
-                  key={item.id}
-                  item={item}
-                  index={index}
-                  selected={selectedId === item.id}
-                  onOpen={setSelectedId}
-                  seasonMatch={colorProfile?.showBadges && itemMatchesPalette(item, colorProfile) ? SEASONS[colorProfile.season] : null}
-                />
-              ))}
-            </section>
+            visibleItems.length === 0 ? (
+              <p className="empty" style={{ margin: "48px 0", textAlign: "center" }}>
+                No pieces match your {(SEASONS[colorProfile?.season] || SEASONS[colorProfile?.parentSeason])?.label || "seasonal"} palette.
+              </p>
+            ) : (
+              <section className="gallery-grid" aria-label={`${TYPE_MAP[activeType]?.label || "All"} wardrobe items`}>
+                {visibleItems.map((item, index) => (
+                  <GalleryItem
+                    key={item.id}
+                    item={item}
+                    index={index}
+                    selected={selectedId === item.id}
+                    onOpen={(id, element) => { setOpenedFrom(element); setSelectedId(id); }}
+                  />
+                ))}
+              </section>
+            )
           )}
         </PageShell>
       )}
 
-      {selectedItem && <ItemViewer item={selectedItem} onClose={() => setSelectedId(null)} onSave={saveItem} onDelete={deleteItem} onGenerateModeled={generateModeledPhoto} premiumAllowed={premiumAllowed} />}
+      {selectedItem && <ItemViewer item={selectedItem} openedFrom={openedFrom} onClose={() => setSelectedId(null)} onSave={saveItem} onDelete={deleteItem} onGenerateModeled={generateModeledPhoto} premiumAllowed={premiumAllowed} />}
       {showColorQuiz && (
         <ColorProfileModal
           initialProfile={colorProfile}

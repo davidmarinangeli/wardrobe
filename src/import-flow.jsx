@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowCounterClockwise, Check, Plus, SpinnerGap, Trash, UploadSimple, WarningCircle, X } from "@phosphor-icons/react";
 import { api } from "./api.js";
 import { useViewerKeyboard } from "./hooks/useViewerKeyboard.js";
+import { usePopoverOrigin } from "./hooks/usePopoverOrigin.js";
 import { BASE_GARMENT_CATEGORIES } from "./categories.js";
 import "./import-flow.css";
 
@@ -71,9 +72,9 @@ function ReviewEditor({ job, stage, draft, setDraft, regenPrompt, setRegenPrompt
           <textarea id={`regenerate-${job.id}-${stage}`} rows="3" value={regenPrompt} onChange={(event) => setRegenPrompt(event.target.value)} placeholder="Example: preserve the original zipper and remove the retail tag" />
         </div>}
         <div className="import-actions">
-          <button className="import-button" disabled={busy} onClick={() => onAction("reject")}><Trash size={14} /> Reject</button>
-          {!isCrop && <button className="import-button" disabled={busy} onClick={() => onAction("regenerate", regenPrompt)}><ArrowCounterClockwise size={14} /> Regenerate</button>}
-          <button className="import-button import-button--primary" disabled={busy || (!isCrop && (!draft.name.trim() || !primaryValid || !secondaryValid))} onClick={() => onAction("approve")}><Check size={14} weight="bold" /> {isCrop ? "Use crop" : "Approve"}</button>
+          <button className="delete-button" type="button" disabled={busy} onClick={() => onAction("reject")}><Trash size={15} /> Reject</button>
+          {!isCrop && <button className="secondary-button" type="button" disabled={busy} onClick={() => onAction("regenerate", regenPrompt)}><ArrowCounterClockwise size={15} /> Regenerate</button>}
+          <button className="primary-button" type="button" disabled={busy || (!isCrop && (!draft.name.trim() || !primaryValid || !secondaryValid))} onClick={() => onAction("approve")}><Check size={15} weight="bold" /> {isCrop ? "Use crop" : "Approve"}</button>
         </div>
       </div>
     </div>
@@ -105,8 +106,8 @@ function CleanupEditor({ job, tolerance, setTolerance, busy, onPreview, onAccept
       </div>
       {Number.isFinite(contaminated) && <p className="import-card__detail">The automated check sees {contaminated.toLocaleString()} tinted edge {contaminated === 1 ? "pixel" : "pixels"}. If the preview looks clean, you can still use it.</p>}
       <div className="import-actions">
-        <button className="import-button" disabled={busy} onClick={() => onPreview(tolerance)}><ArrowCounterClockwise size={14} /> Preview cleanup</button>
-        <button className="import-button import-button--primary" disabled={busy} onClick={onAccept}><Check size={14} weight="bold" /> Use this cleanup</button>
+        <button className="secondary-button" type="button" disabled={busy} onClick={() => onPreview(tolerance)}><ArrowCounterClockwise size={15} /> Preview cleanup</button>
+        <button className="primary-button" type="button" disabled={busy} onClick={onAccept}><Check size={15} weight="bold" /> Use this cleanup</button>
       </div>
     </div>
   );
@@ -115,6 +116,9 @@ function CleanupEditor({ job, tolerance, setTolerance, busy, onPreview, onAccept
 export function WardrobeImportFlow({ onGarmentApproved, externalSetup, idleLabel, onIdleActivate }) {
   const inputRef = useRef(null);
   const closeButtonRef = useRef(null);
+  const triggerRef = useRef(null);
+  const panelRef = useRef(null);
+  const identityRef = useRef(null);
   const [jobs, setJobs] = useState([]);
   const [drafts, setDrafts] = useState({});
   const [regenerationPrompts, setRegenerationPrompts] = useState({});
@@ -132,6 +136,11 @@ export function WardrobeImportFlow({ onGarmentApproved, externalSetup, idleLabel
   // own backdrop, so Escape/body-scroll-lock must be gated on `open` rather
   // than bound for the component's whole lifetime.
   useViewerKeyboard(() => setOpen(false), closeButtonRef, open);
+
+  // Same trigger-anchored open as Mirror — the two chips sit side by side in
+  // the top bar and shouldn't fly in from opposite corners of the viewport.
+  const anchorToTrigger = usePopoverOrigin(triggerRef, panelRef, identityRef);
+  const openPopover = () => { anchorToTrigger(); setOpen(true); };
 
   // The setup wizard can complete (e.g. a reference photo drop) without a page reload — resync
   // whenever the parent's copy of the setup status changes instead of only checking on mount.
@@ -165,7 +174,7 @@ export function WardrobeImportFlow({ onGarmentApproved, externalSetup, idleLabel
   }, [jobs, refresh]);
 
   const submitFiles = useCallback(async (files) => {
-    if (!setup?.ready) { setOpen(true); return; }
+    if (!setup?.ready) { openPopover(); return; }
     const images = [...files].filter((file) => file.type.startsWith("image/"));
     if (!images.length) return;
     setDragging(false); setError(""); setNotice(null);
@@ -177,7 +186,7 @@ export function WardrobeImportFlow({ onGarmentApproved, externalSetup, idleLabel
         const createdJobs = result.jobs || [result];
         if (!createdJobs.length && result.noClothingDetected) {
           setNotice({ tone: "complete", text: "No clothing detected", detail: `We couldn’t find a distinct wearable item in ${file.name}. Try a clearer or more tightly framed image.` });
-          setOpen(true);
+          openPopover();
           continue;
         }
         setJobs((current) => [...current, ...createdJobs]);
@@ -266,15 +275,25 @@ export function WardrobeImportFlow({ onGarmentApproved, externalSetup, idleLabel
   const progress = 0;
   const hasImportActivity = Boolean(jobs.length || notice || setupRequired || analyzing);
 
+  // Chip identity, computed once. The header renders the same icon and the same
+  // words so they can travel into it — see usePopoverOrigin and .popover-identity.
+  const chipIcon = activeStatus?.tone === "processing" ? <SpinnerGap size={16} className="top-action__spinner" />
+    : activeStatus?.tone === "error" ? <WarningCircle size={16} />
+    : readyCount ? <span className="top-action__count">{readyCount}</span>
+    : notice ? <X size={16} />
+    : <Plus size={16} />;
+  const chipLabel = activeStatus?.text || idleLabel || "Add clothes";
+
   return (
     <>
       <input ref={inputRef} type="file" accept="image/*" multiple hidden disabled={!setup?.ready} onChange={(event) => { submitFiles(event.target.files); event.target.value = ""; }} />
       <div className="import-drop-overlay" data-active={dragging && !setupRequired} aria-hidden={!dragging || setupRequired}><div className="import-drop-target is-over"><UploadSimple size={34} weight="light" /><h2>Drop clothing images</h2><p>A single garment or a photo of a full outfit works. Your wardrobe stays exactly where you left it.</p></div></div>
       <button
         type="button"
-        className={`top-action top-action--primary${activeStatus?.tone === "error" ? " is-error" : ""}`}
+        ref={triggerRef}
+        className={`top-action top-action--primary${activeStatus?.tone === "error" ? " is-error" : ""}${open ? " is-morphing" : ""}`}
         onClick={() => {
-          if (setupRequired || hasImportActivity) { setOpen(true); return; }
+          if (setupRequired || hasImportActivity) { openPopover(); return; }
           // Idle: this button doubles as whichever view's "add" action is relevant
           // right now (see App.jsx) — falls back to its own file picker otherwise.
           if (onIdleActivate) onIdleActivate();
@@ -282,23 +301,19 @@ export function WardrobeImportFlow({ onGarmentApproved, externalSetup, idleLabel
         }}
         aria-label={setupRequired ? "Open setup instructions" : hasImportActivity ? "Open import progress" : (idleLabel || "Add clothes")}
       >
-        {activeStatus?.tone === "processing" ? <SpinnerGap size={16} className="top-action__spinner" />
-          : activeStatus?.tone === "error" ? <WarningCircle size={16} />
-          : readyCount ? <span className="top-action__count">{readyCount}</span>
-          : notice ? <X size={16} />
-          : <Plus size={16} />}
-        <span className="top-action__label">{activeStatus?.text || idleLabel || "Add clothes"}</span>
+        {chipIcon}
+        <span className="top-action__label">{chipLabel}</span>
       </button>
       <div className="import-popover-backdrop" data-open={open} onMouseDown={(event) => event.target === event.currentTarget && setOpen(false)}>
-        <section className="import-popover" role="dialog" aria-modal="true" aria-labelledby="import-title">
-          <header className="import-popover__header"><div><p className="import-popover__eyebrow">Wardrobe import</p><h2 className="import-popover__title" id="import-title">{readyCount ? `${readyCount} ready for review` : activeStatus?.tone === "error" ? "Import needs attention" : analyzing ? analyzingStatus.text : jobs.length ? "Preparing new pieces" : notice?.text || "Add to your wardrobe"}</h2></div><button className="import-icon-button" type="button" onClick={() => setOpen(false)} aria-label="Close import progress" ref={closeButtonRef}><X size={20} /></button></header>
-          {!jobs.length ? setupRequired ? <div className="import-drop-target import-setup-warning"><WarningCircle size={30} /><h2>Setup required</h2><p>Add your OpenAI API key to <code>.env</code> and a PNG reference photo of yourself at <code>{setup.modelReference || "data/model-reference.png"}</code>, then restart the app.</p></div> : analyzing ? <div className="import-drop-target import-loading-target"><SpinnerGap size={30} className="import-spinner" /><h2>Reading your photo</h2><p>We’re identifying each clothing item and framing it for review. This takes a few seconds.</p></div> : <div className="import-drop-target"><UploadSimple size={28} /><h2>{notice ? "Try another image" : "Choose or paste an image"}</h2><p>{notice?.detail || "We’ll isolate each clothing item, suggest its details, and hold everything for your approval."}</p><button className="import-button import-button--primary" disabled={!setup?.ready} onClick={() => { setNotice(null); inputRef.current?.click(); }}>Choose images</button></div> : (
+        <section ref={panelRef} className="import-popover" role="dialog" aria-modal="true" aria-labelledby="import-title">
+          <header className="import-popover__header"><div className="import-popover__heading"><p className="import-popover__eyebrow popover-eyebrow">Wardrobe import</p><div className="popover-identity" ref={identityRef}><span className="popover-identity__icon" aria-hidden="true">{chipIcon}</span><h2 className="import-popover__title" id="import-title">{readyCount ? `${readyCount} ready for review` : activeStatus?.tone === "error" ? "Import needs attention" : analyzing ? analyzingStatus.text : jobs.length ? "Preparing new pieces" : notice?.text || chipLabel}</h2></div></div><button className="import-icon-button" type="button" onClick={() => setOpen(false)} aria-label="Close import progress" ref={closeButtonRef}><X size={20} /></button></header>
+          {!jobs.length ? setupRequired ? <div className="import-drop-target import-setup-warning"><WarningCircle size={30} /><h2>Setup required</h2><p>Add your OpenAI API key to <code>.env</code> and a PNG reference photo of yourself at <code>{setup.modelReference || "data/model-reference.png"}</code>, then restart the app.</p></div> : analyzing ? <div className="import-drop-target import-loading-target"><SpinnerGap size={30} className="import-spinner" /><h2>Reading your photo</h2><p>We’re identifying each clothing item and framing it for review. This takes a few seconds.</p></div> : <div className="import-drop-target"><UploadSimple size={28} /><h2>{notice ? "Try another image" : "Choose or paste an image"}</h2><p>{notice?.detail || "We’ll isolate each clothing item, suggest its details, and hold everything for your approval."}</p><button className="primary-button" type="button" disabled={!setup?.ready} onClick={() => { setNotice(null); inputRef.current?.click(); }}>Choose images</button></div> : (
             <>
               {analyzing && <div className="import-drop-target import-loading-target" style={{ minHeight: 60 }}><SpinnerGap size={20} className="import-spinner" /><h2 style={{ fontSize: 13, margin: 0 }}>Analyzing {analyzingFiles.length > 1 ? `${analyzingFiles.length} more photos` : 'another photo'}…</h2></div>}
               <div className={`import-progress${activeStatus?.tone !== "processing" ? " is-reviewing" : progress < 100 ? " is-indeterminate" : ""}`}><div className="import-progress__meta"><span>{activeStatus?.text}</span><span>{jobs.length} {jobs.length === 1 ? "item" : "items"}</span></div>{activeStatus?.tone === "processing" && <div className="import-progress__track"><div className="import-progress__bar" style={{ "--import-progress": `${progress}%` }} /></div>}</div>
               {reviewJob && reviewStage ? <ReviewEditor job={reviewJob} stage={reviewStage} draft={drafts[reviewJob.id] || defaultDraft(reviewJob)} setDraft={(draft) => setDrafts((current) => ({ ...current, [reviewJob.id]: draft }))} regenPrompt={regenerationPrompts[`${reviewJob.id}:${reviewStage}`] || ""} setRegenPrompt={(prompt) => setRegenerationPrompts((current) => ({ ...current, [`${reviewJob.id}:${reviewStage}`]: prompt }))} busy={busyId === reviewJob.id} onAction={(action, prompt) => perform(reviewJob, reviewStage, action, prompt)} /> : reviewJob && hasCleanupFailure(reviewJob) ? <CleanupEditor job={reviewJob} tolerance={cleanupTolerances[reviewJob.id] ?? reviewJob.stages.garment.cleanupTolerance ?? 46} setTolerance={(tolerance) => setCleanupTolerances((current) => ({ ...current, [reviewJob.id]: tolerance }))} busy={busyId === reviewJob.id} onPreview={(tolerance) => performCleanup(reviewJob, "preview", tolerance)} onAccept={() => performCleanup(reviewJob, "accept")} /> : null}
-              <div className="import-card-list">{jobs.map((job) => { const status = deriveStatus(job); const itemName = drafts[job.id]?.name || job.metadata?.name || "New piece"; const failedStage = job.stages?.garment?.status === "failed" ? "garment" : null; return <article className={`import-card is-${status.tone}${reviewJob?.id === job.id ? " is-selected" : ""}`} key={job.id}><img className="import-card__image" src={job.stages?.garment?.assetUrl || job.stages?.garment?.failedAssetUrl || job.stages?.crop?.assetUrl || job.originalAssetUrl} alt="" /><div className="import-card__body"><h3 className="import-card__title">{itemName}</h3><p className="import-card__detail import-card__detail--status" data-tone={status.tone}>{status.tone === "error" ? status.detail : status.text}</p></div><div className="import-card__actions">{status.tone === "ready" && <button className="import-icon-button" onClick={() => { setSelectedReviewId(job.id); setOpen(true); }} aria-label={`Review ${itemName}`}><Check size={17} /></button>}{failedStage && <button className="import-button import-card__retry" disabled={busyId === job.id} onClick={() => perform(job, failedStage, "regenerate", "")}><ArrowCounterClockwise size={14} /> Retry</button>}<button className="import-icon-button import-card__delete" disabled={busyId === job.id} onClick={() => deleteJob(job)} aria-label={`Delete ${itemName} from import queue`}><Trash size={16} /></button></div></article>; })}</div>
-              <div className="import-actions"><button className="import-button" onClick={() => inputRef.current?.click()}><Plus size={14} /> Add another</button></div>
+              <div className="import-card-list">{jobs.map((job) => { const status = deriveStatus(job); const itemName = drafts[job.id]?.name || job.metadata?.name || "New piece"; const failedStage = job.stages?.garment?.status === "failed" ? "garment" : null; return <article className={`import-card is-${status.tone}${reviewJob?.id === job.id ? " is-selected" : ""}`} key={job.id}><img className="import-card__image" src={job.stages?.garment?.assetUrl || job.stages?.garment?.failedAssetUrl || job.stages?.crop?.assetUrl || job.originalAssetUrl} alt="" /><div className="import-card__body"><h3 className="import-card__title">{itemName}</h3><p className="import-card__detail import-card__detail--status" data-tone={status.tone}>{status.tone === "error" ? status.detail : status.text}</p></div><div className="import-card__actions">{status.tone === "ready" && <button className="import-icon-button" type="button" onClick={() => { setSelectedReviewId(job.id); openPopover(); }} aria-label={`Review ${itemName}`}><Check size={17} /></button>}{failedStage && <button className="secondary-button import-card__retry" type="button" disabled={busyId === job.id} onClick={() => perform(job, failedStage, "regenerate", "")}><ArrowCounterClockwise size={14} /> Retry</button>}<button className="import-icon-button import-card__delete" disabled={busyId === job.id} onClick={() => deleteJob(job)} aria-label={`Delete ${itemName} from import queue`}><Trash size={16} /></button></div></article>; })}</div>
+              <div className="import-actions"><button className="secondary-button" type="button" onClick={() => inputRef.current?.click()}><Plus size={15} /> Add another</button></div>
             </>
           )}
           {error && <p className="import-status is-error" role="alert">{error}</p>}

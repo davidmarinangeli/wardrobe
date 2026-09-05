@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowCounterClockwise, Check, MagicWand, SpinnerGap, UploadSimple, X } from "@phosphor-icons/react";
 import { OptimizedImage } from "./OptimizedImage.jsx";
 import { api } from "./api.js";
-import { INSPO_CATEGORIES as CATEGORIES, CATEGORY_LABEL } from "./categories.js";
+import { BASE_GARMENT_CATEGORIES, INSPO_CATEGORIES as CATEGORIES, CATEGORY_LABEL } from "./categories.js";
 import { GalleryItem, ItemViewer } from "./item-editor.jsx";
 import { ViewerPanel } from "./components/ViewerPanel.jsx";
 import { PanelActions } from "./components/PanelActions.jsx";
@@ -194,7 +194,7 @@ function PinCard({ pin, index, wishlistCount, onOpen }) {
     <button
       className="gallery-item"
       type="button"
-      onClick={() => onOpen(pin.id)}
+      onClick={(event) => onOpen(pin.id, event.currentTarget)}
       aria-label={`View ${pin.name || "inspo pin"}`}
       style={{ "--stagger-index": Math.min(index, 11) }}
       data-testid={`inspo-pin-${pin.id}`}
@@ -224,7 +224,7 @@ function PinCard({ pin, index, wishlistCount, onOpen }) {
 // replacing the old split between an edit-only modal and CTAs sitting in the
 // grid. Every field auto-saves on its own (like the outfit viewer's rename),
 // so there's no separate Save/Cancel to track.
-function PinViewer({ pin, wishlistCount, onClose, onSave, onDelete, onDetect }) {
+function PinViewer({ pin, wishlistCount, onClose, onSave, onDelete, onDetect, openedFrom }) {
   const closeButtonRef = useRef(null);
   const [notes, setNotes] = useState(pin.notes || "");
   const [detecting, setDetecting] = useState(false);
@@ -263,7 +263,7 @@ function PinViewer({ pin, wishlistCount, onClose, onSave, onDelete, onDetect }) 
     : wishlistCount ? "Re-detect items" : isError ? "Retry detect" : "Detect items";
 
   return (
-    <ViewerPanel ariaLabel={`Inspo pin: ${pin.name || "untitled"}`} onClose={onClose} closeRef={closeButtonRef}>
+    <ViewerPanel ariaLabel={`Inspo pin: ${pin.name || "untitled"}`} onClose={onClose} closeRef={closeButtonRef} openedFrom={openedFrom}>
       <ModeledHero src={pin.image} alt={pin.name || "Inspiration photo"} showHeading={false} />
 
       <div className="viewer-details editing">
@@ -291,7 +291,7 @@ function PinViewer({ pin, wishlistCount, onClose, onSave, onDelete, onDetect }) 
           <span>Category</span>
           <select value={pin.category || ""} onChange={(e) => patch({ category: e.target.value || null })}>
             <option value="">— unclassified —</option>
-            {CATEGORIES.slice(1, -1).map((c) => (
+            {BASE_GARMENT_CATEGORIES.map((c) => (
               <option key={c.id} value={c.id}>{c.label}</option>
             ))}
           </select>
@@ -319,10 +319,11 @@ function PinViewer({ pin, wishlistCount, onClose, onSave, onDelete, onDetect }) 
 // Inspo pins and Wishlist pieces are one pipeline, not two features: a piece
 // can only ever come from detecting it out of a pin (see
 // detectAndCreateWishlistItems in scripts/wishlist-api.mjs — there is no
-// standalone "add to wishlist" route). This view is the single categorized
-// board for both: "Full Look" and "Unclassified" show pins, every garment
-// category shows the wishlist pieces detected from them (plus any pin whose
-// own aggregate category landed there too), and "All" shows everything.
+// standalone "add to wishlist" route). The nav says exactly that, in two
+// groups: "Sources" is every pin you imported, and everything past the divider
+// — "All" plus each garment type — is the pieces detected out of them. The two
+// never mix in one grid, so a garment can't appear twice (once inside the photo
+// it came from, once as its own cutout) the way it did when "All" showed both.
 export function Inspo({ showImporter, onImporterClose }) {
   const [pins, setPins] = useState([]);
   const [wishlistItems, setWishlistItems] = useState([]);
@@ -331,6 +332,7 @@ export function Inspo({ showImporter, onImporterClose }) {
   const [activeCategory, setActiveCategory] = useState("all");
   const [selectedPinId, setSelectedPinId] = useState(null);
   const [selectedItemId, setSelectedItemId] = useState(null);
+  const [openedFrom, setOpenedFrom] = useState(null);
   const [retryingId, setRetryingId] = useState(null);
 
   useEffect(() => {
@@ -374,18 +376,15 @@ export function Inspo({ showImporter, onImporterClose }) {
     if (item.sourcePinId) wishlistCounts[item.sourcePinId] = (wishlistCounts[item.sourcePinId] || 0) + 1;
   }
 
-  const visiblePins = pins.filter((p) => {
-    if (activeCategory === "all") return true;
-    if (activeCategory === "unclassified") return !p.category;
-    return p.category === activeCategory;
-  });
-  // Wishlist pieces never carry "full_look" or "unclassified" as a part, so
-  // those two categories fall through to a sentinel that matches nothing —
-  // "all" passes straight through and still shows every piece.
-  const itemFilterKey = activeCategory === "unclassified" || activeCategory === "full_look" ? "__none__" : activeCategory;
-  const visibleItems = useTypeFilteredItems(wishlistItems, itemFilterKey);
-
-  const unclassifiedCount = pins.filter((p) => !p.category).length;
+  // A pin is a source whatever it depicts, so "Sources" is unfiltered — its own
+  // stored category (full_look, a garment type, or nothing yet) is a detection
+  // outcome and never decided which pill it belongs under.
+  const showingSources = activeCategory === "sources";
+  const visiblePins = showingSources ? pins : [];
+  // Sources falls through to a sentinel that matches no part, so the pieces grid
+  // stays empty there; every other pill is a real garment filter, and "all"
+  // passes straight through.
+  const visibleItems = useTypeFilteredItems(wishlistItems, showingSources ? "__none__" : activeCategory);
 
   const handleImported = (created) => {
     setPins((current) => [...current, ...created]);
@@ -448,10 +447,10 @@ export function Inspo({ showImporter, onImporterClose }) {
     <PageShell
       count={totalCount}
       noun="item"
-      categories={CATEGORIES.filter((cat) => cat.id !== "unclassified" || unclassifiedCount > 0 || activeCategory === "unclassified")}
+      categories={CATEGORIES}
       activeCategory={activeCategory}
       onCategory={setActiveCategory}
-      renderCategory={(cat) => cat.id === "unclassified" && unclassifiedCount > 0 ? `${cat.label} (${unclassifiedCount})` : cat.label}
+      renderCategory={(cat) => cat.id === "sources" && pins.length ? `${cat.label} (${pins.length})` : cat.label}
       navLabel="Filter inspo by category"
     >
       <PageStatus
@@ -460,7 +459,9 @@ export function Inspo({ showImporter, onImporterClose }) {
         empty={!totalCount}
         emptyMessage="Drop, paste, or add a photo to start your board — individual pieces get detected automatically."
         filterEmpty={!!totalCount && !visiblePins.length && !visibleItems.length}
-        filterEmptyMessage="Nothing in this category yet."
+        filterEmptyMessage={pins.length && !wishlistItems.length
+          ? "Nothing detected yet — open a pin and run Detect items."
+          : "Nothing in this category yet."}
         noun="inspo"
       />
 
@@ -472,12 +473,12 @@ export function Inspo({ showImporter, onImporterClose }) {
               pin={pin}
               index={index}
               wishlistCount={wishlistCounts[pin.id] || 0}
-              onOpen={setSelectedPinId}
+              onOpen={(id, element) => { setOpenedFrom(element); setSelectedPinId(id); }}
             />
           ))}
           {visibleItems.map((item, index) => (
             <div className="wishlist-grid-item" key={item.id}>
-              <GalleryItem item={item} index={visiblePins.length + index} selected={selectedItemId === item.id} onOpen={setSelectedItemId} />
+              <GalleryItem item={item} index={visiblePins.length + index} selected={selectedItemId === item.id} onOpen={(id, element) => { setOpenedFrom(element); setSelectedItemId(id); }} />
               {item.generateStatus === "error" && (
                 <button
                   type="button"
@@ -508,6 +509,7 @@ export function Inspo({ showImporter, onImporterClose }) {
       {selectedPin && (
         <PinViewer
           pin={selectedPin}
+          openedFrom={openedFrom}
           wishlistCount={wishlistCounts[selectedPin.id] || 0}
           onClose={() => setSelectedPinId(null)}
           onSave={handlePinSave}
@@ -519,6 +521,7 @@ export function Inspo({ showImporter, onImporterClose }) {
       {selectedItem && (
         <ItemViewer
           item={selectedItem}
+          openedFrom={openedFrom}
           onClose={() => setSelectedItemId(null)}
           onSave={saveItem}
           onDelete={deleteItem}

@@ -4,6 +4,7 @@ import { api } from "./api.js";
 import { OutfitStack } from "./components/OutfitStack.jsx";
 import { ViewerPanel } from "./components/ViewerPanel.jsx";
 import { useViewerKeyboard } from "./hooks/useViewerKeyboard.js";
+import { useDeckGesture } from "./hooks/useDeckGesture.js";
 import "./suggestions.css";
 
 const OCCASIONS = [
@@ -18,10 +19,6 @@ const OCCASIONS = [
 // deck with depth; more is invisible under the card above it and just costs
 // layout on every advance.
 const DECK_DEPTH = 3;
-
-// Fraction of the card's width a drag has to cross to count as a decision.
-// Below it the card springs back — a hesitant drag is not an answer.
-const COMMIT_RATIO = 0.28;
 
 // Long enough to notice a mis-tap and reach for it, short enough that it isn't
 // still hanging around two cards later.
@@ -61,32 +58,27 @@ function HeartBurst({ id }) {
 }
 
 // ─── One card ─────────────────────────────────────────────────────────────────
-function SuggestionCard({ suggestion, pieces, depth, drag, leaving, dragHandlers }) {
-  // Depth drives the resting transform; drag overrides it while a pointer is
-  // down. Both are transforms, so the two never fight over layout.
-  const style = drag
-    ? {
-        transform: `translate3d(${drag.dx}px, ${Math.abs(drag.dx) * 0.06}px, 0) rotate(${drag.dx * 0.045}deg)`,
-        transition: "none",
-      }
-    : { "--depth": depth };
-
-  const verdictOpacity = drag ? Math.min(1, Math.abs(drag.dx) / 90) : 0;
-
+function SuggestionCard({ suggestion, pieces, depth, leaving, isTop, cardRef, dragHandlers }) {
+  // Depth drives the resting pose. The dragged pose is written straight onto
+  // the node by useDeckGesture — publishing a per-frame transform as React
+  // state re-renders the entire panel sixty times a second to move one card,
+  // and the standards call that out by name.
   return (
     <article
-      className={`deck-card${leaving ? ` is-leaving is-leaving--${leaving}` : ""}${drag ? " is-dragging" : ""}`}
-      style={style}
+      ref={isTop ? cardRef : null}
+      className={`deck-card${leaving ? " is-leaving" : ""}`}
+      style={{ "--depth": depth }}
       data-depth={depth}
       aria-hidden={depth > 0 || Boolean(leaving)}
-      {...(depth === 0 && !leaving ? dragHandlers : {})}
+      {...(isTop && !leaving ? dragHandlers : {})}
     >
       {/* The verdict a release would produce right now. It appears under the
-          thumb during a drag so the gesture is never a guess. */}
-      <span className="deck-stamp deck-stamp--like" style={{ opacity: drag?.dx > 0 ? verdictOpacity : 0 }} aria-hidden="true">
+          thumb during a drag so the gesture is never a guess — the gesture
+          fades these in directly, keyed off data-stamp. */}
+      <span className="deck-stamp deck-stamp--like" data-stamp="like" aria-hidden="true">
         <Heart size={16} weight="fill" /> Save it
       </span>
-      <span className="deck-stamp deck-stamp--pass" style={{ opacity: drag?.dx < 0 ? verdictOpacity : 0 }} aria-hidden="true">
+      <span className="deck-stamp deck-stamp--pass" data-stamp="pass" aria-hidden="true">
         <X size={16} weight="bold" /> Not today
       </span>
 
@@ -144,12 +136,11 @@ export function SuggestionPanel({ items, onSaveOutfit, onClose }) {
   const [savedCount, setSavedCount] = useState(0);
   const [style, setStyle] = useState(null);          // { styleDna, pinCount, minPins }
   const [leaving, setLeaving] = useState(null);      // { index, verdict }
-  const [drag, setDrag] = useState(null);            // { dx }
   const [undo, setUndo] = useState(null);            // { index }
   const [burst, setBurst] = useState(0);
   const [announcement, setAnnouncement] = useState("");
 
-  const dragState = useRef(null);
+  const topCardRef = useRef(null);
   const exitTimer = useRef(null);
   const undoTimer = useRef(null);
   const pendingPass = useRef(null);
@@ -229,8 +220,6 @@ export function SuggestionPanel({ items, onSaveOutfit, onClose }) {
   // the animation and the bookkeeping can never disagree about which card is on
   // top.
   const advance = useCallback((verdict) => {
-    setDrag(null);
-    dragState.current = null;
     setLeaving({ index, verdict });
     clearTimeout(exitTimer.current);
     exitTimer.current = setTimeout(() => {
@@ -281,6 +270,31 @@ export function SuggestionPanel({ items, onSaveOutfit, onClose }) {
   const current = suggestions[index] || null;
   const exhausted = suggestions.length > 0 && !current && !leaving;
 
+  // ─── Drag ───────────────────────────────────────────────────────────────────
+  // Velocity, momentum projection, boundary resistance and the velocity handoff
+  // into the exit all live in the hook; this component only says what a commit
+  // means. See src/hooks/useDeckGesture.js.
+  const onCommit = useCallback((verdict) => {
+    if (!current) return;
+    if (verdict === "like") like(current);
+    else pass(current, index);
+  }, [current, index, like, pass]);
+
+  const { dragHandlers, fling } = useDeckGesture({
+    cardRef: topCardRef,
+    deckRef,
+    enabled: Boolean(current) && !leaving,
+    onCommit,
+  });
+
+  // The buttons and the arrow keys throw the same card the same way, just with
+  // no velocity to inherit — one exit path, so the deck can never be in a pose
+  // that the gesture could not have produced.
+  const commit = useCallback((verdict) => {
+    if (!current || leaving) return;
+    fling(verdict);
+  }, [current, fling, leaving]);
+
   // Arrow keys are how a deck wants to be driven, and they make the ♥ cheap to
   // press over and over — which is the entire point of the surface.
   useEffect(() => {
@@ -289,53 +303,13 @@ export function SuggestionPanel({ items, onSaveOutfit, onClose }) {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       const tag = event.target?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") return;
-      if (event.key === "ArrowRight") { event.preventDefault(); like(current); }
-      else if (event.key === "ArrowLeft") { event.preventDefault(); pass(current, index); }
+      if (event.key === "ArrowRight") { event.preventDefault(); commit("like"); }
+      else if (event.key === "ArrowLeft") { event.preventDefault(); commit("pass"); }
       else if (event.key.toLowerCase() === "z" && undo) { event.preventDefault(); undoPass(); }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [current, index, like, pass, undo, undoPass]);
-
-  // ─── Drag ───────────────────────────────────────────────────────────────────
-  const dragHandlers = {
-    onPointerDown: (event) => {
-      if (event.button !== 0 && event.pointerType === "mouse") return;
-      dragState.current = { id: event.pointerId, x: event.clientX, y: event.clientY, moved: false, aborted: false };
-    },
-    onPointerMove: (event) => {
-      const state = dragState.current;
-      if (!state || state.id !== event.pointerId || state.aborted) return;
-      const dx = event.clientX - state.x;
-      const dy = event.clientY - state.y;
-
-      if (!state.moved) {
-        if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;   // absorb the jitter in a click
-        // A mostly-vertical gesture belongs to the reasoning's scrollbar, not to
-        // the deck. Bailing out here — and only capturing the pointer once the
-        // gesture is unambiguously sideways — is what lets a card be both
-        // swipeable and scrollable.
-        if (Math.abs(dx) <= Math.abs(dy)) { state.aborted = true; return; }
-        state.moved = true;
-        event.currentTarget.setPointerCapture(event.pointerId);
-      }
-
-      setDrag({ dx });
-    },
-    onPointerUp: (event) => {
-      const state = dragState.current;
-      dragState.current = null;
-      if (!state || state.id !== event.pointerId || !state.moved) return;
-      const dx = event.clientX - state.x;
-      const width = deckRef.current?.offsetWidth || 320;
-      if (Math.abs(dx) > width * COMMIT_RATIO) {
-        if (dx > 0) like(current); else pass(current, index);
-        return;
-      }
-      setDrag(null);                                  // under the threshold: spring home
-    },
-    onPointerCancel: () => { dragState.current = null; setDrag(null); },
-  };
+  }, [commit, current, undo, undoPass]);
 
   // ─── Render ─────────────────────────────────────────────────────────────────
   const memo = style?.styleDna
@@ -427,7 +401,8 @@ export function SuggestionPanel({ items, onSaveOutfit, onClose }) {
                   pieces={piecesFor(card.suggestion)}
                   depth={card.depth}
                   leaving={card.leaving}
-                  drag={card.depth === 0 && !card.leaving ? drag : null}
+                  isTop={card.key === index}
+                  cardRef={topCardRef}
                   dragHandlers={dragHandlers}
                 />
               ))}
@@ -437,7 +412,7 @@ export function SuggestionPanel({ items, onSaveOutfit, onClose }) {
               <button
                 type="button"
                 className="deck-action deck-action--pass"
-                onClick={() => current && pass(current, index)}
+                onClick={() => commit("pass")}
                 disabled={!current}
                 aria-label="Pass on this outfit"
                 title="Not today  ·  ←"
@@ -452,7 +427,7 @@ export function SuggestionPanel({ items, onSaveOutfit, onClose }) {
               <button
                 type="button"
                 className="deck-action deck-action--like"
-                onClick={() => current && like(current)}
+                onClick={() => commit("like")}
                 disabled={!current}
                 aria-label="Save this outfit"
                 title="Save it  ·  →"

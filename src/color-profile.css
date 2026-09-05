@@ -1,237 +1,955 @@
-/* .color-profile-trigger renamed to .header-action-btn — styles live in styles.css */
+/* ==========================================================================
+   MY COLORS / ARMOCROMIA — SIDE PANEL HARMONY
+   Uses design system tokens: Instrument Sans, warm papers, frosted glass,
+   standard .primary-button and .secondary-button primitives.
+   ========================================================================== */
 
+/* Panel width constraint on desktop matching ItemViewer / OutfitViewer */
+.color-quiz-entry {
+  width: clamp(380px, 34vw, 480px);
+  transition: width var(--dur-drawer, 420ms) var(--ease-drawer);
+}
+
+/* Draping is a comparison, so it gets the room to show both faces at a size
+   you can actually read skin off. */
+.color-quiz-entry.is-wide {
+  width: clamp(380px, 52vw, 700px);
+}
+
+/* Season match dot indicator used across item badges */
 .season-dot {
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
   flex: none;
   border-radius: 50%;
   display: inline-block;
+  box-shadow: 0 0 0 1px var(--glass-border);
 }
 
-.color-quiz-entry { width: clamp(360px, 30vw, 440px); }
+/* --- SEASON MACRO HERO (16:9 UNCUT) --- */
 
-.color-quiz-body {
-  padding-top: 8px;
+.color-viewer-panel .modeled-hero {
+  flex: 0 0 auto;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1376 / 768;
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  overflow: hidden;
+  position: relative;
+  background: var(--wash-2);
+}
+
+.color-viewer-panel .modeled-hero-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
+  display: block;
+}
+
+/* Remove full-body fade gradients so the 16:9 macro photo is 100% visible and unblurred */
+.color-viewer-panel .modeled-hero::before,
+.color-viewer-panel .modeled-hero::after {
+  display: none;
+}
+
+/* Close button positioning over 16:9 hero */
+.color-viewer-panel.has-modeled-image .viewer-icon-close {
+  top: 18px;
+  right: 18px;
+  z-index: 10;
+}
+
+/* --- DETAILS SECTION --- */
+
+.color-viewer-details {
   display: flex;
   flex-direction: column;
-  gap: 26px;
 }
 
-.color-quiz-intro {
+/* Title row: Season name on left, Gender pill switch on right */
+.color-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 6px 0 12px;
+}
+
+.color-season-title {
   margin: 0;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.color-quiz-step {
-  margin: 0;
-  border: 0;
-  padding: 0;
-}
-
-.color-quiz-step legend {
-  margin-bottom: 10px;
-  padding: 0;
+  white-space: nowrap;
+  font-size: 22px;
+  font-weight: 580;
+  letter-spacing: -0.015em;
   color: var(--ink);
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.4;
 }
 
-.color-quiz-options {
+.color-season-description {
+  margin: 0 0 20px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.color-details-section {
+  margin-bottom: 22px;
+}
+
+.color-details-section .details-label {
+  margin: 0 0 10px;
+}
+
+/* Natural Pigments */
+.color-pigments-row {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.color-quiz-options button {
-  min-height: 40px;
+.color-pigment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--paper-raised);
   border: 1px solid var(--line);
   border-radius: var(--r-full);
-  padding: 9px 16px;
-  background: var(--paper-raised);
+  padding: 4px 10px 4px 8px;
+  font-size: 11.5px;
   color: var(--ink-soft);
+  box-shadow: var(--shadow-sm);
+}
+
+.color-pigment-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 0 0 1px var(--wash-3);
+  flex: none;
+}
+
+/* Season name + its Italian alias */
+.color-title-names {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.color-season-alt {
   font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   PALETTE
+   Reads as a finished object; editing is opt-in so the colours stay the
+   loudest thing in the section.
+   ========================================================================== */
+
+.palette-section {
+  margin-bottom: 22px;
+}
+
+.palette-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.palette-head .details-label {
+  margin: 0;
+}
+
+.palette-edit-toggle {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  color: var(--muted);
   cursor: pointer;
+  border-bottom: 1px solid transparent;
+  transition: color var(--dur-pop) var(--ease-out), border-color var(--dur-pop) var(--ease-out);
+}
+
+.palette-edit-toggle:hover {
+  color: var(--accent-warm);
+  border-bottom-color: currentColor;
+}
+
+.palette-swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 4px;
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+
+.palette-swatch {
+  position: relative;
+  aspect-ratio: 1 / 1.5;
+  border-radius: var(--r-sm);
+  box-shadow: inset 0 0 0 1px var(--wash-2);
+  transition: transform var(--dur-pop) var(--ease-out);
+}
+
+.palette-swatches.is-editing .palette-swatch:hover {
+  transform: translateY(-2px);
+}
+
+.palette-swatch button {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--paper-raised) 90%, transparent);
+  color: var(--ink);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+}
+
+.palette-swatch button:active {
+  transform: scale(.9);
+}
+
+.palette-empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.palette-edit-body {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.palette-extract {
+  align-self: flex-start;
+  border: 1px dashed var(--line);
+  background: var(--paper-raised);
+  border-radius: var(--r-full);
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: border-color var(--dur-pop) var(--ease-out), color var(--dur-pop) var(--ease-out);
+}
+
+.palette-extract:hover:not(:disabled) {
+  border-color: var(--accent-warm);
+  color: var(--accent-warm);
+}
+
+.palette-extract:active { transform: scale(.97); }
+.palette-extract:disabled { opacity: .55; cursor: default; }
+
+.palette-candidates-label {
+  margin: 0 0 6px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.palette-candidate {
+  aspect-ratio: 1 / 1.5;
+  border: 0;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px var(--wash-2);
+  transition: transform var(--dur-pop) var(--ease-out);
+}
+
+.palette-candidate:hover { transform: translateY(-2px); }
+.palette-candidate:active { transform: scale(.95); }
+
+.palette-error { margin: 0; }
+
+/* ==========================================================================
+   OPEN QUESTION
+   One card, one job: the reading is unsettled and draping settles it.
+   ========================================================================== */
+
+.color-open-question {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 9px;
+  width: 100%;
+  text-align: left;
+  margin-bottom: 22px;
+  padding: 13px 15px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--paper-raised);
+  font: inherit;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
   transition:
-    background var(--dur-pop) var(--ease-out),
     border-color var(--dur-pop) var(--ease-out),
     box-shadow var(--dur-pop) var(--ease-out),
     transform var(--dur-press) var(--ease-out);
 }
 
-@media (hover: hover) and (pointer: fine) {
-  .color-quiz-options button:hover { border-color: var(--muted); box-shadow: var(--shadow-sm); }
-}
-
-.color-quiz-options button:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
-.color-quiz-options button:active { transform: scale(.97); }
-
-.color-quiz-options button.active {
+.color-open-question:hover {
   border-color: var(--accent-warm);
-  box-shadow: inset 0 0 0 1px var(--accent-warm);
+  box-shadow: var(--shadow-md);
 }
 
-.color-quiz-result {
-  padding-top: 16px;
+.color-open-question:active { transform: scale(.99); }
+
+.color-open-question-body {
   display: flex;
   flex-direction: column;
+  gap: 3px;
+  min-width: 0;
 }
 
-.season-result h3 {
-  margin: 16px 0 8px;
-  font-size: 20px;
-  font-weight: 520;
-  letter-spacing: -.01em;
+.color-open-question-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: var(--accent-warm);
+  font-weight: 600;
 }
 
-.season-result p {
-  margin: 0;
+.color-open-question-text {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.color-open-question-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  font-size: 12.5px;
+  font-weight: 560;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.color-open-question:hover .color-open-question-cta { color: var(--accent-warm); }
+
+/* ==========================================================================
+   SECONDARY ACTIONS
+   Escape hatches, not headline actions — so they read as links.
+   ========================================================================== */
+
+.color-more-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  padding-top: 4px;
+  margin-bottom: 4px;
+}
+
+.color-more-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  background: none;
+  padding: 2px 0;
+  font: inherit;
+  font-size: 12px;
   color: var(--muted);
+  cursor: pointer;
+  border-bottom: 1px solid transparent;
+  transition: color var(--dur-pop) var(--ease-out), border-color var(--dur-pop) var(--ease-out);
+}
+
+.color-more-actions button:hover:not(:disabled) {
+  color: var(--accent-warm);
+  border-bottom-color: currentColor;
+}
+
+.color-more-actions button:disabled { opacity: .5; cursor: default; }
+
+/* ==========================================================================
+   ANALYSING / QUIZ
+   ========================================================================== */
+
+.color-analyzing-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 64px 32px;
+  text-align: center;
+}
+
+.color-scanner-pulse {
+  width: 66px;
+  height: 66px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  animation: color-pulse 1800ms var(--ease-in-out) infinite;
+}
+
+@keyframes color-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 16%, transparent); }
+  50% { box-shadow: 0 0 0 14px transparent; }
+}
+
+.color-scanner-icon { color: var(--accent-warm); }
+
+.color-analyzing-state h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 560;
+  color: var(--ink);
+}
+
+.color-analyzing-state p {
+  margin: 0;
+  max-width: 30ch;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+/* Uses the shared `spin` from styles.css — the other four spinners in the app
+   were already consolidated onto it; this one was missed. */
+.color-spinner { animation: spin 900ms linear infinite; }
+
+.color-quiz-body {
+  display: flex;
+  flex-direction: column;
+  padding: 22px 24px 24px;
+}
+
+.color-quiz-header-banner { margin-bottom: 18px; }
+
+.color-quiz-intro {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.color-quiz-alert {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.color-quiz-step {
+  border: 0;
+  padding: 0;
+  margin: 0 0 20px;
+}
+
+.color-quiz-step legend {
+  padding: 0;
+  margin-bottom: 9px;
+  font-size: 13px;
+  font-weight: 540;
+  color: var(--ink);
+}
+
+.color-quiz-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.color-quiz-options button {
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--paper-raised);
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--ink-soft);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color var(--dur-pop) var(--ease-out),
+    background var(--dur-pop) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
+}
+
+@media (hover: hover) {
+  .color-quiz-options button:hover { border-color: var(--accent-warm); }
+}
+
+.color-quiz-options button.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--paper);
+}
+
+.color-quiz-options button:active { transform: scale(.97); }
+
+/* ==========================================================================
+   DRAPE TEST
+   Two faces, one neutral ground, one variable. Comparison is the whole point,
+   so both candidates stay on screen and the user's own pick comes first.
+   ========================================================================== */
+
+.drape-test {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 24px 24px;
+}
+
+.drape-loading,
+.drape-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 72px 32px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.drape-test-header { margin-bottom: 16px; }
+
+.drape-test-header h3 {
+  margin: 0 0 5px;
+  font-size: 17px;
+  font-weight: 560;
+  letter-spacing: -0.012em;
+  color: var(--ink);
+}
+
+.drape-question {
+  margin: 0;
   font-size: 13px;
   line-height: 1.5;
+  color: var(--ink-soft);
 }
 
-.palette-editor {
-  margin-top: 22px;
-  padding-top: 20px;
+.drape-grid {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.drape-grid.is-pair { grid-template-columns: 1fr 1fr; }
+.drape-grid.is-quad { grid-template-columns: 1fr 1fr; }
+
+.drape-option {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.drape-option-stage {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  cursor: pointer;
+  box-shadow: 0 0 0 1px var(--line), var(--shadow-sm);
+  transition:
+    box-shadow var(--dur-pop) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
+}
+
+@media (hover: hover) {
+  .drape-option-stage:hover { box-shadow: 0 0 0 1px var(--accent-warm), var(--shadow-md); }
+}
+
+.drape-option-stage:active { transform: scale(.98); }
+
+.drape-option.is-picked .drape-option-stage {
+  box-shadow: 0 0 0 2px var(--pick-accent, var(--accent)), var(--shadow-md);
+}
+
+.drape-portrait {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 760 / 950;
+  overflow: hidden;
+}
+
+.drape-portrait-photo,
+.drape-portrait-fabric {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.drape-portrait-photo { object-fit: cover; object-position: top center; }
+
+/* Fabric swaps animate, so stepping through colours reads as one cloth being
+   exchanged for another rather than the image being replaced. */
+.drape-portrait-fabric path,
+.drape-portrait-fabric rect {
+  transition: fill 260ms var(--ease-out);
+}
+
+.drape-picked-flag {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--pick-accent, var(--accent));
+  color: var(--paper-raised);
+  box-shadow: 0 0 0 2px var(--glass-border);
+}
+
+.drape-option-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0 2px;
+}
+
+.drape-option-name {
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--ink);
+}
+
+.drape-option-sub {
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: .01em;
+}
+
+.drape-option-note {
+  margin: 0;
+  padding: 0 2px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+/* Fabric stepper — swaps both sides at once, the way a consultant works. */
+.drape-fabric-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
   border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 14px;
 }
 
-.palette-editor-heading {
+.drape-fabric-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: var(--muted);
+  flex: none;
+}
+
+.drape-fabric-dots { display: flex; gap: 6px; }
+
+.drape-fabric-dot {
+  padding: 3px;
+  border: 1px solid transparent;
+  border-radius: var(--r-full);
+  background: none;
+  cursor: pointer;
+  transition: border-color var(--dur-pop) var(--ease-out);
+}
+
+.drape-fabric-dot.is-active { border-color: var(--ink-soft); }
+.drape-fabric-dot:active { transform: scale(.94); }
+
+.drape-fabric-chip {
+  display: flex;
+  border-radius: var(--r-full);
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px var(--wash-2);
+}
+
+.drape-fabric-chip span {
+  width: 11px;
+  height: 14px;
+  display: block;
+}
+
+.drape-fabric-names {
+  font-size: 11px;
+  color: var(--muted);
+  margin-left: auto;
+  text-align: right;
+  min-width: 0;
+}
+
+.drape-hint {
+  margin: 0 0 16px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.drape-verdict {
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  border-radius: var(--r-md);
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+}
+
+.drape-verdict-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 6px;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  font-weight: 600;
+  color: var(--accent-warm);
+}
+
+.drape-verdict p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+.drape-error { margin: 0 0 14px; }
+
+.drape-decide {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.drape-decide-prompt {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.drape-apply,
+.drape-second-opinion,
+.drape-narrowed .primary-button {
+  width: 100%;
+  justify-content: center;
+}
+
+.drape-narrowed {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.drape-narrowed p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.drape-narrowed strong { text-transform: capitalize; }
+
+.drape-other-tests {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  margin-bottom: 16px;
+}
+
+.drape-disclosure {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.drape-disclosure:hover { color: var(--accent-warm); }
+
+.drape-disclosure-caret {
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  transition: transform var(--dur-pop) var(--ease-out);
+}
+
+.drape-disclosure-caret.is-open { transform: rotate(180deg); }
+
+.drape-test-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 10px;
+}
+
+.drape-test-link {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 12px;
-}
-
-.palette-editor-heading > span {
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: .1em;
-  text-transform: uppercase;
-}
-
-.palette-editor-heading button {
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: var(--accent-warm);
-  font-size: 11px;
-  cursor: pointer;
-}
-
-.palette-editor-heading button:hover,
-.palette-editor-heading button:focus-visible { text-decoration: underline; outline: none; }
-.palette-editor-heading button:disabled { color: var(--muted); cursor: default; text-decoration: none; }
-
-.palette-swatches {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  min-height: 30px;
-}
-
-.palette-swatch {
-  position: relative;
-  width: 30px;
-  height: 30px;
-  border: 1px solid var(--wash-3);
-  border-radius: var(--r-xs);
-}
-
-.palette-swatch button {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  width: 16px;
-  height: 16px;
-  display: grid;
-  place-items: center;
+  width: 100%;
+  padding: 9px 12px;
   border: 1px solid var(--line);
-  border-radius: 50%;
-  padding: 0;
-  background: var(--paper);
+  border-radius: var(--r-sm);
+  background: var(--paper-raised);
+  font: inherit;
+  font-size: 12.5px;
   color: var(--ink-soft);
   cursor: pointer;
-  transition: border-color var(--dur-pop) var(--ease-out), color var(--dur-pop) var(--ease-out), transform var(--dur-press) var(--ease-out);
+  text-align: left;
+  transition: border-color var(--dur-pop) var(--ease-out), transform var(--dur-press) var(--ease-out);
 }
 
-@media (hover: hover) and (pointer: fine) {
-  .palette-swatch button:hover { border-color: var(--accent-warm); color: var(--accent-warm); }
-}
+.drape-test-link:hover { border-color: var(--accent-warm); color: var(--accent-warm); }
+.drape-test-link:active { transform: scale(.98); }
 
-.palette-swatch button:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 1px; }
-.palette-swatch button:active { transform: scale(.9); }
+.drape-footer { display: flex; }
+.drape-footer .secondary-button { width: 100%; justify-content: center; }
 
-.palette-empty {
-  margin: 0;
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.5;
-}
+/* ==========================================================================
+   CERTIFIED SEASON PICKER
+   ========================================================================== */
 
-.palette-error { margin: 8px 0 0; color: var(--error); }
+.certified-picker { padding: 4px 24px 24px; }
 
-.palette-candidates {
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px dashed var(--line);
-}
+.certified-picker-header { margin-bottom: 20px; }
 
-.palette-candidates-label {
-  margin: 0 0 8px;
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.palette-candidate {
-  width: 30px;
-  height: 30px;
-  border: 1px solid var(--wash-3);
-  border-radius: var(--r-xs);
-  padding: 0;
-  cursor: pointer;
-  transition: transform var(--dur-press) var(--ease-out), box-shadow var(--dur-pop) var(--ease-out);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .palette-candidate:hover { box-shadow: var(--shadow-sm); }
-}
-
-.palette-candidate:active { transform: scale(.92); }
-.palette-candidate:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
-
-.palette-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 18px;
+.certified-picker-header h3 {
+  margin: 0 0 5px;
+  font-size: 17px;
+  font-weight: 560;
   color: var(--ink);
-  font-size: 12px;
+}
+
+.certified-picker-header p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.certified-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-bottom: 22px;
+}
+
+.certified-group-title {
+  margin: 0 0 9px;
+  font-size: 11px;
+  font-weight: 620;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+}
+
+.certified-group-alt {
+  font-weight: 450;
+  color: var(--muted);
+  text-transform: none;
+  letter-spacing: .01em;
+}
+
+.certified-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.certified-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--paper-raised);
+  font: inherit;
+  text-align: left;
   cursor: pointer;
+  transition:
+    border-color var(--dur-pop) var(--ease-out),
+    box-shadow var(--dur-pop) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
 }
 
-.palette-toggle input {
-  width: 15px;
-  height: 15px;
-  cursor: pointer;
+.certified-card:hover { border-color: var(--accent-warm); box-shadow: var(--shadow-md); }
+.certified-card:active { transform: scale(.97); }
+
+.certified-card-name {
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--ink);
 }
 
-.gallery-item-badge {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, .7);
-  box-shadow: 0 0 0 1px var(--wash-3);
+.certified-card-sub {
+  font-size: 10.5px;
+  color: var(--muted);
 }
 
-@media (max-width: 860px) {
-  .color-quiz-entry { width: 100%; }
+.certified-strip {
+  display: flex;
+  margin-top: 5px;
+  border-radius: var(--r-full);
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px var(--wash-2);
+}
+
+.certified-strip span { flex: 1; height: 9px; }
+
+.certified-footer { display: flex; }
+.certified-footer .secondary-button { width: 100%; justify-content: center; }
+
+/* ==========================================================================
+   NARROW SCREENS
+   ========================================================================== */
+
+@media (max-width: 720px) {
+  .color-quiz-entry,
+  .color-quiz-entry.is-wide { width: 100%; }
+  .color-quiz-options { grid-template-columns: 1fr; }
+  .certified-grid { grid-template-columns: 1fr; }
+  .drape-fabric-names { display: none; }
+  .color-title-row { flex-wrap: wrap; }
 }

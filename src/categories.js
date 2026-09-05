@@ -13,18 +13,36 @@ export const WARDROBE_TYPES = [
   ...BASE_GARMENT_CATEGORIES,
 ];
 
-// Inspo board: "All" first, garment types, then "Full Look" + "Unclassified" at the end.
+// Inspo board: the pins you imported ("Sources") sit left of a divider; every
+// pill right of it — "All" plus each garment type — is the pieces detected out
+// of them.
+//
+// There is deliberately no "Full Look" pill any more. `full_look` is what
+// wishlist-api.mjs stamps on a pin whose detection found more than two distinct
+// garment parts — a detection outcome, not something the user chose — so paste a
+// photo of one sweater and it could land under a pill claiming it was a full
+// look. A pin is a source regardless of how much of an outfit it happens to show.
 export const INSPO_CATEGORIES = [
-  { id: "all",           label: "All" },
+  { id: "sources", label: "Sources" },
+  { id: "all",     label: "All", dividerBefore: true },
   ...BASE_GARMENT_CATEGORIES,
-  { id: "full_look",     label: "Full Look" },
-  { id: "unclassified",  label: "Unclassified" },
 ];
 
 // Outfit builder: no "All" or "Unclassified", no singular needed.
 export const OUTFIT_CATEGORIES = BASE_GARMENT_CATEGORIES.map(({ id, label }) => ({ id, label }));
 
+// Pins already on disk keep "full_look" / "unclassified" as their stored
+// category even though neither is a pill now, and PinCard/PinViewer still have
+// to print a human label for one. Kept out of INSPO_CATEGORIES so they label
+// without filtering.
+const LEGACY_PIN_CATEGORIES = [
+  { id: "full_look",    label: "Full look" },
+  { id: "unclassified", label: "Unclassified" },
+];
+
 // Convenience lookup maps.
 export const TYPE_MAP   = Object.fromEntries(WARDROBE_TYPES.map((t) => [t.id, t]));
 export const TYPE_ORDER = Object.fromEntries(WARDROBE_TYPES.slice(1).map((t, i) => [t.id, i]));
-export const CATEGORY_LABEL = Object.fromEntries(INSPO_CATEGORIES.map((c) => [c.id, c.label]));
+export const CATEGORY_LABEL = Object.fromEntries(
+  [...INSPO_CATEGORIES, ...LEGACY_PIN_CATEGORIES].map((c) => [c.id, c.label]),
+);

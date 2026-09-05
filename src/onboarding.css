@@ -75,7 +75,7 @@
 .onboarding-lede code,
 .onboarding-highlights code {
   padding: 1px 5px;
-  background: rgba(25, 24, 22, .06);
+  background: var(--wash-2);
   border-radius: var(--r-xs);
   font-size: .92em;
 }
@@ -152,7 +152,7 @@
 
 .onboarding-provider.is-selected {
   border-color: var(--ink);
-  background: rgba(25, 24, 22, .04);
+  background: var(--wash-1);
 }
 
 .onboarding-provider__head {
@@ -255,7 +255,7 @@
 
 .onboarding-dropzone.is-over {
   border-color: var(--ink);
-  background: rgba(25, 24, 22, .04);
+  background: var(--wash-1);
 }
 
 .onboarding-dropzone.is-uploaded { border-style: solid; }
@@ -294,16 +294,148 @@
   font-size: 11.5px;
 }
 
+.onboarding-photo-group {
+  margin-bottom: 18px;
+}
+
+.photo-guide-card {
+  margin-top: 8px;
+  background: var(--wash-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 8px 12px;
+  transition: background var(--dur-press) var(--ease-out), border-color var(--dur-press) var(--ease-out);
+}
+
+.photo-guide-card.is-open {
+  background: var(--wash-2);
+  border-color: var(--muted);
+  padding: 10px 14px 14px;
+}
+
+.photo-guide-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 2px 0;
+  cursor: pointer;
+  color: var(--muted);
+  font: 500 12px/1.4 "Instrument Sans Variable", sans-serif;
+  transition: color var(--dur-press) var(--ease-out), transform 160ms var(--ease-out);
+}
+
+.photo-guide-toggle:hover {
+  color: var(--ink);
+}
+
+.photo-guide-toggle:active {
+  transform: scale(0.98);
+}
+
+.photo-guide-toggle__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.photo-guide-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 12px;
+  animation: guide-enter 220ms var(--ease-out) both;
+}
+
+@keyframes guide-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.photo-guide-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.photo-guide-thumb-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-xs);
+}
+
+.photo-guide-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.photo-guide-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: var(--r-full);
+  font: 700 9.5px/1 "Instrument Sans Variable", sans-serif;
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--paper-raised);
+  backdrop-filter: var(--glass-blur-scrim);
+  box-shadow: var(--shadow-sm);
+}
+
+.photo-guide-badge.do {
+  background: color-mix(in srgb, var(--success) 92%, transparent);
+}
+
+.photo-guide-badge.dont {
+  background: color-mix(in srgb, var(--error) 92%, transparent);
+}
+
+.photo-guide-tips {
+  margin: 0;
+  padding: 0 0 0 15px;
+  font: 400 11.5px/1.45 "Instrument Sans Variable", sans-serif;
+  color: var(--ink);
+}
+
+.photo-guide-tips li {
+  margin-bottom: 4px;
+}
+
+.photo-guide-tips strong {
+  font-weight: 600;
+}
+
 /* uses the shared @keyframes spin from styles.css */
 .onboarding-spinner { animation: spin 900ms linear infinite; }
 
 @media (prefers-reduced-motion: reduce) {
   .viewer-entry.onboarding-entry { animation: none; }
   .onboarding-spinner { animation: none !important; }
+  .photo-guide-content { animation: none !important; }
 }
 
 @media (max-width: 640px) {
   .viewer-overlay.onboarding-overlay { padding: 0; align-items: flex-end; }
   .viewer-entry.onboarding-entry { width: 100%; max-height: 92dvh; }
   .viewer.onboarding { border-radius: var(--r-lg) var(--r-lg) 0 0; padding: 28px 20px 24px; max-height: 92dvh; }
+  .photo-guide-content { grid-template-columns: 1fr; }
 }

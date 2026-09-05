@@ -1,8 +1,9 @@
-import { useRef, useState } from "react";
-import { ArrowCounterClockwise, MagicWand, SpinnerGap, UploadSimple, X } from "@phosphor-icons/react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowCounterClockwise, MagicWand, UploadSimple, X } from "@phosphor-icons/react";
 import { OptimizedImage } from "./OptimizedImage.jsx";
 import { api } from "./api.js";
 import { useViewerKeyboard } from "./hooks/useViewerKeyboard.js";
+import { usePopoverOrigin } from "./hooks/usePopoverOrigin.js";
 import "./mirror.css";
 
 const fileToDataUrl = (file) => new Promise((resolve, reject) => {
@@ -12,6 +13,99 @@ const fileToDataUrl = (file) => new Promise((resolve, reject) => {
   reader.readAsDataURL(file);
 });
 
+// Shown one at a time while the critique is running. The wait is a few seconds
+// of real work, and a single frozen string makes it feel like nothing is
+// happening — these say what is actually being looked at.
+//
+// Two rules on this copy. It never implies a verdict before one exists (the
+// board's no-judgment guardrail covers loading states too: "checking the
+// proportions" is fine, "seeing what went wrong" is not), and the sequence
+// stops on its last line instead of wrapping, because a status that loops back
+// to the beginning reads as stuck.
+const MIRROR_STATUS_LINES = [
+  "Looking you over…",
+  "Reading the silhouette…",
+  "Working out the proportions…",
+  "Pulling the colors out of the photo…",
+  "Checking how the layers sit…",
+  "Measuring the contrast…",
+  "Looking at where things break…",
+  "Thinking about the shoes…",
+  "Cross-checking against your wardrobe…",
+  "Looking for something that would swap in…",
+  "Weighing it up…",
+  "Second-guessing myself about the shoes…",
+  "Putting it into words…",
+  "Almost there…",
+];
+
+const STATUS_LINE_MS = 1600;
+
+function shuffledStatusLines() {
+  // The first line is always the same, so the panel opens on a familiar beat;
+  // everything after it is shuffled so two runs don't read identically.
+  const [first, ...rest] = MIRROR_STATUS_LINES;
+  for (let index = rest.length - 1; index > 0; index -= 1) {
+    const swap = Math.floor(Math.random() * (index + 1));
+    [rest[index], rest[swap]] = [rest[swap], rest[index]];
+  }
+  return [first, ...rest];
+}
+
+// Advances through the lines while `active`, holding on the last one.
+function useStatusLine(active) {
+  const [lines, setLines] = useState(shuffledStatusLines);
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    if (!active) return undefined;
+    setLines(shuffledStatusLines());
+    setIndex(0);
+    const timer = setInterval(() => {
+      setIndex((current) => {
+        if (current >= MIRROR_STATUS_LINES.length - 1) return current;
+        return current + 1;
+      });
+    }, STATUS_LINE_MS);
+    return () => clearInterval(timer);
+  }, [active]);
+
+  return { line: lines[index], index };
+}
+
+// Placeholders in the shape of the result that's coming — verdict, the overall
+// line, two things that work, two issue cards — so the panel fills in rather
+// than cutting from a spinner to a page of text. Decorative: the status line
+// above it is what gets announced.
+function MirrorSkeleton() {
+  return (
+    <div className="mirror-skeleton" aria-hidden="true">
+      <div className="mirror-skeleton__verdict">
+        <span className="mirror-skeleton__block mirror-skeleton__dot" />
+        <span className="mirror-skeleton__block mirror-skeleton__line mirror-skeleton__line--label" />
+      </div>
+      <span className="mirror-skeleton__block mirror-skeleton__line mirror-skeleton__line--lead" />
+      <span className="mirror-skeleton__block mirror-skeleton__line mirror-skeleton__line--lead-short" />
+      <div className="mirror-skeleton__section">
+        <span className="mirror-skeleton__block mirror-skeleton__line mirror-skeleton__line--heading" />
+        <span className="mirror-skeleton__block mirror-skeleton__line" />
+        <span className="mirror-skeleton__block mirror-skeleton__line mirror-skeleton__line--short" />
+      </div>
+      <div className="mirror-skeleton__section">
+        <span className="mirror-skeleton__block mirror-skeleton__line mirror-skeleton__line--heading" />
+        <div className="mirror-skeleton__card">
+          <span className="mirror-skeleton__block mirror-skeleton__line mirror-skeleton__line--short" />
+          <span className="mirror-skeleton__block mirror-skeleton__line" />
+        </div>
+        <div className="mirror-skeleton__card">
+          <span className="mirror-skeleton__block mirror-skeleton__line mirror-skeleton__line--short" />
+          <span className="mirror-skeleton__block mirror-skeleton__line" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const VERDICT_LABEL = (critique) => {
   if (critique.verdict === "clean") return "Clean fit";
   return critique.issues.length === 1 ? "1 thing to adjust" : `${critique.issues.length} things to adjust`;
@@ -20,6 +114,9 @@ const VERDICT_LABEL = (critique) => {
 export function Mirror({ items }) {
   const inputRef = useRef(null);
   const closeButtonRef = useRef(null);
+  const triggerRef = useRef(null);
+  const panelRef = useRef(null);
+  const identityRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [photo, setPhoto] = useState(null);
   const [critique, setCritique] = useState(null);
@@ -30,6 +127,12 @@ export function Mirror({ items }) {
   // toggles its own backdrop via CSS. `enabled: open` keeps Escape and the
   // body-scroll lock scoped to while it's actually visible.
   useViewerKeyboard(() => setOpen(false), closeButtonRef, open);
+
+  // Measured just before opening, so the panel grows out of the chip rather
+  // than out of a corner. See usePopoverOrigin for why it can't be measured
+  // from the panel's own rect while it's closed.
+  const anchorToTrigger = usePopoverOrigin(triggerRef, panelRef, identityRef);
+  const status = useStatusLine(loading);
 
   const itemMap = Object.fromEntries(items.map((item) => [item.id, item]));
 
@@ -74,9 +177,10 @@ export function Mirror({ items }) {
       />
 
       <button
+        ref={triggerRef}
         type="button"
-        className="top-action top-action--secondary ai-action"
-        onClick={() => setOpen(true)}
+        className={`top-action top-action--secondary ai-action${open ? " is-morphing" : ""}`}
+        onClick={() => { anchorToTrigger(); setOpen(true); }}
         aria-label="How do I look?"
       >
         <MagicWand size={17} weight="bold" />
@@ -87,11 +191,18 @@ export function Mirror({ items }) {
       </button>
 
       <div className="mirror-popover-backdrop" data-open={open} onMouseDown={(event) => event.target === event.currentTarget && setOpen(false)}>
-        <section className="mirror-popover" role="dialog" aria-modal="true" aria-labelledby="mirror-title">
+        <section ref={panelRef} className="mirror-popover" role="dialog" aria-modal="true" aria-labelledby="mirror-title">
           <header className="mirror-popover__header">
-            <div>
-              <p className="mirror-popover__eyebrow">AI Mirror</p>
-              <h2 className="mirror-popover__title" id="mirror-title">How do I look?</h2>
+            <div className="mirror-popover__heading">
+              <p className="mirror-popover__eyebrow popover-eyebrow">AI Mirror</p>
+              {/* Same icon, same words as the chip — this block IS the chip,
+                  moved. usePopoverOrigin measures where it has to start. */}
+              <div className="popover-identity" ref={identityRef}>
+                <span className="popover-identity__icon" aria-hidden="true">
+                  <MagicWand size={22} weight="bold" />
+                </span>
+                <h2 className="mirror-popover__title" id="mirror-title">How do I look?</h2>
+              </div>
             </div>
             <button className="mirror-close" type="button" onClick={() => setOpen(false)} aria-label="Close" ref={closeButtonRef}>
               <X size={20} />
@@ -121,14 +232,19 @@ export function Mirror({ items }) {
                 </div>
               </div>
 
-              <div className="mirror-result">
+              <div className="mirror-result" aria-busy={loading}>
                 {error && <p className="status error">{error}</p>}
 
                 {loading && (
-                  <div className="suggestion-loading">
-                    <SpinnerGap size={24} className="outfit-card-spinner" />
-                    Looking you over...
-                  </div>
+                  <>
+                    <p className="mirror-status" aria-live="polite">
+                      {/* Keyed on the index so each line is a fresh element and
+                          replays the entry animation instead of the text
+                          swapping under a static node. */}
+                      <span className="mirror-status__line" key={status.index}>{status.line}</span>
+                    </p>
+                    <MirrorSkeleton />
+                  </>
                 )}
 
                 {!loading && critique && (
