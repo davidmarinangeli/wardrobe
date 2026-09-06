@@ -11,3 +11,9 @@ data/
 # scripts/draping-service.mjs). It is a crop of a personal reference photo and
 # it regenerates itself, so it has no business in the history.
 public/drapes/
+
+# Source screen recordings for the README. These are hundreds of MB each and
+# GitHub rejects anything over 100MB — only the transcoded MP4s and their
+# poster frames in docs/screenshots/ belong in the repo.
+docs/screenshots/*.gif
+docs/screenshots/*.mov
