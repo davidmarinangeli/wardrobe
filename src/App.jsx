@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Gear, Lightbulb } from "@phosphor-icons/react";
 import { WardrobeImportFlow } from "./import-flow.jsx";
+import { api } from "./api.js";
+import { buildOutfitIndex } from "../shared/outfit-index.mjs";
 import { ColorProfileModal, SEASONS, itemMatchesPalette, readColorProfile } from "./color-profile.jsx";
 import { Outfits } from "./outfits.jsx";
 import { Mirror } from "./mirror.jsx";
@@ -11,6 +13,8 @@ import { PageShell } from "./components/PageShell.jsx";
 import { PageStatus } from "./components/PageStatus.jsx";
 import { useTypeFilteredItems } from "./hooks/useTypeFilteredItems.js";
 import { DISMISS_KEY as ONBOARDING_DISMISS_KEY, Onboarding, RESUME_KEY as ONBOARDING_RESUME_KEY } from "./onboarding.jsx";
+
+const EMPTY_OUTFIT_INDEX = { outfits: {}, byItem: {} };
 
 const STORAGE_KEY = "open-wardrobe-edits-v1";
 const DELETED_STORAGE_KEY = "open-wardrobe-deleted-v1";
@@ -79,6 +83,10 @@ export function App() {
   const [items, setItems] = useState([]);
   const [activeType, setActiveType] = useState("all");
   const [selectedId, setSelectedId] = useState(null);
+  // The card the viewer should grow out of. The element itself, not its
+  // coordinates — opening the viewer reflows the page behind it, so the rect is
+  // read later, once that has settled. See useExpandOrigin.
+  const [openedFrom, setOpenedFrom] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [colorProfile, setColorProfile] = useState(() => readColorProfile());
@@ -89,6 +97,25 @@ export function App() {
   const [showInspoImporter, setShowInspoImporter] = useState(false);
   const [showOutfitBuilder, setShowOutfitBuilder] = useState(false);
   const [showOutfitSuggestions, setShowOutfitSuggestions] = useState(false);
+  // Which saved outfits use each piece. Lives here rather than in Outfits
+  // because the wardrobe grid is the surface that asks the question, and that
+  // tab must not have to mount Outfits (or wait on the full outfit list) to
+  // answer it. Refetched on every return to the wardrobe so an outfit built in
+  // the meantime is reflected.
+  const [outfitIndex, setOutfitIndex] = useState(EMPTY_OUTFIT_INDEX);
+  const [openOutfitId, setOpenOutfitId] = useState(null);
+
+  useEffect(() => {
+    if (view !== "wardrobe") return undefined;
+    let cancelled = false;
+    // Silent on failure: the count is an enrichment, and a piece with no
+    // outfits looks exactly like a piece whose index didn't load — neither is
+    // an error worth putting in front of someone.
+    api("/api/outfits/index")
+      .then((payload) => { if (!cancelled) setOutfitIndex(buildOutfitIndex(payload.outfits)); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [view]);
 
   useEffect(() => {
     fetch("/api/import/config", { cache: "no-store" })
@@ -132,7 +159,48 @@ export function App() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Sync color profile from server database on mount
+  useEffect(() => {
+    fetch("/api/color-profile/status", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.hasProfile && data.profile?.season) {
+          const resolvedSeason = SEASONS[data.profile.season] || SEASONS[data.profile.parentSeason] || SEASONS["autumn-deep"];
+          const fullProfile = {
+            ...data.profile,
+            season: resolvedSeason.id,
+            parentSeason: resolvedSeason.parentSeason,
+            palette: Array.isArray(data.profile.palette) && data.profile.palette.length ? data.profile.palette : (resolvedSeason.palette || []),
+          };
+          setColorProfile(fullProfile);
+          try {
+            localStorage.setItem("open-wardrobe-color-profile-v1", JSON.stringify(fullProfile));
+          } catch {}
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const selectedItem = items.find((item) => item.id === selectedId) || null;
+
+  const itemsById = useMemo(() => Object.fromEntries(items.map((item) => [item.id, item])), [items]);
+
+  // Resolved here (not in the viewer) because the piece images the thumbnails
+  // are built from are already in this component's state — the index only
+  // carries ids.
+  const selectedItemOutfits = useMemo(() => {
+    if (!selectedId) return [];
+    return (outfitIndex.byItem[selectedId] || [])
+      .map((id) => outfitIndex.outfits[id])
+      .filter(Boolean)
+      .map((outfit) => ({ ...outfit, pieces: outfit.itemIds.map((id) => itemsById[id]).filter(Boolean) }));
+  }, [selectedId, outfitIndex, itemsById]);
+
+  const openOutfit = useCallback((outfitId) => {
+    setSelectedId(null);
+    setOpenOutfitId(outfitId);
+    setView("outfits");
+  }, []);
 
   const paletteFilter = useCallback(
     (item) => itemMatchesPalette(item, colorProfile),
@@ -272,22 +340,36 @@ export function App() {
         <Outfits
           items={items}
           premiumAllowed={premiumAllowed}
+          colorProfile={colorProfile}
+          onOpenColorQuiz={() => setShowColorQuiz(true)}
           showBuilder={showOutfitBuilder}
           onOpenBuilder={() => setShowOutfitBuilder(true)}
           onCloseBuilder={() => setShowOutfitBuilder(false)}
           showSuggestions={showOutfitSuggestions}
           onCloseSuggestions={() => setShowOutfitSuggestions(false)}
+          openOutfitId={openOutfitId}
+          onOutfitOpened={() => setOpenOutfitId(null)}
         />
       ) : (
         <PageShell
-          count={items.length}
-          noun="piece"
+          count={onlyMatches ? visibleItems.length : items.length}
+          noun={onlyMatches && colorProfile ? `${(SEASONS[colorProfile.season] || SEASONS[colorProfile.parentSeason])?.label || "palette"} match` : "piece"}
           actions={(
             // A profile setting ("what's my season?"), not a filter — it belongs
             // up here with the page-level actions, not among the category-nav
             // pills below. "Matches my colors" stays there since it IS a filter.
             <button type="button" className="header-action-btn" onClick={() => setShowColorQuiz(true)}>
-              {colorProfile ? <><span className="season-dot" style={{ backgroundColor: SEASONS[colorProfile.season].accent }} />{SEASONS[colorProfile.season].label}</> : "My Colors"}
+              {colorProfile && (SEASONS[colorProfile.season] || SEASONS[colorProfile.parentSeason]) ? (
+                <>
+                  <span
+                    className="season-dot"
+                    style={{ backgroundColor: (SEASONS[colorProfile.season] || SEASONS[colorProfile.parentSeason]).accent }}
+                  />
+                  {(SEASONS[colorProfile.season] || SEASONS[colorProfile.parentSeason]).label}
+                </>
+              ) : (
+                "My Colors"
+              )}
             </button>
           )}
           categories={availableTypes}
@@ -297,10 +379,16 @@ export function App() {
           navExtra={colorProfile && (
             <button
               type="button"
-              className={onlyMatches ? "active" : ""}
+              className={`color-filter-btn${onlyMatches ? " active" : ""}`}
               onClick={() => setOnlyMatches((current) => !current)}
               aria-pressed={onlyMatches}
+              title={onlyMatches ? "Show all pieces" : `Show only pieces matching your ${(SEASONS[colorProfile.season] || SEASONS[colorProfile.parentSeason])?.label || "palette"}`}
             >
+              <span
+                className="season-dot"
+                style={{ backgroundColor: (SEASONS[colorProfile.season] || SEASONS[colorProfile.parentSeason])?.accent }}
+                aria-hidden="true"
+              />
               Matches my colors
             </button>
           )}
@@ -314,23 +402,29 @@ export function App() {
           />
 
           {!!items.length && (
-            <section className="gallery-grid" aria-label={`${TYPE_MAP[activeType]?.label || "All"} wardrobe items`}>
-              {visibleItems.map((item, index) => (
-                <GalleryItem
-                  key={item.id}
-                  item={item}
-                  index={index}
-                  selected={selectedId === item.id}
-                  onOpen={setSelectedId}
-                  seasonMatch={colorProfile?.showBadges && itemMatchesPalette(item, colorProfile) ? SEASONS[colorProfile.season] : null}
-                />
-              ))}
-            </section>
+            visibleItems.length === 0 ? (
+              <p className="empty" style={{ margin: "48px 0", textAlign: "center" }}>
+                No pieces match your {(SEASONS[colorProfile?.season] || SEASONS[colorProfile?.parentSeason])?.label || "seasonal"} palette.
+              </p>
+            ) : (
+              <section className="gallery-grid" aria-label={`${TYPE_MAP[activeType]?.label || "All"} wardrobe items`}>
+                {visibleItems.map((item, index) => (
+                  <GalleryItem
+                    key={item.id}
+                    item={item}
+                    index={index}
+                    selected={selectedId === item.id}
+                    outfitCount={outfitIndex.byItem[item.id]?.length || 0}
+                    onOpen={(id, element) => { setOpenedFrom(element); setSelectedId(id); }}
+                  />
+                ))}
+              </section>
+            )
           )}
         </PageShell>
       )}
 
-      {selectedItem && <ItemViewer item={selectedItem} onClose={() => setSelectedId(null)} onSave={saveItem} onDelete={deleteItem} onGenerateModeled={generateModeledPhoto} premiumAllowed={premiumAllowed} />}
+      {selectedItem && <ItemViewer item={selectedItem} openedFrom={openedFrom} onClose={() => setSelectedId(null)} onSave={saveItem} onDelete={deleteItem} onGenerateModeled={generateModeledPhoto} premiumAllowed={premiumAllowed} outfits={selectedItemOutfits} onOpenOutfit={openOutfit} />}
       {showColorQuiz && (
         <ColorProfileModal
           initialProfile={colorProfile}

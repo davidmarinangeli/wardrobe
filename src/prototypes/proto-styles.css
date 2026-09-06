@@ -1,0 +1,185 @@
+/* --- PROTOTYPE STYLES & SHARED TOKENS --- */
+
+.proto-backdrop {
+  min-height: 100vh;
+  background: var(--paper-subtle, #f5f2eb);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 16px 100px;
+}
+
+.proto-modal-surface {
+  width: 100%;
+  max-width: 460px;
+  background: var(--paper-raised, #ffffff);
+  border-radius: var(--r-lg, 20px);
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.6));
+  box-shadow: var(--shadow-lg, 0 10px 30px rgba(0, 0, 0, 0.08));
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: box-shadow 300ms var(--ease-out, ease-out);
+}
+
+/* Common Modal Header */
+.proto-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line, rgba(0, 0, 0, 0.08));
+}
+
+.proto-header-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 580;
+  color: var(--ink, #1a1a1a);
+  letter-spacing: -0.01em;
+}
+
+.proto-close-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-full, 999px);
+  border: 1px solid var(--line, rgba(0, 0, 0, 0.08));
+  background: var(--paper, #faf7f2);
+  color: var(--ink-soft, #4a4a4a);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: transform var(--dur-press, 140ms) var(--ease-out, ease-out),
+              background var(--dur-pop, 180ms) var(--ease-out, ease-out);
+}
+
+.proto-close-btn:hover {
+  background: var(--wash-2, rgba(0, 0, 0, 0.06));
+}
+
+.proto-close-btn:active {
+  transform: scale(0.92);
+}
+
+/* Dropzone (Matching Onboarding) */
+.proto-dropzone {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1.5px dashed var(--line-heavy, rgba(0, 0, 0, 0.16));
+  border-radius: var(--r-md, 14px);
+  background: var(--wash-1, rgba(0, 0, 0, 0.03));
+  cursor: pointer;
+  transition: border-color 160ms var(--ease-out, ease-out),
+              background 160ms var(--ease-out, ease-out);
+}
+
+.proto-dropzone:hover {
+  border-color: var(--accent-warm, #d97706);
+  background: rgba(217, 119, 6, 0.04);
+}
+
+.proto-dropzone.is-over {
+  border-color: var(--accent-warm, #d97706);
+  background: rgba(217, 119, 6, 0.08);
+}
+
+.proto-dropzone-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--paper, #ffffff);
+  border: 1px solid var(--line, rgba(0, 0, 0, 0.08));
+  display: grid;
+  place-items: center;
+  color: var(--ink-soft, #4a4a4a);
+  flex: none;
+}
+
+.proto-dropzone-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.proto-dropzone-title {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 560;
+  color: var(--ink, #1a1a1a);
+}
+
+.proto-dropzone-hint {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--muted, #737373);
+}
+
+/* Palette Swatches */
+.proto-palette-row {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 6px;
+}
+
+.proto-swatch {
+  aspect-ratio: 1;
+  border-radius: var(--r-xs, 6px);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+  cursor: pointer;
+  transition: transform var(--dur-press, 140ms) var(--ease-out, ease-out),
+              box-shadow var(--dur-pop, 180ms) var(--ease-out, ease-out);
+}
+
+.proto-swatch:hover {
+  transform: scale(1.12);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+  z-index: 1;
+}
+
+.proto-swatch:active {
+  transform: scale(0.96);
+}
+
+/* Responsive Buttons */
+.proto-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 540;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: var(--r-full, 999px);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: transform var(--dur-press, 140ms) var(--ease-out, ease-out),
+              background var(--dur-pop, 180ms) var(--ease-out, ease-out),
+              border-color var(--dur-pop, 180ms) var(--ease-out, ease-out);
+}
+
+.proto-btn:active {
+  transform: scale(0.97);
+}
+
+.proto-btn-primary {
+  background: var(--ink, #1a1a1a);
+  color: #ffffff;
+}
+
+.proto-btn-primary:hover {
+  background: #333333;
+}
+
+.proto-btn-secondary {
+  background: var(--wash-1, rgba(0, 0, 0, 0.04));
+  border-color: var(--line, rgba(0, 0, 0, 0.08));
+  color: var(--ink-soft, #4a4a4a);
+}
+
+.proto-btn-secondary:hover {
+  background: var(--wash-2, rgba(0, 0, 0, 0.08));
+}

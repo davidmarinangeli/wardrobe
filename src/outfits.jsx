@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, PencilSimple, SpinnerGap, X } from "@phosphor-icons/react";
+import { Check, Palette, PencilSimple, Sparkle, SpinnerGap, X } from "@phosphor-icons/react";
 import { OptimizedImage } from "./OptimizedImage.jsx";
 import { api } from "./api.js";
 import { OUTFIT_CATEGORIES as CATEGORIES } from "./categories.js";
@@ -104,6 +104,18 @@ function hoverSlot(part, indexAmongPart, outfitId, itemId) {
 // yet) scatter layouts below — same slots, same per-piece element, just a
 // different wrapper class controlling whether it starts hidden or visible.
 function scatteredPieces(outfitId, pieces) {
+  if (pieces.length === 1) {
+    const item = pieces[0];
+    const isFull = item.part === "dress" || item.part === "jumpsuit";
+    const style = {
+      top: "50%",
+      left: "50%",
+      transform: "translate(-50%, -50%)",
+      maxHeight: isFull ? "82%" : "68%",
+      maxWidth: "68%",
+    };
+    return <img key={item.id} className="outfit-card-hover-piece outfit-card-solo-piece" src={item.image || item.thumbnail} alt="" style={style} />;
+  }
   const seenByPart = {};
   return pieces.map((item) => {
     const part = item.part || "upperbody";
@@ -114,7 +126,7 @@ function scatteredPieces(outfitId, pieces) {
     if (slot.bottom != null) style.bottom = slot.bottom;
     if (slot.left != null) style.left = slot.left;
     if (slot.right != null) style.right = slot.right;
-    return <img key={item.id} className="outfit-card-hover-piece" src={item.thumbnail || item.image} alt="" style={style} />;
+    return <img key={item.id} className="outfit-card-hover-piece" src={item.image || item.thumbnail} alt="" style={style} />;
   });
 }
 
@@ -261,7 +273,7 @@ function OutfitCard({ outfit, itemMap, onOpen }) {
   const processing = outfit.modeledStatus === "processing";
 
   return (
-    <button type="button" className="outfit-card" onClick={() => onOpen(outfit.id)} aria-label={`View ${outfit.name}`}>
+    <button type="button" className="outfit-card" onClick={(event) => onOpen(outfit.id, event.currentTarget)} aria-label={`View ${outfit.name}`}>
       <div className="outfit-card-art">
         {hasModeledImage ? (
           <>
@@ -286,7 +298,7 @@ function OutfitCard({ outfit, itemMap, onOpen }) {
   );
 }
 
-function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateModeled, onRename, premiumAllowed }) {
+function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateModeled, onRename, premiumAllowed, openedFrom }) {
   const closeButtonRef = useRef(null);
   const pieces = outfit.itemIds.map((id) => itemMap[id]).filter(Boolean);
   const [note, setNote] = useState("");
@@ -312,13 +324,20 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
     <ViewerPanel
       onClose={onClose}
       closeRef={closeButtonRef}
+      openedFrom={openedFrom}
       ariaLabel={`Outfit: ${outfit.name}`}
       panelClassName={hasModeledImage ? "has-modeled-image" : undefined}
     >
       {hasModeledImage ? (
         <ModeledHero src={outfit.modeledImage} alt={`${outfit.name} worn by a model`} showHeading={false} />
       ) : (
-        <div className="viewer-art outfit-viewer-art"><OutfitStack items={pieces} /></div>
+        <div className="viewer-art outfit-viewer-art">
+          {pieces.length ? (
+            <OutfitFlatLay outfitId={outfit.id} pieces={pieces} />
+          ) : (
+            <OutfitStack items={pieces} />
+          )}
+        </div>
       )}
 
       <div className="viewer-details editing">
@@ -342,7 +361,7 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
         <div className="outfit-viewer-pieces-grid">
           {pieces.map((item) => (
             <div className="outfit-viewer-piece-tile" key={item.id} title={item.name}>
-              <OptimizedImage src={item.thumbnail || item.image} alt="" sizes="64px" breakpoints={[64, 96]} />
+              <OptimizedImage src={item.thumbnail || item.image} alt="" sizes="72px" breakpoints={[72, 108]} />
             </div>
           ))}
         </div>
@@ -373,44 +392,80 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
   );
 }
 
-function SuggestionNudges({ items }) {
-  const [dismissed, setDismissed] = useState(() => new Set());
-  
+const NUDGE_DISMISS_KEY = "open-wardrobe-nudges-dismissed-v1";
+
+function readDismissedNudges() {
+  try {
+    const value = JSON.parse(localStorage.getItem(NUDGE_DISMISS_KEY) || "[]");
+    return new Set(Array.isArray(value) ? value : []);
+  } catch {
+    return new Set();
+  }
+}
+
+// One nudge at a time, on the page gutter, with the action it is asking for
+// attached to it. A nudge that only names a button you have to go find is a
+// notification, not a nudge — so the colour one opens the quiz itself. The
+// wardrobe-coverage nudges carry no button on purpose: the only "add" control
+// is the primary in the top bar, and a button pointing at another button is the
+// same problem wearing a different hat.
+function SuggestionNudges({ items, colorProfile, onOpenColorQuiz }) {
+  const [dismissed, setDismissed] = useState(readDismissedNudges);
+
+  const dismiss = (id) => setDismissed((current) => {
+    const next = new Set(current).add(id);
+    // Persisted, so a dismissal survives a reload. A banner that comes back
+    // every time the page mounts is how a nudge turns into nagging.
+    try { localStorage.setItem(NUDGE_DISMISS_KEY, JSON.stringify([...next])); } catch { /* private mode */ }
+    return next;
+  });
+
   if (!items) return null;
-  
-  const dismiss = (id) => setDismissed(prev => new Set(prev).add(id));
-  
-  const hasColorProfile = !!localStorage.getItem('open-wardrobe-color-profile-v1');
+
   // Coverage, not category: a wardrobe of dresses can already make complete
   // outfits, so telling it that it "has no bottoms" would be both wrong and a
   // criticism of a wardrobe that is working fine.
   const coverages = new Set(items.map((i) => GARMENT_PART_MAP[i.part]?.coverage));
   const hasTops = coverages.has('upper') || coverages.has('full');
   const hasBottoms = coverages.has('lower') || coverages.has('full');
-  
+
   const nudges = [];
-  
+
   if (items.length < 15 && !dismissed.has('few-items')) {
     nudges.push({ id: 'few-items', msg: "Add more clothes to your wardrobe for better outfit suggestions" });
   } else if (!hasBottoms && !dismissed.has('no-bottoms')) {
     nudges.push({ id: 'no-bottoms', msg: "You don't have any bottoms yet. Add some for complete outfits." });
   } else if (!hasTops && !dismissed.has('no-tops')) {
     nudges.push({ id: 'no-tops', msg: "You don't have any tops yet. Add some for complete outfits." });
-  } else if (!hasColorProfile && !dismissed.has('no-color')) {
-    nudges.push({ id: 'no-color', msg: "Take the color quiz for suggestions that match your skin tone" });
+  } else if (!colorProfile && !dismissed.has('no-color')) {
+    nudges.push({
+      id: 'no-color',
+      icon: 'palette',
+      msg: "Know your colors and every suggestion can match your skin tone",
+      actionLabel: "Take the quiz",
+      onAction: onOpenColorQuiz,
+    });
   }
-  
+
   if (!nudges.length) return null;
-  
+
   const nudge = nudges[0];
-  
+
   return (
-    <div className="nudge-banner">
-      <span>{nudge.msg}</span>
-      <button type="button" onClick={() => dismiss(nudge.id)} aria-label="Dismiss">
+    <aside className="nudge-banner" key={nudge.id}>
+      <span className="nudge-banner__icon" aria-hidden="true">
+        {nudge.icon === 'palette' ? <Palette size={16} weight="regular" /> : <Sparkle size={16} weight="regular" />}
+      </span>
+      <p className="nudge-banner__message">{nudge.msg}</p>
+      {nudge.actionLabel && nudge.onAction && (
+        <button type="button" className="secondary-button nudge-banner__action" onClick={nudge.onAction}>
+          {nudge.actionLabel}
+        </button>
+      )}
+      <button type="button" className="nudge-banner__dismiss" onClick={() => dismiss(nudge.id)} aria-label="Dismiss">
         <X size={16} />
       </button>
-    </div>
+    </aside>
   );
 }
 
@@ -419,12 +474,13 @@ function SuggestionNudges({ items }) {
 // there's exactly one "add" and one "AI action" button per view, not a
 // second pair duplicated on the page itself. builderOutfit (which outfit,
 // if any, is being edited) stays local — the topbar doesn't need to know.
-export function Outfits({ items, premiumAllowed = true, showBuilder, onOpenBuilder, onCloseBuilder, showSuggestions, onCloseSuggestions }) {
+export function Outfits({ items, premiumAllowed = true, colorProfile, onOpenColorQuiz, showBuilder, onOpenBuilder, onCloseBuilder, showSuggestions, onCloseSuggestions, openOutfitId, onOutfitOpened }) {
   const [outfits, setOutfits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [builderOutfit, setBuilderOutfit] = useState(null);
   const [viewingOutfitId, setViewingOutfitId] = useState(null);
+  const [openedFrom, setOpenedFrom] = useState(null);
 
   useEffect(() => {
     api("/api/outfits")
@@ -432,6 +488,16 @@ export function Outfits({ items, premiumAllowed = true, showBuilder, onOpenBuild
       .catch((requestError) => setError(requestError.message))
       .finally(() => setLoading(false));
   }, []);
+
+  // Arriving from a wardrobe piece ("in 3 looks" -> this outfit). The id is set
+  // before this tab has finished loading its outfits, which is fine: the viewer
+  // renders off a lookup that simply finds nothing until the list arrives.
+  useEffect(() => {
+    if (!openOutfitId) return;
+    setViewingOutfitId(openOutfitId);
+    setOpenedFrom(null);
+    onOutfitOpened?.();
+  }, [openOutfitId, onOutfitOpened]);
 
   const hasProcessingOutfit = outfits.some((outfit) => outfit.modeledStatus === "processing");
 
@@ -522,12 +588,12 @@ export function Outfits({ items, premiumAllowed = true, showBuilder, onOpenBuild
         noun="outfits"
       />
 
-      <SuggestionNudges items={items} />
+      <SuggestionNudges items={items} colorProfile={colorProfile} onOpenColorQuiz={onOpenColorQuiz} />
 
       {!!outfits.length && (
         <section className="outfits-grid">
           {outfits.map((outfit) => (
-            <OutfitCard key={outfit.id} outfit={outfit} itemMap={itemMap} onOpen={setViewingOutfitId} />
+            <OutfitCard key={outfit.id} outfit={outfit} itemMap={itemMap} onOpen={(id, element) => { setOpenedFrom(element); setViewingOutfitId(id); }} />
           ))}
         </section>
       )}
@@ -535,6 +601,7 @@ export function Outfits({ items, premiumAllowed = true, showBuilder, onOpenBuild
       {viewingOutfit && (
         <OutfitViewer
           outfit={viewingOutfit}
+          openedFrom={openedFrom}
           itemMap={itemMap}
           onClose={() => setViewingOutfitId(null)}
           onEdit={openEditOutfit}

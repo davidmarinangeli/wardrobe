@@ -29,10 +29,9 @@
   position: relative;
   aspect-ratio: 3 / 4;
   overflow: hidden;
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--line);
   border-radius: var(--r-lg);
-  background:
-    linear-gradient(165deg, rgba(255, 250, 242, .9), rgba(238, 227, 212, .85));
+  background: var(--surface-stage);
   box-shadow: var(--glass-edge), var(--shadow-sm);
   transition:
     transform var(--dur-panel) var(--ease-out),
@@ -134,6 +133,11 @@
   transform: scale(1) rotate(var(--rot, 0deg));
 }
 
+.outfit-card-solo-piece {
+  opacity: 1 !important;
+  transform: translate(-50%, -50%) !important;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .outfit-card:hover .outfit-card-flatlay .outfit-card-hover-piece {
     transform: scale(1.06) rotate(var(--rot, 0deg));
@@ -154,9 +158,9 @@
   display: flex;
   justify-content: center;
   padding: 10px;
-  background: rgba(247, 242, 233, .88);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
+  background: color-mix(in srgb, var(--paper-warm) 88%, transparent);
+  -webkit-backdrop-filter: var(--glass-blur-sm);
+  backdrop-filter: var(--glass-blur-sm);
 }
 
 .outfit-card-status {
@@ -231,7 +235,7 @@
 
 .outfit-card-note:focus-visible {
   border-color: var(--accent-warm);
-  box-shadow: 0 0 0 3px rgba(140, 68, 54, .12);
+  box-shadow: var(--ring-focus);
   outline: none;
 }
 
@@ -244,14 +248,17 @@
   gap: 22px;
 }
 
+/* Standalone stage — the suggestion deck and the builder preview. Inside an
+   outfit card or the viewer's flat-lay box this is stripped back to nothing,
+   because those already provide the stage themselves. */
 .outfit-stack {
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding: 14px;
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--line);
   border-radius: var(--r-lg);
-  background: var(--glass-card);
+  background: var(--surface-stage);
   box-shadow: var(--glass-edge), var(--shadow-sm);
   min-height: 64px;
 }
@@ -281,24 +288,60 @@
   padding: 0;
   border: 0;
   background: none;
+  box-shadow: none;
 }
 
 .outfit-stack.compact .outfit-stack-item { width: 56px; height: 56px; }
 
 /* ── Outfit detail viewer — mirrors the wardrobe item viewer (.viewer, .viewer-details, .modeled-hero) ── */
 
-.outfit-viewer-art {
-  padding: 12px 0 18px;
+.viewer-art.outfit-viewer-art {
+  position: relative;
+  width: 100%;
+  /* .viewer-art sizes itself for a single garment on a fixed 30vh strip, and it
+     is a single class in a file bundled AFTER this one — so every sizing
+     declaration here was being silently discarded and the flat-lay kept the
+     letterbox. Qualifying with .viewer-art wins on specificity instead of
+     hoping for source order, and the basis it sets has to be unset explicitly:
+     a flat-lay is a scene with three or four pieces in it and wants a square. */
+  flex: 0 0 auto;
+  height: auto;
+  aspect-ratio: 1;
+  max-height: min(46vh, 420px);
+  min-height: 260px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line);
+  background: var(--surface-stage);
+  box-shadow: var(--glass-edge), var(--shadow-sm);
+  overflow: hidden;
+  margin-bottom: 24px;
+  padding: 0;
+}
+
+.outfit-viewer-art .outfit-card-flatlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 
 .outfit-viewer-art .outfit-stack {
-  width: 100%;
+  height: 100%;
+  border: 0;
+  background: none;
+  justify-content: center;
+  padding: 24px;
+  box-shadow: none;
+}
+
+.outfit-viewer-art .outfit-stack-item {
+  width: 110px;
+  height: 110px;
 }
 
 .outfit-viewer-pieces-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 10px;
   margin: 4px 0 22px;
 }
 
@@ -306,17 +349,23 @@
   aspect-ratio: 1;
   display: grid;
   place-items: center;
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--line);
   border-radius: var(--r-md);
   padding: 8px;
-  background: var(--glass-card);
-  box-shadow: var(--glass-edge), var(--shadow-sm);
+  /* Was --paper-raised on a --paper-warm panel: four points apart, which is not
+     a card sitting on a panel, it is a panel with faint rectangles drawn on it.
+     Stacking a near-white surface on a near-white one is the specific thing the
+     material rules warn about, so the separation comes from the other
+     direction. */
+  background: var(--surface-stage);
+  box-shadow: var(--glass-edge), var(--shadow-xs);
 }
 
 .outfit-viewer-piece-tile img {
   width: 100%;
   height: 100%;
   object-fit: contain;
+  filter: var(--shadow-contact);
 }
 
 .outfit-category-label {
@@ -337,19 +386,20 @@
 
 .outfit-piece {
   flex: none;
-  width: 72px;
-  height: 72px;
+  width: 76px;
+  height: 76px;
   display: grid;
   place-items: center;
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--line);
   border-radius: var(--r-md);
-  padding: 7px;
-  background: var(--glass-card);
-  box-shadow: var(--glass-edge), var(--shadow-sm);
+  padding: 8px;
+  background: var(--paper-raised);
+  box-shadow: var(--shadow-xs);
   cursor: pointer;
   transition:
     border-color var(--dur-pop) var(--ease-out),
     box-shadow var(--dur-pop) var(--ease-out),
+    background var(--dur-pop) var(--ease-out),
     transform var(--dur-press) var(--ease-out);
 }
 
@@ -362,11 +412,16 @@
 
 .outfit-piece.active {
   border-color: var(--accent-warm);
-  box-shadow: var(--glass-edge), 0 0 0 1px var(--accent-warm), var(--shadow-sm);
+  box-shadow: 0 0 0 2px var(--accent-warm), var(--shadow-xs);
+  background: #ffffff;
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .outfit-piece:hover { border-color: var(--line); box-shadow: var(--glass-edge), var(--shadow-md); }
+  .outfit-piece:hover:not(.blocked) {
+    background: #ffffff;
+    border-color: var(--accent-warm);
+    box-shadow: var(--shadow-sm);
+  }
 }
 
 .outfit-piece:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
@@ -388,6 +443,83 @@
 
 .outfit-error { margin: 0; text-align: right; }
 
+/* ─── Nudge banner ──────────────────────────────────────────────────────────
+   Renders on the Outfits page (SuggestionNudges in outfits.jsx), which is why
+   it lives here now — it used to sit in suggestions.css, where it picked up a
+   hardcoded 52px gutter that missed the page's own --page-x by four pixels.
+
+   Material is the same recipe .modeled-photo-prompt uses for an inline prompt
+   card (styles.css): translucent warm fill, light on the top edge, one soft
+   shadow. The old rgba(255,255,255,.08) was effectively invisible on cream. */
+.nudge-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 4px var(--page-x) 20px;
+  padding: 12px 14px 12px 16px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  background: var(--glass-card);
+  box-shadow: var(--glass-edge), var(--shadow-sm);
+  color: var(--ink-soft);
+  animation: nudge-in var(--dur-panel) var(--ease-out) both;
+}
+
+.nudge-banner__icon {
+  flex: 0 0 30px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: var(--accent-warm);
+  background: color-mix(in srgb, var(--accent-warm) 9%, transparent);
+}
+
+.nudge-banner__message {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.nudge-banner__action { flex: 0 0 auto; }
+
+.nudge-banner__dismiss {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  padding: 5px;
+  border: none;
+  border-radius: 50%;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  transition: color var(--dur-pop) var(--ease-out), background var(--dur-pop) var(--ease-out), transform var(--dur-press) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .nudge-banner__dismiss:hover { color: var(--ink-soft); background: var(--wash-1); }
+}
+
+.nudge-banner__dismiss:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
+.nudge-banner__dismiss:active { transform: scale(.94); }
+
+@keyframes nudge-in {
+  from { opacity: 0; transform: translate3d(0, 6px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (max-width: 640px) {
+  /* The action drops under the message rather than squeezing it to two words. */
+  .nudge-banner { flex-wrap: wrap; }
+  .nudge-banner__message { flex: 1 1 100%; order: 1; }
+  .nudge-banner__icon { order: 0; }
+  .nudge-banner__dismiss { order: 0; margin-left: auto; }
+  .nudge-banner__action { order: 2; margin-left: 44px; }
+}
+
 @media (max-width: 860px) {
   .outfit-builder-entry { width: 100%; }
 }
@@ -404,6 +536,7 @@
   .outfit-card-hero img,
   .outfit-card-hover-pieces,
   .outfit-card-hover-piece,
+  .nudge-banner,
   .outfit-card-spinner { transition: none; animation: none; }
 
   .outfit-card-art,

@@ -7,6 +7,17 @@
   --paper: #f4f0e8;
   --paper-warm: #f7f2e9;
   --paper-raised: #fbf7f0;
+  /* The ground a garment cut-out sits ON, and the one surface in the set that
+     goes DOWN rather than up. Everything else here is an elevation ladder —
+     paper, warm, raised — climbing toward white. That ladder has nowhere left
+     to climb: the page is already near-white, the steps between these three are
+     four points each, and the objects being displayed are cut-outs that are
+     frequently white themselves. A white sock on a raised white card is not a
+     card holding a sock, it is an empty card.
+     So a stage is darker and warmer than whatever it sits on, and takes its
+     "raised" reading from the lit top edge and the contact shadow of the thing
+     standing on it instead of from being lighter. */
+  --surface-stage: #eee7d9;
   --ink: #191919;
   --ink-soft: #2e2a26;
   --muted: #6d675f;
@@ -35,30 +46,65 @@
      Chrome gets real backdrop-filter (few elements, content scrolls under).
      Cards get a translucent warm fill instead — over the gradient field it
      reads the same, without paying blur cost on 55+ elements. */
-  --glass-card: linear-gradient(160deg, rgba(255, 251, 243, .62), rgba(250, 242, 230, .34));
-  --glass-card-hover: linear-gradient(160deg, rgba(255, 253, 248, .82), rgba(252, 246, 235, .52));
+  --glass-card: linear-gradient(160deg, rgba(255, 252, 246, .92), rgba(246, 237, 224, .84));
+  --glass-card-hover: linear-gradient(160deg, rgba(255, 254, 250, .96), rgba(248, 240, 228, .90));
   --glass-chrome: rgba(250, 245, 237, .72);
   --glass-blur: blur(20px) saturate(155%);
+  /* Chrome gets the full 20px. Panels sitting on the scrim need less — they are
+     already reading against a dimmed page — and the scrim itself needs least of
+     all, since blurring a full-viewport layer is the most expensive thing here. */
+  --glass-blur-panel: blur(14px) saturate(140%);
+  --glass-blur-sm: blur(7px) saturate(130%);
+  --glass-blur-scrim: blur(3px);
   --glass-edge: inset 0 1px 0 rgba(255, 255, 255, .7);
   --glass-border: rgba(255, 255, 255, .5);
+  --glass-border-hover: rgba(255, 255, 255, .75);
 
   /* ─── Elevation ──────────────────────────────────────────────────────────
      Warm-toned shadows; a cool grey shadow on cream reads as dirt. */
+  --shadow-xs: 0 1px 2px rgba(60, 47, 33, .05);
   --shadow-sm: 0 1px 2px rgba(60, 47, 33, .05), 0 6px 16px rgba(60, 47, 33, .06);
   --shadow-md: 0 2px 4px rgba(60, 47, 33, .06), 0 14px 32px rgba(60, 47, 33, .1);
   --shadow-lg: 0 4px 8px rgba(60, 47, 33, .07), 0 28px 60px rgba(60, 47, 33, .16);
-  --shadow-contact: drop-shadow(0 10px 12px rgba(60, 47, 33, .17));
+  --shadow-contact: drop-shadow(0 1px 2px rgba(60, 47, 33, .12)) drop-shadow(0 8px 12px rgba(60, 47, 33, .16));
+  --shadow-contact-lift: drop-shadow(0 22px 22px rgba(60, 47, 33, .2));
+  /* One focus ring, not four copies of the same rgba triplet. */
+  --ring-focus: 0 0 0 3px rgba(140, 68, 54, .12);
 
   /* ─── Layout ─────────────────────────────────────────────────────────────
      One page gutter. Header and grid both align to it. */
   --page-x: 56px;
   --item-pad: 14px;
 
+  /* Spacing. Extracted from the values already in use, not invented — the app
+     was written on a 4px grid by hand. Hand-tuned one-offs that carry a comment
+     explaining themselves stay as they are; this is for the repeats. */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-7: 48px;
+  --s-8: 64px;
+
+  /* ─── Tracking ───────────────────────────────────────────────────────────
+     Letter-spacing is size-specific, never one value for all sizes: large type
+     reads too loose as it grows and wants negative tracking, uppercase micro-
+     labels want positive. Three steps replace nineteen hand-set values. */
+  --track-display: -.035em;
+  --track-tight: -.015em;
+  --track-body: -.005em;
+  --track-caps: .05em;
+
   /* ─── Motion ─────────────────────────────────────────────────────────────
      Built-in easings are too weak; these are the only curves in the app. */
   --ease-out: cubic-bezier(.23, 1, .32, 1);
   --ease-in-out: cubic-bezier(.77, 0, .175, 1);
   --ease-drawer: cubic-bezier(.32, .72, 0, 1);
+  /* Slight overshoot, for something settling into place after being moved.
+     Two hand-rolled near-copies of this lived in suggestions.css. */
+  --ease-spring: cubic-bezier(.18, 1.12, .28, 1);
   --dur-press: 140ms;
   --dur-pop: 180ms;
   --dur-panel: 260ms;
@@ -163,7 +209,7 @@ button { font: inherit; }
   right: 0;
   left: 0;
   height: 24px;
-  background: linear-gradient(to bottom, rgba(244, 240, 232, .55), transparent);
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--paper) 55%, transparent), transparent);
   pointer-events: none;
 }
 
@@ -223,6 +269,105 @@ button { font: inherit; }
 .top-action:active { transform: scale(.96); }
 .top-action:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
 .top-action:disabled { opacity: .45; cursor: not-allowed; transform: none; box-shadow: none; }
+
+/* ─── Chip → panel morph ──────────────────────────────────────────────────────
+   The chip's icon and label don't cross-fade into the panel header; they travel
+   there. The panel renders the same icon and the same words, starts them sitting
+   on the chip (usePopoverOrigin measures the delta into --identity-dx/dy/scale),
+   and slides them home while the chip hands its own copy over.
+
+   Two copies of one thing on screen at once would break the illusion, so the
+   chip empties out first — fast, and on a shorter curve than the arrival, so the
+   handover reads as one object moving rather than a swap. The pill itself stays:
+   it is the hole the panel came out of, and it has to still be there to go back
+   into on close. */
+.top-action.is-morphing > :not(.ai-action-beam-mask) {
+  opacity: 0;
+  transition: opacity 90ms linear;
+}
+
+.popover-identity {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  /* Left center, so the block only has to reconcile one point with the chip's
+     content edge — a center origin would need the width ratio too, and the
+     title is a different length from the chip label in half the states. */
+  transform-origin: left center;
+  transform:
+    translate(var(--identity-dx, 0px), var(--identity-dy, 0px))
+    scale(var(--identity-scale, 1));
+  opacity: 0;
+  /* 12px chip label to a 22–32px title is a real type interpolation, and no
+     easing hides it. A couple of pixels of blur held through the move blends the
+     two readings into one perceived transformation — STANDARDS calls this out
+     specifically, and keeps it well under the 20px where blur gets expensive. */
+  filter: blur(4px);
+  transition:
+    transform 260ms var(--ease-out),
+    opacity 130ms linear,
+    filter 200ms var(--ease-out);
+}
+
+[data-open="true"] .popover-identity,
+.is-open .popover-identity {
+  transform: none;
+  opacity: 1;
+  filter: none;
+}
+
+/* The header renders the chip's own icon node, so it arrives at the chip's
+   16–17px size — correct at the start of the morph, undersized next to a 32px
+   title at the end. Sizing it here rather than passing a second `size` prop
+   keeps it one object rendered twice instead of two that merely match. */
+.popover-identity__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  color: var(--accent);
+}
+
+.popover-identity__icon svg {
+  width: 1.1em;
+  height: 1.1em;
+}
+
+/* The eyebrow is context, not identity — it names the panel rather than being
+   the thing that arrived, so it comes in just behind the morph instead of
+   riding along with it. */
+.popover-identity + .popover-eyebrow,
+.popover-eyebrow {
+  opacity: 0;
+  transition: opacity 160ms var(--ease-out) 90ms;
+}
+
+[data-open="true"] .popover-eyebrow,
+.is-open .popover-eyebrow { opacity: 1; }
+
+/* Below 860px the chips collapse to icon-only circles (see the media query
+   further down) — there is no label to morph out of, and the panel goes
+   full-width, so it falls back to the plain trigger-anchored scale. */
+@media (max-width: 860px) {
+  .popover-identity {
+    transform: none;
+    filter: none;
+    transition: opacity var(--dur-pop) var(--ease-out);
+  }
+
+  .top-action.is-morphing > :not(.ai-action-beam-mask) { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .popover-identity {
+    transform: none;
+    filter: none;
+    transition: opacity var(--dur-pop) var(--ease-out);
+  }
+
+  .top-action.is-morphing > :not(.ai-action-beam-mask) { opacity: 1; }
+}
 
 /* ─── AI action border beam ───────────────────────────────────────────────────
    A one-shot light that travels the border of an AI-powered action ("How do
@@ -591,6 +736,26 @@ button { font: inherit; }
   box-shadow: var(--shadow-sm);
 }
 
+.category-nav button.color-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.category-nav button.color-filter-btn .season-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.category-nav button.color-filter-btn.active {
+  border-color: var(--accent);
+  color: var(--ink);
+  font-weight: 560;
+  box-shadow: 0 0 0 1px var(--accent), var(--shadow-xs);
+}
+
 .category-nav button:focus-visible {
   outline: 2px solid var(--accent-warm);
   outline-offset: 2px;
@@ -599,6 +764,19 @@ button { font: inherit; }
 .category-nav button:active { transform: scale(.97); }
 
 .category-nav::-webkit-scrollbar { display: none; }
+
+/* Splits the nav into groups. Inspo uses it to separate the source pins from
+   the pieces detected out of them — two different kinds of thing sharing one
+   row, which reads as one flat list without a rule between them. */
+.category-nav__divider {
+  flex: 0 0 1px;
+  align-self: center;
+  height: 16px;
+  margin-inline: 6px;
+  /* --wash-3, not --wash-2: the pills either side are themselves washed fills,
+     so a 9% hairline between them reads as nothing at all. */
+  background: var(--wash-3);
+}
 
 .gallery-grid {
   display: grid;
@@ -646,6 +824,7 @@ button { font: inherit; }
     border-color var(--dur-pop) var(--ease-out);
 }
 
+
 /* A faint warm pool inside the card, so pure white still has something to
    read against near the centre where garments sit. */
 .gallery-item__art::before {
@@ -653,7 +832,7 @@ button { font: inherit; }
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: radial-gradient(120% 90% at 50% 12%, rgba(255, 255, 255, .5), transparent 68%);
+  background: radial-gradient(120% 90% at 50% 12%, var(--glass-border), transparent 68%);
   pointer-events: none;
 }
 
@@ -715,11 +894,16 @@ button { font: inherit; }
   text-transform: uppercase;
 }
 
+/* "in 3 looks" — the count rides the type line instead of becoming the grid's
+   first badge. Warm ink rather than muted so it is scannable down a column of
+   cards without adding a mark on the cutout. */
+.gallery-item__outfits { color: var(--accent-warm); }
+
 @media (hover: hover) and (pointer: fine) {
   .gallery-item:hover .gallery-item__art {
     transform: translateY(-3px);
     background: var(--glass-card-hover);
-    border-color: rgba(255, 255, 255, .75);
+    border-color: var(--glass-border-hover);
     box-shadow: var(--glass-edge), var(--shadow-md);
   }
 
@@ -772,8 +956,8 @@ button { font: inherit; }
   justify-content: flex-end;
   padding: 12px;
   background: var(--scrim);
-  -webkit-backdrop-filter: blur(3px);
-  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: var(--glass-blur-scrim);
+  backdrop-filter: var(--glass-blur-scrim);
   animation: overlay-in var(--dur-panel) var(--ease-out) both;
 }
 
@@ -787,6 +971,36 @@ button { font: inherit; }
    must leave to the right, or the two motions read as unrelated. */
 .viewer-overlay[data-closing="true"] { animation: overlay-out 160ms var(--ease-out) both; }
 .viewer-overlay[data-closing="true"] .viewer-entry { animation: viewer-out 160ms var(--ease-out) both; }
+
+/* ─── Opened from a card ─────────────────────────────────────────────────────
+   The default entry slides in from the right edge, which is the honest answer
+   when nothing on screen opened the panel. When something did — a garment card,
+   an outfit, an inspo pin — the panel grows out of it instead, the same claim
+   the top-bar popovers make about their chips: transform-origin sits on the
+   thing that was clicked, so the panel's own scale carries it back there.
+
+   Only the name is overridden, so duration, easing and fill stay with the base
+   rule and the two entries can never drift apart. useExpandOrigin writes the
+   origin; without it the fallback is the panel's right edge, which is where the
+   old slide came from. */
+.viewer-entry--from-card {
+  transform-origin: var(--card-x, 100%) var(--card-y, 50%);
+  animation-name: viewer-expand;
+}
+
+.viewer-overlay[data-closing="true"] .viewer-entry--from-card {
+  animation-name: viewer-collapse;
+}
+
+/* Never scale(0) — nothing in the real world appears from nothing, and the
+   distance to the card does the rest of the work. */
+@keyframes viewer-expand {
+  from { transform: scale(.92); opacity: 0; }
+}
+
+@keyframes viewer-collapse {
+  to { transform: scale(.92); opacity: 0; }
+}
 
 /* Escape is a keyboard action — repeated, and always faster than an
    animation. Closing by key skips the exit entirely. */
@@ -845,8 +1059,8 @@ button { font: inherit; }
 .modeled-hero::before {
   z-index: 1;
   height: 170px;
-  -webkit-backdrop-filter: blur(7px);
-  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: var(--glass-blur-sm);
+  backdrop-filter: var(--glass-blur-sm);
   -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 68%);
   mask-image: linear-gradient(to bottom, transparent 0%, #000 68%);
 }
@@ -854,9 +1068,9 @@ button { font: inherit; }
 .modeled-hero::after {
   z-index: 2;
   height: 124px;
-  background: linear-gradient(to bottom, rgba(247, 242, 233, 0), var(--paper-warm) 82%);
-  -webkit-backdrop-filter: blur(17px);
-  backdrop-filter: blur(17px);
+  background: linear-gradient(to bottom, transparent, var(--paper-warm) 82%);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
   -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 60%);
   mask-image: linear-gradient(to bottom, transparent 0%, #000 60%);
 }
@@ -950,9 +1164,9 @@ button { font: inherit; }
   z-index: 6;
   max-width: calc(100% - 108px);
   padding: 13px 16px 14px;
-  background: rgba(247, 242, 233, .82);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
+  background: color-mix(in srgb, var(--paper-warm) 82%, transparent);
+  -webkit-backdrop-filter: var(--glass-blur-panel);
+  backdrop-filter: var(--glass-blur-panel);
 }
 
 .modeled-heading h2 {
@@ -967,9 +1181,9 @@ button { font: inherit; }
   top: 24px;
   right: 24px;
   border-radius: 50%;
-  background: rgba(247, 242, 233, .82);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
+  background: color-mix(in srgb, var(--paper-warm) 82%, transparent);
+  -webkit-backdrop-filter: var(--glass-blur-panel);
+  backdrop-filter: var(--glass-blur-panel);
 }
 
 .viewer-swatch {
@@ -998,6 +1212,9 @@ button { font: inherit; }
   min-height: 0;
   max-height: 100%;
   object-fit: contain;
+  /* The same cutout sits on a shelf in the grid; without this it floats free
+     the moment you open it, and the two readings of one garment disagree. */
+  filter: var(--shadow-contact);
 }
 
 .viewer-art.sampling img {
@@ -1017,20 +1234,20 @@ button { font: inherit; }
   height: 178px;
   min-height: 0;
   padding: 0;
-  filter: drop-shadow(0 18px 18px rgba(60, 47, 33, .16));
+  filter: var(--shadow-contact);
   transform: rotate(var(--piece-rotation));
   transform-origin: 62% 72%;
   transition: transform 280ms var(--ease-out), filter 280ms ease;
 }
 
 .viewer-art-floating:focus-within {
-  filter: drop-shadow(0 24px 23px rgba(60, 47, 33, .21));
+  filter: var(--shadow-contact-lift);
   transform: translateY(-5px) scale(1.1) rotate(calc(var(--piece-rotation) + 2deg));
 }
 
 @media (hover: hover) and (pointer: fine) {
   .viewer-art-floating:hover {
-    filter: drop-shadow(0 24px 23px rgba(60, 47, 33, .21));
+    filter: var(--shadow-contact-lift);
     transform: translateY(-5px) scale(1.1) rotate(calc(var(--piece-rotation) + 2deg));
   }
 }
@@ -1084,6 +1301,102 @@ button { font: inherit; }
   font-weight: 450;
   letter-spacing: .05em;
   text-transform: uppercase;
+}
+
+/* Outfits this piece is already in. Sits below the editor as part of the
+   piece's detail; renders nothing at all when there are none. */
+.item-outfits {
+  margin: 4px 0 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.item-outfits .details-label { margin-bottom: 12px; }
+
+.item-outfits__row {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+}
+
+.item-outfits__card {
+  flex: 0 0 auto;
+  width: 76px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  transition: transform 220ms var(--ease-out);
+}
+
+.item-outfits__art {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  overflow: hidden;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-stage);
+  box-shadow: var(--glass-edge), var(--shadow-xs);
+}
+
+.item-outfits__art img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* No model photo yet: the pieces stand in for it, overlapped so three of them
+   still read as one look rather than three thumbnails. */
+.item-outfits__pieces {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.item-outfits__pieces img {
+  width: 60%;
+  height: 100%;
+  object-fit: contain;
+  filter: var(--shadow-contact);
+}
+
+.item-outfits__pieces img + img { margin-left: -22%; }
+
+.item-outfits__name {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .item-outfits__card:hover { transform: translateY(-2px); }
+}
+
+.item-outfits__card:focus-visible {
+  outline: none;
+}
+
+.item-outfits__card:focus-visible .item-outfits__art {
+  outline: 2px solid var(--accent-warm);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .item-outfits__card { transition: none; }
+  .item-outfits__card:hover { transform: none; }
 }
 
 .detail-tags {
@@ -1226,10 +1539,10 @@ button { font: inherit; }
   gap: 12px;
   margin-bottom: 26px;
   padding: 16px;
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--line);
   border-radius: var(--r-lg);
-  background: var(--glass-card);
-  box-shadow: var(--glass-edge), var(--shadow-sm);
+  background: var(--paper-raised);
+  box-shadow: var(--shadow-xs);
 }
 
 .modeled-photo-prompt.is-processing {
@@ -1259,10 +1572,10 @@ button { font: inherit; }
 .modeled-tier-picker button {
   display: grid;
   gap: 3px;
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--line);
   border-radius: var(--r-md);
   padding: 9px 11px;
-  background: var(--paper-raised);
+  background: #ffffff;
   color: var(--ink-soft);
   text-align: left;
   cursor: pointer;
@@ -1276,13 +1589,17 @@ button { font: inherit; }
 .modeled-tier-picker button small { color: var(--muted); font-size: 10px; line-height: 1.35; }
 
 @media (hover: hover) and (pointer: fine) {
-  .modeled-tier-picker button:hover { border-color: var(--line); box-shadow: var(--shadow-sm); }
+  .modeled-tier-picker button:hover { border-color: var(--accent-warm); box-shadow: var(--shadow-sm); }
 }
 
 .modeled-tier-picker button:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
 .modeled-tier-picker button:active { transform: scale(.98); }
 
-.modeled-tier-picker button.active { border-color: var(--accent-warm); box-shadow: inset 0 0 0 1px var(--accent-warm); }
+.modeled-tier-picker button.active {
+  border-color: var(--accent-warm);
+  box-shadow: inset 0 0 0 1px var(--accent-warm);
+  background: #ffffff;
+}
 .modeled-tier-picker button.active small { color: var(--ink-soft); }
 
 .modeled-tier-picker button:disabled {
@@ -1400,7 +1717,7 @@ button { font: inherit; }
 .field select:focus,
 .tag-input-row input:focus {
   border-color: var(--accent-warm);
-  box-shadow: 0 0 0 3px rgba(140, 68, 54, .12);
+  box-shadow: var(--ring-focus);
   outline: none;
 }
 
@@ -1791,7 +2108,7 @@ button { font: inherit; }
   .category-nav button:active,
   .app-view-switch button:active { transform: none; }
 
-  .outfit-card-hero img { transform: none; filter: none; }
+  .outfit-card-hero img { transform: none; }
 
   .viewer-overlay,
   .viewer-entry { animation: none; }
@@ -1813,13 +2130,24 @@ button { font: inherit; }
   }
 
   .gallery-item__art,
-  .outfit-card-art,
-  .inspo-card { background: var(--paper-raised); }
+  .inspo-card,
+  .mirror-issue-card,
+  .import-card,
+  .import-drop-target,
+  .style-memo { background: var(--paper-raised); }
 
-  .viewer-overlay {
+  .import-card.is-selected,
+  .import-drop-target.is-over { background: var(--paper-warm); }
+
+  .viewer-overlay,
+  .mirror-popover-backdrop,
+  .import-popover-backdrop,
+  .import-drop-overlay {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
+
+  .import-drop-overlay { background: var(--paper); }
 
   .modeled-heading,
   .has-modeled-image .viewer-icon-close {
@@ -1832,11 +2160,21 @@ button { font: inherit; }
 /* High contrast: solid surfaces with a defined edge. */
 @media (prefers-contrast: more) {
   .gallery-item__art,
-  .outfit-card-art,
-  .inspo-card {
+  .inspo-card,
+  .mirror-issue-card,
+  .import-card,
+  .style-memo {
     background: var(--paper-raised);
     border-color: var(--muted);
   }
+
+  /* A stage keeps its ground and only sharpens its edge. Raising it to
+     --paper-raised with the rest would flatten a white garment into a white
+     card for the people who asked for MORE contrast, not less. */
+  .outfit-card-art,
+  .outfit-stack,
+  .outfit-viewer-piece-tile,
+  .viewer-art.outfit-viewer-art { border-color: var(--muted); }
 
   .app-top-bar::before {
     background: var(--paper-raised);

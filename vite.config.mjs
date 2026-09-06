@@ -9,6 +9,7 @@ import { mirrorApi } from "./scripts/mirror-api.mjs";
 import { responsiveImageApi } from "./scripts/responsive-image-api.mjs";
 import { wardrobeSetupApi } from "./scripts/setup-api.mjs";
 import { preferencesApi } from "./scripts/preferences-api.mjs";
+import { colorProfileApi } from "./scripts/color-profile-api.mjs";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
@@ -18,7 +19,7 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       host: "0.0.0.0",
-      allowedHosts: ["terminal.local"],
+      allowedHosts: ["terminal.local", "localhost"],
       warmup: {
         clientFiles: ["./src/main.jsx"],
       },
@@ -28,6 +29,18 @@ export default defineConfig(({ mode }) => {
       port: 4173,
       allowedHosts: ["localhost"],
     },
-    plugins: [react(), responsiveImageApi(), wardrobeImportApi({ env }), outfitsApi({ env }), inspoApi({ env }), wishlistApi({ env }), suggestionsApi({ env }), mirrorApi({ env }), wardrobeSetupApi({ env }), preferencesApi({ env })],
+    plugins: [
+      react(),
+      responsiveImageApi(),
+      wardrobeImportApi({ env }),
+      outfitsApi({ env }),
+      inspoApi({ env }),
+      wishlistApi({ env }),
+      suggestionsApi({ env }),
+      mirrorApi({ env }),
+      wardrobeSetupApi({ env }),
+      preferencesApi({ env }),
+      colorProfileApi({ env }),
+    ],
   };
 });

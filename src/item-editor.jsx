@@ -3,6 +3,7 @@ import { ArrowCounterClockwise, Check, Plus, Sparkle, SpinnerGap, X } from "@pho
 import { OptimizedImage } from "./OptimizedImage.jsx";
 import { useViewerKeyboard } from "./hooks/useViewerKeyboard.js";
 import { useDismiss } from "./hooks/useDismiss.js";
+import { useExpandOrigin } from "./hooks/useExpandOrigin.js";
 import { ModeledHero } from "./components/ModeledHero.jsx";
 import { PanelActions } from "./components/PanelActions.jsx";
 import { EditableTitle } from "./components/EditableTitle.jsx";
@@ -100,15 +101,21 @@ function sampleImageColor(image, canvas, event) {
   return null;
 }
 
-export function GalleryItem({ item, selected, onOpen, seasonMatch, index = 0 }) {
+export function GalleryItem({ item, index, selected, onOpen, outfitCount = 0 }) {
   const type = TYPE_MAP[item.part]?.singular || "wardrobe item";
+  // A piece in four looks is a different piece from one in none, and the grid
+  // used to render them identically. The count rides the type line rather than
+  // becoming a badge: the card's whole premise is a clean cutout on cream, and
+  // this is the first mark the grid would carry. Zero says nothing — a piece in
+  // no outfits is normal, especially early.
+  const outfitLabel = outfitCount ? `in ${outfitCount} ${outfitCount === 1 ? "look" : "looks"}` : "";
 
   return (
     <button
       className={`gallery-item${selected ? " selected" : ""}`}
       type="button"
-      onClick={() => onOpen(item.id)}
-      aria-label={`View ${item.name || type}`}
+      onClick={(event) => onOpen(item.id, event.currentTarget)}
+      aria-label={outfitLabel ? `View ${item.name || type} — ${outfitLabel}` : `View ${item.name || type}`}
       aria-pressed={selected}
       data-part={item.part}
       // Stagger is capped: past the first screenful the delay would only ever
@@ -117,7 +124,6 @@ export function GalleryItem({ item, selected, onOpen, seasonMatch, index = 0 }) 
       data-testid={`wardrobe-item-${item.id}`}
     >
       <span className="gallery-item__art">
-        {seasonMatch && <span className="gallery-item-badge" style={{ backgroundColor: seasonMatch.accent }} title={`Matches your ${seasonMatch.label} palette`} />}
         <OptimizedImage
           src={item.thumbnail || item.image}
           alt=""
@@ -127,7 +133,10 @@ export function GalleryItem({ item, selected, onOpen, seasonMatch, index = 0 }) 
       </span>
       <span className="gallery-item__label">
         <span className="gallery-item__name">{item.name || type}</span>
-        <span className="gallery-item__type">{type}</span>
+        <span className="gallery-item__type">
+          {type}
+          {outfitLabel && <span className="gallery-item__outfits"> · {outfitLabel}</span>}
+        </span>
       </span>
     </button>
   );
@@ -353,8 +362,49 @@ export function ModeledPhotoPrompt({ status, error, busy, onGenerate, premiumAll
   );
 }
 
-export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled, premiumAllowed, showModeledPhoto = true }) {
+// The other half of the answer: the grid says how many, this says which, with
+// enough of each look to recognise it. Tapping one lands on the outfit itself
+// rather than on a filtered grid.
+function OutfitsWithItem({ outfits, onOpen }) {
+  // Zero is not an error state, so it is not a state at all here.
+  if (!outfits.length) return null;
+
+  return (
+    <section className="item-outfits">
+      <p className="details-label">In {outfits.length} {outfits.length === 1 ? "outfit" : "outfits"}</p>
+      <div className="item-outfits__row">
+        {outfits.map((outfit) => (
+          <button
+            type="button"
+            key={outfit.id}
+            className="item-outfits__card"
+            onClick={() => onOpen(outfit.id)}
+            aria-label={`Open outfit: ${outfit.name || "Outfit"}`}
+          >
+            <span className="item-outfits__art">
+              {outfit.modeledImage ? (
+                <OptimizedImage src={outfit.modeledImage} alt="" sizes="76px" breakpoints={[76, 152]} />
+              ) : (
+                // No model photo yet — the pieces themselves read well enough at
+                // this size, and they are already loaded for the grid behind.
+                <span className="item-outfits__pieces">
+                  {outfit.pieces.slice(0, 3).map((piece) => (
+                    <img key={piece.id} src={piece.thumbnail || piece.image} alt="" loading="lazy" />
+                  ))}
+                </span>
+              )}
+            </span>
+            <span className="item-outfits__name">{outfit.name || "Outfit"}</span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled, premiumAllowed, showModeledPhoto = true, openedFrom = null, outfits = [], onOpenOutfit }) {
   const closeButtonRef = useRef(null);
+  const entryRef = useRef(null);
   const imageRef = useRef(null);
   const samplingCanvasRef = useRef(null);
   const shakeTimerRef = useRef(null);
@@ -363,6 +413,9 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
   const [palette, setPalette] = useState(item.palette || []);
   const [draft, setDraft] = useState({ name: item.name || "", part: item.part, color: item.color || "#9a9286", secondaryColor: item.secondaryColor || null, tags: [...(item.tags || [])] });
   const [shaking, setShaking] = useState(false);
+  // This viewer is hand-rolled rather than a ViewerPanel — it needs the
+  // unsaved-changes shake — so it opts into the card-anchored entry itself.
+  useExpandOrigin(entryRef, openedFrom);
   const [closeBlocked, setCloseBlocked] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [modeledNote, setModeledNote] = useState("");
@@ -420,6 +473,13 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
   }, [isDirty, nudgeUnsaved, dismiss]);
 
   useViewerKeyboard(requestClose, closeButtonRef);
+
+  // Leaving for an outfit is still leaving: unsaved edits get the same shake
+  // they get from the close button, not a silent discard.
+  const openOutfit = useCallback((outfitId) => {
+    if (isDirty) nudgeUnsaved();
+    else onOpenOutfit(outfitId);
+  }, [isDirty, nudgeUnsaved, onOpenOutfit]);
 
   useEffect(() => {
     if (!sampling) return;
@@ -493,7 +553,7 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
 
   return (
     <div className="viewer-overlay" role="presentation" data-closing={closing} onMouseDown={(event) => event.target === event.currentTarget && requestClose()}>
-    <div className="viewer-entry">
+    <div ref={entryRef} className={`viewer-entry${openedFrom ? " viewer-entry--from-card" : ""}`}>
     <aside className={`viewer editing${hasModeledImage ? " has-modeled-image" : ""}${shaking ? " shake" : ""}`} role="dialog" aria-modal="true" aria-label="Selected wardrobe item">
       <button className="icon-button viewer-icon-close" type="button" onClick={() => requestClose()} aria-label="Close viewer" ref={closeButtonRef}>
         <X size={24} weight="light" aria-hidden="true" />
@@ -529,6 +589,8 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
           setSampling={setSampling}
           sampleStatus={sampleStatus}
         />
+
+        {onOpenOutfit && <OutfitsWithItem outfits={outfits} onOpen={openOutfit} />}
 
         {closeBlocked && <p className="unsaved-notice" role="status">Save or cancel changes before closing.</p>}
 

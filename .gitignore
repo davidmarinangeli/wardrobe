@@ -6,3 +6,8 @@ dist/
 !.env.example
 *.log
 data/
+
+# Derived from data/model-reference-face.png at runtime (see prepareSubject in
+# scripts/draping-service.mjs). It is a crop of a personal reference photo and
+# it regenerates itself, so it has no business in the history.
+public/drapes/

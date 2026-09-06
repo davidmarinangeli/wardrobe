@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, CheckCircle, SpinnerGap, UploadSimple, WarningCircle } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, CaretDown, CaretUp, Check, CheckCircle, Info, SpinnerGap, UploadSimple, WarningCircle, X } from "@phosphor-icons/react";
 import { api } from "./api.js";
 import { ViewerPanel } from "./components/ViewerPanel.jsx";
 import "./onboarding.css";
@@ -272,6 +272,92 @@ function KeysStep({ provider, onSaved, onBack }) {
   );
 }
 
+function PhotoGuideCard({ kind }) {
+  const [open, setOpen] = useState(false);
+  const isFace = kind === "face";
+
+  return (
+    <div className={`photo-guide-card ${open ? "is-open" : ""}`}>
+      <button
+        type="button"
+        className="photo-guide-toggle"
+        onClick={() => setOpen((prev) => !prev)}
+        aria-expanded={open}
+      >
+        <span className="photo-guide-toggle__title">
+          <Info size={14} weight="bold" />
+          {isFace ? "Face photo guide: Do & Don't for color analysis" : "Full-body guide: Do & Don't for modeled photos"}
+        </span>
+        {open ? <CaretUp size={13} weight="bold" /> : <CaretDown size={13} weight="bold" />}
+      </button>
+
+      {open && (
+        <div className="photo-guide-content">
+          <div className="photo-guide-column is-do">
+            <div className="photo-guide-thumb-wrap">
+              <img
+                src={isFace ? "/onboarding/face_do.jpg" : "/onboarding/fullbody_do.jpg"}
+                alt="Recommended example"
+                className="photo-guide-thumb"
+              />
+              <span className="photo-guide-badge do">
+                <Check size={11} weight="bold" /> DO
+              </span>
+            </div>
+            <ul className="photo-guide-tips">
+              {isFace ? (
+                <>
+                  <li><strong>Natural indirect daylight</strong> (near a window, no harsh sun)</li>
+                  <li><strong>Bare skin</strong> — no foundation or bronzer masking undertone</li>
+                  <li><strong>Hair off forehead</strong> and ears visible for natural contrast</li>
+                  <li><strong>Neutral expression</strong> looking straight into camera</li>
+                </>
+              ) : (
+                <>
+                  <li><strong>Head to toe in frame</strong> — full height with shoes visible</li>
+                  <li><strong>Standing straight</strong> facing camera at eye level</li>
+                  <li><strong>Fitted simple clothes</strong> (plain tee &amp; jeans) for true silhouette</li>
+                  <li><strong>Plain background</strong> with even diffused light and zero clutter</li>
+                </>
+              )}
+            </ul>
+          </div>
+
+          <div className="photo-guide-column is-dont">
+            <div className="photo-guide-thumb-wrap">
+              <img
+                src={isFace ? "/onboarding/face_dont.jpg" : "/onboarding/fullbody_dont.jpg"}
+                alt="Avoided example"
+                className="photo-guide-thumb"
+              />
+              <span className="photo-guide-badge dont">
+                <X size={11} weight="bold" /> AVOID
+              </span>
+            </div>
+            <ul className="photo-guide-tips">
+              {isFace ? (
+                <>
+                  <li><strong>Beauty smoothing filters</strong> that erase natural skin pores</li>
+                  <li><strong>Sunglasses or tinted specs</strong> covering eyes &amp; brows</li>
+                  <li><strong>Harsh yellow lamps</strong> or direct flash glare</li>
+                  <li><strong>Tilted selfies</strong> or hands covering jawline</li>
+                </>
+              ) : (
+                <>
+                  <li><strong>Mirror selfies</strong> with phone blocking torso</li>
+                  <li><strong>Cropped frame</strong> cutting off legs or feet</li>
+                  <li><strong>Bulky winter parkas</strong> or sitting/slouching postures</li>
+                  <li><strong>Dim yellow lighting</strong>, deep shadows, or multiple people</li>
+                </>
+              )}
+            </ul>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PhotosStep({ setup, onSetupChange, onNext, onBack }) {
   const [fullUploaded, setFullUploaded] = useState(setup?.hasModelReference || false);
   const [faceUploaded, setFaceUploaded] = useState(setup?.hasFaceReference || false);
@@ -303,23 +389,30 @@ function PhotosStep({ setup, onSetupChange, onNext, onBack }) {
       <h2>Add a reference photo</h2>
       <p className="onboarding-lede">Wardrobe uses this to put you in every modeled photo. A clear, well-lit full-body shot works best — plain background, facing the camera.</p>
 
-      <Dropzone
-        label="Full-body photo"
-        hint="Drag a photo here, or click to choose one"
-        required
-        uploaded={fullUploaded}
-        previewUrl={fullPreview}
-        busy={busyKind === "full"}
-        onFile={(file) => upload("full", file)}
-      />
-      <Dropzone
-        label="Face close-up"
-        hint="Optional — sharpens facial identity across generations"
-        uploaded={faceUploaded}
-        previewUrl={facePreview}
-        busy={busyKind === "face"}
-        onFile={(file) => upload("face", file)}
-      />
+      <div className="onboarding-photo-group">
+        <Dropzone
+          label="Full-body photo"
+          hint="Drag a photo here, or click to choose one"
+          required
+          uploaded={fullUploaded}
+          previewUrl={fullPreview}
+          busy={busyKind === "full"}
+          onFile={(file) => upload("full", file)}
+        />
+        <PhotoGuideCard kind="full" />
+      </div>
+
+      <div className="onboarding-photo-group">
+        <Dropzone
+          label="Face close-up"
+          hint="Optional — sharpens facial identity across generations and colors"
+          uploaded={faceUploaded}
+          previewUrl={facePreview}
+          busy={busyKind === "face"}
+          onFile={(file) => upload("face", file)}
+        />
+        <PhotoGuideCard kind="face" />
+      </div>
 
       {error && <p className="onboarding-status is-error"><WarningCircle size={14} /> {error}</p>}
 

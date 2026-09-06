@@ -33,7 +33,7 @@
   resize: vertical;
 }
 
-.inspo-notes-field textarea:focus { border-color: var(--accent-warm); box-shadow: 0 0 0 3px rgba(140, 68, 54, .12); outline: none; }
+.inspo-notes-field textarea:focus { border-color: var(--accent-warm); box-shadow: var(--ring-focus); outline: none; }
 
 /* ─── Importer modal ────────────────────────────────────────────────────────── */
 
@@ -107,7 +107,7 @@
   resize: vertical;
 }
 
-.inspo-url-field textarea:focus { border-color: var(--accent-warm); box-shadow: 0 0 0 3px rgba(140, 68, 54, .12); outline: none; }
+.inspo-url-field textarea:focus { border-color: var(--accent-warm); box-shadow: var(--ring-focus); outline: none; }
 
 .inspo-url-hint {
   margin: 0;
