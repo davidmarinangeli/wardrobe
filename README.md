@@ -15,8 +15,6 @@ Your clothes, extracted and organized with AI.
 
 This is a fork of [tandpfun/wardrobe](https://github.com/tandpfun/wardrobe), a local-first app with a simple idea: drop in a photo of a clothing item, let AI cut it out into a clean product shot, and generate an editorial photo of you wearing it. Everything — originals, cutouts, and the wardrobe database — stays on your machine.
 
-![Wardrobe gallery](docs/screenshots/gallery.png)
-
 ![Modeled wardrobe editor](docs/screenshots/editor.png)
 
 The original does three things well:
