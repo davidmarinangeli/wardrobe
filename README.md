@@ -36,6 +36,7 @@ The core import pipeline above is still here, but this fork turns it into a full
 - **Outfits** — combine wardrobe pieces (top, bottom, jacket, shoes, socks, accessory) into saved looks, previewed as a flat lay that reveals a scattered editorial layout on hover. Generate a modeled photo of the full outfit, in Standard or Premium quality, and refine it with a free-text note ("jacket should be darker") to regenerate.
 - **Suggest outfits** — pick an occasion (casual, work, date, sport, event) and get 3–5 AI-generated combinations pulled from your own wardrobe, each with reasoning about color harmony, weather, and occasion fit. It factors in live local weather and your style profile from Inspo. One click saves a suggestion as a real outfit.
 - **Inspo** — one board for style inspiration and the wishlist pieces detected from it. Paste image URLs or drag in photos from anywhere to save a full look; a "Detect items" action analyzes it and breaks it down into individual garment cutouts. Browse by category — Full Look for the saved photos, or any garment type for the pieces detected out of them.
+- **How do I look?** — an AI mirror: upload a photo of yourself actually wearing an outfit and get a fit and color critique, plus swap suggestions pulled from pieces you already own.
 - **My Colors** — a quick seasonal color-analysis quiz (undertone + contrast) that assigns you a season palette, refinable by extracting colors from your own photos. Matching wardrobe items get a badge, and it feeds into outfit suggestions.
 
 **AI & providers**
@@ -49,6 +50,36 @@ The core import pipeline above is still here, but this fork turns it into a full
 
 - **In-dashboard onboarding wizard** — the app walks you through picking a provider, saving your API key, and dropping in a reference photo, right in the browser. No hand-editing `.env` or restarting anything yourself — see [Quick start](#quick-start).
 - **Bulk import and agent-driven setup** — a script for importing a whole folder of old photos at once, plus Codex skills for hands-off importing and outfit generation. See [AGENTS.md](AGENTS.md).
+
+## See it in action
+
+Click any still to play the walkthrough.
+
+### The wardrobe
+
+[![Browsing the wardrobe grid](docs/screenshots/wardrobe-poster.png)](docs/screenshots/wardrobe.mp4)
+
+Every piece you import lands here as a clean cutout on its own card, labeled with its category and how many saved looks it appears in. Filter down to tops, jackets, bottoms, accessories, shoes or socks — or to just the pieces that match your season palette — and open any item to see the original photo it came from, its modeled preview, and the outfits built around it.
+
+### Outfits
+
+[![The outfits board](docs/screenshots/outfits-poster.png)](docs/screenshots/outfits.mp4)
+
+Saved looks, each previewed as a flat lay that scatters into an editorial layout on hover. Build one by hand from your own pieces, or hit **Suggest outfit**, pick an occasion, and get AI-generated combinations drawn from your wardrobe with reasoning about color harmony, weather and occasion fit. Any outfit can be rendered as a modeled photo of you wearing the whole look, and refined with a free-text note ("jacket should be darker") to regenerate.
+
+### Inspo and the AI Mirror
+
+[![Importing inspo images and asking How do I look](docs/screenshots/inspo-howdoilook-poster.png)](docs/screenshots/inspo-howdoilook.mp4)
+
+**Inspo** is a board for looks you want to steal. Paste a batch of image URLs or drag photos in from anywhere, then run **Detect items** to break a saved look down into individual garment cutouts you can browse by category — the wishlist half of your wardrobe.
+
+**How do I look?** is the AI Mirror: upload a photo of yourself actually wearing an outfit and get a fit and color critique — what's working, what isn't — plus swap suggestions pulled from pieces you already own.
+
+### My Colors
+
+[![The seasonal color analysis flow](docs/screenshots/armocromia-poster.png)](docs/screenshots/armocromia.mp4)
+
+A guided seasonal color analysis. Side-by-side comparisons narrow you down — warm against cool, then depth and contrast — until you land on one of the twelve seasons, and you can refine it further by extracting colors from your own photos. Matching wardrobe items pick up a badge, and the palette feeds straight into outfit suggestions.
 
 ## Quick start
 
