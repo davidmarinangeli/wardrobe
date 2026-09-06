@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Gear, Lightbulb } from "@phosphor-icons/react";
 import { WardrobeImportFlow } from "./import-flow.jsx";
+import { api } from "./api.js";
+import { buildOutfitIndex } from "../shared/outfit-index.mjs";
 import { ColorProfileModal, SEASONS, itemMatchesPalette, readColorProfile } from "./color-profile.jsx";
 import { Outfits } from "./outfits.jsx";
 import { Mirror } from "./mirror.jsx";
@@ -11,6 +13,8 @@ import { PageShell } from "./components/PageShell.jsx";
 import { PageStatus } from "./components/PageStatus.jsx";
 import { useTypeFilteredItems } from "./hooks/useTypeFilteredItems.js";
 import { DISMISS_KEY as ONBOARDING_DISMISS_KEY, Onboarding, RESUME_KEY as ONBOARDING_RESUME_KEY } from "./onboarding.jsx";
+
+const EMPTY_OUTFIT_INDEX = { outfits: {}, byItem: {} };
 
 const STORAGE_KEY = "open-wardrobe-edits-v1";
 const DELETED_STORAGE_KEY = "open-wardrobe-deleted-v1";
@@ -93,6 +97,25 @@ export function App() {
   const [showInspoImporter, setShowInspoImporter] = useState(false);
   const [showOutfitBuilder, setShowOutfitBuilder] = useState(false);
   const [showOutfitSuggestions, setShowOutfitSuggestions] = useState(false);
+  // Which saved outfits use each piece. Lives here rather than in Outfits
+  // because the wardrobe grid is the surface that asks the question, and that
+  // tab must not have to mount Outfits (or wait on the full outfit list) to
+  // answer it. Refetched on every return to the wardrobe so an outfit built in
+  // the meantime is reflected.
+  const [outfitIndex, setOutfitIndex] = useState(EMPTY_OUTFIT_INDEX);
+  const [openOutfitId, setOpenOutfitId] = useState(null);
+
+  useEffect(() => {
+    if (view !== "wardrobe") return undefined;
+    let cancelled = false;
+    // Silent on failure: the count is an enrichment, and a piece with no
+    // outfits looks exactly like a piece whose index didn't load — neither is
+    // an error worth putting in front of someone.
+    api("/api/outfits/index")
+      .then((payload) => { if (!cancelled) setOutfitIndex(buildOutfitIndex(payload.outfits)); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [view]);
 
   useEffect(() => {
     fetch("/api/import/config", { cache: "no-store" })
@@ -159,6 +182,25 @@ export function App() {
   }, []);
 
   const selectedItem = items.find((item) => item.id === selectedId) || null;
+
+  const itemsById = useMemo(() => Object.fromEntries(items.map((item) => [item.id, item])), [items]);
+
+  // Resolved here (not in the viewer) because the piece images the thumbnails
+  // are built from are already in this component's state — the index only
+  // carries ids.
+  const selectedItemOutfits = useMemo(() => {
+    if (!selectedId) return [];
+    return (outfitIndex.byItem[selectedId] || [])
+      .map((id) => outfitIndex.outfits[id])
+      .filter(Boolean)
+      .map((outfit) => ({ ...outfit, pieces: outfit.itemIds.map((id) => itemsById[id]).filter(Boolean) }));
+  }, [selectedId, outfitIndex, itemsById]);
+
+  const openOutfit = useCallback((outfitId) => {
+    setSelectedId(null);
+    setOpenOutfitId(outfitId);
+    setView("outfits");
+  }, []);
 
   const paletteFilter = useCallback(
     (item) => itemMatchesPalette(item, colorProfile),
@@ -305,6 +347,8 @@ export function App() {
           onCloseBuilder={() => setShowOutfitBuilder(false)}
           showSuggestions={showOutfitSuggestions}
           onCloseSuggestions={() => setShowOutfitSuggestions(false)}
+          openOutfitId={openOutfitId}
+          onOutfitOpened={() => setOpenOutfitId(null)}
         />
       ) : (
         <PageShell
@@ -370,6 +414,7 @@ export function App() {
                     item={item}
                     index={index}
                     selected={selectedId === item.id}
+                    outfitCount={outfitIndex.byItem[item.id]?.length || 0}
                     onOpen={(id, element) => { setOpenedFrom(element); setSelectedId(id); }}
                   />
                 ))}
@@ -379,7 +424,7 @@ export function App() {
         </PageShell>
       )}
 
-      {selectedItem && <ItemViewer item={selectedItem} openedFrom={openedFrom} onClose={() => setSelectedId(null)} onSave={saveItem} onDelete={deleteItem} onGenerateModeled={generateModeledPhoto} premiumAllowed={premiumAllowed} />}
+      {selectedItem && <ItemViewer item={selectedItem} openedFrom={openedFrom} onClose={() => setSelectedId(null)} onSave={saveItem} onDelete={deleteItem} onGenerateModeled={generateModeledPhoto} premiumAllowed={premiumAllowed} outfits={selectedItemOutfits} onOpenOutfit={openOutfit} />}
       {showColorQuiz && (
         <ColorProfileModal
           initialProfile={colorProfile}

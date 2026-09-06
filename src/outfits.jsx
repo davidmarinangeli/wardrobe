@@ -474,7 +474,7 @@ function SuggestionNudges({ items, colorProfile, onOpenColorQuiz }) {
 // there's exactly one "add" and one "AI action" button per view, not a
 // second pair duplicated on the page itself. builderOutfit (which outfit,
 // if any, is being edited) stays local — the topbar doesn't need to know.
-export function Outfits({ items, premiumAllowed = true, colorProfile, onOpenColorQuiz, showBuilder, onOpenBuilder, onCloseBuilder, showSuggestions, onCloseSuggestions }) {
+export function Outfits({ items, premiumAllowed = true, colorProfile, onOpenColorQuiz, showBuilder, onOpenBuilder, onCloseBuilder, showSuggestions, onCloseSuggestions, openOutfitId, onOutfitOpened }) {
   const [outfits, setOutfits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -488,6 +488,16 @@ export function Outfits({ items, premiumAllowed = true, colorProfile, onOpenColo
       .catch((requestError) => setError(requestError.message))
       .finally(() => setLoading(false));
   }, []);
+
+  // Arriving from a wardrobe piece ("in 3 looks" -> this outfit). The id is set
+  // before this tab has finished loading its outfits, which is fine: the viewer
+  // renders off a lookup that simply finds nothing until the list arrives.
+  useEffect(() => {
+    if (!openOutfitId) return;
+    setViewingOutfitId(openOutfitId);
+    setOpenedFrom(null);
+    onOutfitOpened?.();
+  }, [openOutfitId, onOutfitOpened]);
 
   const hasProcessingOutfit = outfits.some((outfit) => outfit.modeledStatus === "processing");
 

@@ -894,6 +894,11 @@ button { font: inherit; }
   text-transform: uppercase;
 }
 
+/* "in 3 looks" — the count rides the type line instead of becoming the grid's
+   first badge. Warm ink rather than muted so it is scannable down a column of
+   cards without adding a mark on the cutout. */
+.gallery-item__outfits { color: var(--accent-warm); }
+
 @media (hover: hover) and (pointer: fine) {
   .gallery-item:hover .gallery-item__art {
     transform: translateY(-3px);
@@ -1296,6 +1301,102 @@ button { font: inherit; }
   font-weight: 450;
   letter-spacing: .05em;
   text-transform: uppercase;
+}
+
+/* Outfits this piece is already in. Sits below the editor as part of the
+   piece's detail; renders nothing at all when there are none. */
+.item-outfits {
+  margin: 4px 0 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.item-outfits .details-label { margin-bottom: 12px; }
+
+.item-outfits__row {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+}
+
+.item-outfits__card {
+  flex: 0 0 auto;
+  width: 76px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  transition: transform 220ms var(--ease-out);
+}
+
+.item-outfits__art {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  overflow: hidden;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-stage);
+  box-shadow: var(--glass-edge), var(--shadow-xs);
+}
+
+.item-outfits__art img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* No model photo yet: the pieces stand in for it, overlapped so three of them
+   still read as one look rather than three thumbnails. */
+.item-outfits__pieces {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.item-outfits__pieces img {
+  width: 60%;
+  height: 100%;
+  object-fit: contain;
+  filter: var(--shadow-contact);
+}
+
+.item-outfits__pieces img + img { margin-left: -22%; }
+
+.item-outfits__name {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .item-outfits__card:hover { transform: translateY(-2px); }
+}
+
+.item-outfits__card:focus-visible {
+  outline: none;
+}
+
+.item-outfits__card:focus-visible .item-outfits__art {
+  outline: 2px solid var(--accent-warm);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .item-outfits__card { transition: none; }
+  .item-outfits__card:hover { transform: none; }
 }
 
 .detail-tags {

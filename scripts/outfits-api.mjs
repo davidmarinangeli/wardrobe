@@ -4,6 +4,7 @@ import path from "node:path";
 import { atomicJson, buildModeledPrompt, checkSetup, computeIdentityProfile, geminiAnalyzeOutfitStyle, geminiEdit, isLikelyBottom, isLikelyCroppedOrShortBottom, isLikelySocks, isPremiumAllowed, loadFaceReference, miniMaxEdit, openAIAnalyzeOutfitStyle, openAIEdit, readAiMode, resolveApiKey, resolveModeledModel, resolveProvider } from "./import-job-api.mjs";
 
 import { recordSignal } from "./preferences-api.mjs";
+import { summarizeOutfits } from "../shared/outfit-index.mjs";
 
 const OUTFIT_ASSET_ROOT = "/api/outfits/assets";
 
@@ -184,6 +185,12 @@ export function outfitsApi(options = {}) {
     try {
       if (url.pathname === "/api/outfits" && req.method === "GET") {
         return json(res, 200, await loadOutfits());
+      }
+      // Read-only, for the wardrobe grid: which outfits use which pieces, minus
+      // the model photo state, style prose and timestamps the full list carries.
+      // See shared/outfit-index.mjs for why the grouping happens on the client.
+      if (url.pathname === "/api/outfits/index" && req.method === "GET") {
+        return json(res, 200, { outfits: summarizeOutfits(await loadOutfits()) });
       }
       if (url.pathname === "/api/outfits" && req.method === "POST") {
         const input = await body(req);
