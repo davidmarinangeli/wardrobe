@@ -53,23 +53,29 @@ The core import pipeline above is still here, but this fork turns it into a full
 
 ## See it in action
 
-Click any still to play the walkthrough.
+Each clip plays on loop below. The full-quality MP4 is linked under each one.
 
 ### The wardrobe
 
-[![Browsing the wardrobe grid](docs/screenshots/wardrobe-poster.png)](docs/screenshots/wardrobe.mp4)
+![Browsing the wardrobe grid](docs/screenshots/wardrobe.webp)
+
+<sub>[Full quality MP4 →](docs/screenshots/wardrobe.mp4)</sub>
 
 Every piece you import lands here as a clean cutout on its own card, labeled with its category and how many saved looks it appears in. Filter down to tops, jackets, bottoms, accessories, shoes or socks — or to just the pieces that match your season palette — and open any item to see the original photo it came from, its modeled preview, and the outfits built around it.
 
 ### Outfits
 
-[![The outfits board](docs/screenshots/outfits-poster.png)](docs/screenshots/outfits.mp4)
+![The outfits board](docs/screenshots/outfits.webp)
+
+<sub>[Full quality MP4 →](docs/screenshots/outfits.mp4)</sub>
 
 Saved looks, each previewed as a flat lay that scatters into an editorial layout on hover. Build one by hand from your own pieces, or hit **Suggest outfit**, pick an occasion, and get AI-generated combinations drawn from your wardrobe with reasoning about color harmony, weather and occasion fit. Any outfit can be rendered as a modeled photo of you wearing the whole look, and refined with a free-text note ("jacket should be darker") to regenerate.
 
 ### Inspo and the AI Mirror
 
-[![Importing inspo images and asking How do I look](docs/screenshots/inspo-howdoilook-poster.png)](docs/screenshots/inspo-howdoilook.mp4)
+![Importing inspo images and asking How do I look](docs/screenshots/inspo-howdoilook.webp)
+
+<sub>[Full quality MP4 →](docs/screenshots/inspo-howdoilook.mp4)</sub>
 
 **Inspo** is a board for looks you want to steal. Paste a batch of image URLs or drag photos in from anywhere, then run **Detect items** to break a saved look down into individual garment cutouts you can browse by category — the wishlist half of your wardrobe.
 
@@ -77,7 +83,9 @@ Saved looks, each previewed as a flat lay that scatters into an editorial layout
 
 ### My Colors
 
-[![The seasonal color analysis flow](docs/screenshots/armocromia-poster.png)](docs/screenshots/armocromia.mp4)
+![The seasonal color analysis flow](docs/screenshots/armocromia.webp)
+
+<sub>[Full quality MP4 →](docs/screenshots/armocromia.mp4)</sub>
 
 A guided seasonal color analysis. Side-by-side comparisons narrow you down — warm against cool, then depth and contrast — until you land on one of the twelve seasons, and you can refine it further by extracting colors from your own photos. Matching wardrobe items pick up a badge, and the palette feeds straight into outfit suggestions.
 
