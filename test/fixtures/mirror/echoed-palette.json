@@ -1,0 +1,31 @@
+{
+  "name": "a loud outfit whose colors repeat",
+  "why": "The guard on the new colour rule. This carries just as many colours as the alley photo, but each one turns up twice — which is exactly what makes a maximalist outfit read as chosen. If 'colors don't echo' fires here it has become the hue-count rule it was written to replace.",
+  "perception": {
+    "register": "eclectic",
+    "photoQuality": "clear",
+    "garments": [
+      { "region": "accessory", "description": "wool beanie", "color": "red", "colorHex": "#c0392b", "secondaryHex": null, "material": "wool", "patterned": false, "patternScale": null, "volume": "regular", "formality": 2, "hemNotes": null, "hemSeverity": null, "confidence": "high" },
+      { "region": "upperbody", "description": "striped rugby shirt", "color": "teal", "colorHex": "#1f8a80", "secondaryHex": "#c0392b", "material": "cotton", "patterned": true, "patternScale": "bold", "volume": "regular", "formality": 2, "hemNotes": null, "hemSeverity": null, "confidence": "high" },
+      { "region": "lowerbody", "description": "corduroy trousers", "color": "teal", "colorHex": "#2a9d8f", "secondaryHex": null, "material": "corduroy", "patterned": false, "patternScale": null, "volume": "regular", "formality": 2, "hemNotes": null, "hemSeverity": null, "confidence": "high" },
+      { "region": "legwear", "description": "ribbed socks", "color": "red", "colorHex": "#b83a2e", "secondaryHex": null, "material": "wool", "patterned": false, "patternScale": null, "volume": "regular", "formality": 2, "hemNotes": null, "hemSeverity": null, "confidence": "high" },
+      { "region": "footwear", "description": "suede boots", "color": "brown", "colorHex": "#6b4b2a", "secondaryHex": null, "material": "suede", "patterned": false, "patternScale": null, "volume": "regular", "formality": 2, "hemNotes": null, "hemSeverity": null, "confidence": "high" }
+    ]
+  },
+  "judgment": {
+    "findings": [
+      { "ruleId": "no-color-echo", "garmentIndices": [0, 1, 2, 3], "confidence": "high", "summary": "Lots of color going on at once." },
+      { "ruleId": "weather-split", "garmentIndices": [0, 2, 4], "confidence": "high", "summary": "Wool, corduroy and suede." }
+    ],
+    "works": [{ "text": "The red in the beanie comes back in the socks and again in the shirt's stripe, which is what makes the whole thing read as chosen.", "garmentIndices": [0, 1, 3] }]
+  },
+  "expect": {
+    "verdict": "clean",
+    "issueIds": [],
+    "rejects": {
+      "no-color-echo": "every color here turns up on a second piece — the repetition is the point, and this rule is about the absence of it",
+      "weather-split": "wool, corduroy and suede all belong to the same cold end; nothing here is pulling toward hot weather"
+    },
+    "minWorks": 1
+  }
+}

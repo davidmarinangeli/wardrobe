@@ -4,6 +4,7 @@ import { OptimizedImage } from "./OptimizedImage.jsx";
 import { api } from "./api.js";
 import { useViewerKeyboard } from "./hooks/useViewerKeyboard.js";
 import { usePopoverOrigin } from "./hooks/usePopoverOrigin.js";
+import { MirrorVariantHost, useMirrorVariant } from "./prototypes/mirror/MirrorVariantHost.jsx";
 import "./mirror.css";
 
 const fileToDataUrl = (file) => new Promise((resolve, reject) => {
@@ -106,6 +107,57 @@ function MirrorSkeleton() {
   );
 }
 
+// A finding can now end in four different places, and the difference between
+// them is the whole point of the rewrite. "Take the belt off" is often the true
+// answer to too much going on, and the old shape — one swap card, or nothing —
+// had no way to say it, so it said the nearest wrong thing instead. "none" is
+// also a real outcome: an observation worth making that no single move fixes.
+const REMEDY_EYEBROW = { replace: "Try instead", add: "Try adding", remove: "Try this" };
+
+function Remedy({ remedy, itemMap }) {
+  if (!remedy) return null;
+
+  // Saying nothing here reads as a dead end, and inventing a swap is how this
+  // feature went wrong in the first place. Some problems are also not one swap
+  // away — three patterns competing is not settled by removing one — so the
+  // rule gets to say what would actually help before falling back to the
+  // honest admission that nothing owned answers it.
+  if (remedy.action === "none") {
+    return (
+      <p className="mirror-issue-no-fix">
+        {remedy.guidance || "Nothing in your wardrobe swaps in cleanly for this one."}
+      </p>
+    );
+  }
+
+  if (remedy.action === "remove") {
+    return (
+      <div className="mirror-issue-fix mirror-issue-fix--remove">
+        <div className="mirror-issue-fix-body">
+          <p className="mirror-issue-fix-eyebrow">{REMEDY_EYEBROW.remove}</p>
+          <p className="mirror-issue-fix-name">Leave the {remedy.target} off</p>
+          <p className="mirror-issue-fix-reason">{remedy.reason}</p>
+        </div>
+      </div>
+    );
+  }
+
+  const item = itemMap[remedy.itemId];
+  if (!item) return null;
+  return (
+    <div className="mirror-issue-fix">
+      <div className="mirror-issue-fix-image">
+        <OptimizedImage src={item.thumbnail || item.image} alt="" sizes="48px" breakpoints={[48, 72]} />
+      </div>
+      <div className="mirror-issue-fix-body">
+        <p className="mirror-issue-fix-eyebrow">{REMEDY_EYEBROW[remedy.action]}</p>
+        <p className="mirror-issue-fix-name">{item.name}</p>
+        <p className="mirror-issue-fix-reason">{remedy.reason}</p>
+      </div>
+    </div>
+  );
+}
+
 const VERDICT_LABEL = (critique) => {
   if (critique.verdict === "clean") return "Clean fit";
   return critique.issues.length === 1 ? "1 thing to adjust" : `${critique.issues.length} things to adjust`;
@@ -133,6 +185,9 @@ export function Mirror({ items }) {
   // from the panel's own rect while it's closed.
   const anchorToTrigger = usePopoverOrigin(triggerRef, panelRef, identityRef);
   const status = useStatusLine(loading);
+  // PROTOTYPE hook — null unless ?mirrorVariant= is in the URL, and always null
+  // in a production build. Remove with src/prototypes/mirror.
+  const prototypeVariant = useMirrorVariant();
 
   const itemMap = Object.fromEntries(items.map((item) => [item.id, item]));
 
@@ -209,7 +264,7 @@ export function Mirror({ items }) {
             </button>
           </header>
 
-          {!photo ? (
+          {!photo && !prototypeVariant ? (
             <div className="mirror-dropzone">
               <UploadSimple size={28} />
               <h2>What do you think of my outfit?</h2>
@@ -219,12 +274,16 @@ export function Mirror({ items }) {
           ) : (
             <div className="mirror-layout">
               <div className="mirror-photo">
-                <img src={photo} alt="Outfit you're wearing" />
+                {photo
+                  ? <img src={photo} alt="Outfit you're wearing" />
+                  /* PROTOTYPE: the panel is reachable with no photo when a
+                     variant is being reviewed, so the frame holds its shape. */
+                  : <div className="mirror-photo__placeholder" />}
                 <div className="mirror-photo-actions">
-                  <button type="button" className="secondary-button" onClick={reset}>
-                    <ArrowCounterClockwise size={15} /> New photo
+                  <button type="button" className="secondary-button" onClick={() => (photo ? reset() : inputRef.current?.click())}>
+                    <ArrowCounterClockwise size={15} /> {photo ? "New photo" : "Choose a photo"}
                   </button>
-                  {!critique && (
+                  {photo && !critique && (
                     <button type="button" className="primary-button" onClick={getFeedback} disabled={loading}>
                       <MagicWand size={15} weight="bold" /> Get feedback
                     </button>
@@ -247,7 +306,11 @@ export function Mirror({ items }) {
                   </>
                 )}
 
-                {!loading && critique && (
+                {!loading && prototypeVariant && (
+                  <MirrorVariantHost variantKey={prototypeVariant} critique={critique} itemMap={itemMap} />
+                )}
+
+                {!loading && !prototypeVariant && critique && (
                   <div className="mirror-critique">
                     <div className="mirror-verdict">
                       <span className={`mirror-verdict-dot${critique.verdict !== "clean" ? " is-attention" : ""}`} />
@@ -268,26 +331,13 @@ export function Mirror({ items }) {
                       <div className="mirror-critique-section">
                         <h3>Room to improve</h3>
                         <div className="mirror-issues">
-                          {critique.issues.map((issue) => {
-                            const fixItem = issue.fix ? itemMap[issue.fix.itemId] : null;
-                            return (
-                              <div className="mirror-issue-card" key={issue.id}>
-                                <p className="mirror-issue-label">{issue.label}</p>
-                                <p className="mirror-issue-summary">{issue.summary}</p>
-                                {issue.fix && fixItem && (
-                                  <div className="mirror-issue-fix">
-                                    <div className="mirror-issue-fix-image">
-                                      <OptimizedImage src={fixItem.thumbnail || fixItem.image} alt="" sizes="48px" breakpoints={[48, 72]} />
-                                    </div>
-                                    <div className="mirror-issue-fix-body">
-                                      <p className="mirror-issue-fix-name">{fixItem.name}</p>
-                                      <p className="mirror-issue-fix-reason">{issue.fix.reason}</p>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
+                          {critique.issues.map((issue) => (
+                            <div className="mirror-issue-card" key={issue.id}>
+                              <p className="mirror-issue-label">{issue.label}</p>
+                              <p className="mirror-issue-summary">{issue.summary}</p>
+                              <Remedy remedy={issue.remedy} itemMap={itemMap} />
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )}

@@ -1,0 +1,28 @@
+{
+  "name": "a printed dress under a plain jacket",
+  "why": "A full-coverage garment cannot fight itself on volume, and a single print is not a pattern problem. Both were places the old engine either fell silent or over-reported.",
+  "perception": {
+    "register": "eclectic",
+    "photoQuality": "clear",
+    "garments": [
+      { "region": "fullbody", "description": "floral midi dress", "color": "red", "colorHex": "#b3222a", "secondaryHex": "#e8d9a0", "patterned": true, "patternScale": "bold", "volume": "relaxed", "formality": 3, "hemNotes": null, "hemSeverity": null, "confidence": "high" },
+      { "region": "outerwear", "description": "denim jacket", "color": "navy", "colorHex": "#263548", "secondaryHex": null, "patterned": false, "patternScale": null, "volume": "relaxed", "formality": 2, "hemNotes": null, "hemSeverity": null, "confidence": "high" }
+    ]
+  },
+  "judgment": {
+    "findings": [
+      { "ruleId": "pattern-load", "garmentIndices": [0, 1], "confidence": "high", "summary": "Two patterns at once." },
+      { "ruleId": "no-anchor", "garmentIndices": [0, 1], "confidence": "high", "summary": "Nothing quiet is holding it down." }
+    ],
+    "works": []
+  },
+  "expect": {
+    "verdict": "clean",
+    "issueIds": [],
+    "rejects": {
+      "pattern-load": "only one of the two pieces is actually patterned",
+      "no-anchor": "the plain navy jacket is a large, quiet, neutral piece — it is the anchor"
+    },
+    "minWorks": 1
+  }
+}

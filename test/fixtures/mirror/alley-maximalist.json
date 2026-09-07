@@ -1,0 +1,198 @@
+{
+  "name": "alley maximalist — the photo this overhaul came from",
+  "why": "Deliberate loud layering over a neutral bottom half. The old engine counted five hues, blamed the accessory region because it was the cheapest to change, and offered a navy baseball cap as the cure for a shirt. Nothing about that answer was true. It is also the case that made the two-observation ceiling untenable: several separate things are true of this outfit at once, and reporting one of them reads as approval of the rest.",
+  "perception": {
+    "register": "eclectic",
+    "photoQuality": "clear",
+    "garments": [
+      {
+        "region": "accessory",
+        "description": "knit beanie",
+        "color": "blue",
+        "colorHex": "#4a6fa5",
+        "secondaryHex": null,
+        "patterned": false,
+        "patternScale": null,
+        "volume": "regular",
+        "formality": 2,
+        "hemNotes": null,
+        "hemSeverity": null,
+        "confidence": "high",
+        "material": "wool"
+      },
+      {
+        "region": "upperbody",
+        "description": "patterned camp shirt",
+        "color": "purple",
+        "colorHex": "#7b5ea7",
+        "secondaryHex": "#d4b83a",
+        "patterned": true,
+        "patternScale": "bold",
+        "volume": "relaxed",
+        "formality": 2,
+        "hemNotes": null,
+        "hemSeverity": null,
+        "confidence": "high",
+        "material": "cotton"
+      },
+      {
+        "region": "upperbody",
+        "description": "mesh tank top",
+        "color": "green",
+        "colorHex": "#b8d94a",
+        "secondaryHex": null,
+        "patterned": false,
+        "patternScale": null,
+        "volume": "regular",
+        "formality": 1,
+        "hemNotes": null,
+        "hemSeverity": null,
+        "confidence": "high",
+        "material": "mesh"
+      },
+      {
+        "region": "accessory",
+        "description": "webbing belt",
+        "color": "pink",
+        "colorHex": "#e8547c",
+        "secondaryHex": null,
+        "patterned": false,
+        "patternScale": null,
+        "volume": "regular",
+        "formality": 1,
+        "hemNotes": null,
+        "hemSeverity": null,
+        "confidence": "high",
+        "material": "nylon"
+      },
+      {
+        "region": "accessory",
+        "description": "crossbody sling bag",
+        "color": "teal",
+        "colorHex": "#2fa8a0",
+        "secondaryHex": "#e8a33d",
+        "patterned": true,
+        "patternScale": "bold",
+        "volume": "regular",
+        "formality": 1,
+        "hemNotes": null,
+        "hemSeverity": null,
+        "confidence": "high",
+        "material": "nylon"
+      },
+      {
+        "region": "lowerbody",
+        "description": "corduroy shorts",
+        "color": "tan",
+        "colorHex": "#a8763f",
+        "secondaryHex": null,
+        "patterned": false,
+        "patternScale": null,
+        "volume": "relaxed",
+        "formality": 2,
+        "hemNotes": null,
+        "hemSeverity": null,
+        "confidence": "high",
+        "material": "corduroy"
+      },
+      {
+        "region": "legwear",
+        "description": "ribbed crew socks",
+        "color": "orange",
+        "colorHex": "#e2622a",
+        "secondaryHex": null,
+        "patterned": false,
+        "patternScale": null,
+        "volume": "regular",
+        "formality": 1,
+        "hemNotes": null,
+        "hemSeverity": null,
+        "confidence": "high",
+        "material": "cotton"
+      },
+      {
+        "region": "footwear",
+        "description": "suede work boots",
+        "color": "tan",
+        "colorHex": "#a8895e",
+        "secondaryHex": null,
+        "patterned": false,
+        "patternScale": null,
+        "volume": "regular",
+        "formality": 2,
+        "hemNotes": null,
+        "hemSeverity": null,
+        "confidence": "high",
+        "material": "suede"
+      }
+    ]
+  },
+  "judgment": {
+    "findings": [
+      {
+        "ruleId": "no-focal-point",
+        "garmentIndices": [
+          1,
+          2,
+          4
+        ],
+        "confidence": "medium",
+        "summary": "The printed camp shirt, the green mesh tank and the sling bag are all pitched at the same volume, so nothing gets to lead."
+      },
+      {
+        "ruleId": "no-color-echo",
+        "garmentIndices": [
+          0,
+          2,
+          3,
+          4,
+          6
+        ],
+        "confidence": "high",
+        "summary": "The blue beanie, green tank, pink belt, teal bag and orange socks each bring a color that turns up nowhere else."
+      },
+      {
+        "ruleId": "weather-split",
+        "garmentIndices": [
+          2,
+          5,
+          7
+        ],
+        "confidence": "high",
+        "summary": "The mesh tank is a hot-weather fabric against corduroy shorts and suede boots."
+      },
+      {
+        "ruleId": "color-clutter",
+        "garmentIndices": [
+          0,
+          3,
+          6
+        ],
+        "confidence": "high",
+        "summary": "Blue, pink and orange are all going at once."
+      }
+    ],
+    "works": [
+      {
+        "text": "The tan cords and the boots hold the bottom half completely steady, which is what lets the top half be as loud as it is.",
+        "garmentIndices": [
+          5,
+          7
+        ]
+      }
+    ]
+  },
+  "expect": {
+    "verdict": "notable",
+    "issueIds": [
+      "no-color-echo",
+      "weather-split",
+      "no-focal-point"
+    ],
+    "rejects": {
+      "color-clutter": "not offered to the judge at all in an eclectic outfit — counting hues is the wrong question for a deliberate mix, and no-color-echo asks the right one"
+    },
+    "forbidRemedyPart": "accessories_up",
+    "minWorks": 1
+  }
+}

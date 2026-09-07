@@ -12,21 +12,25 @@
 // conflicts with another garment — a jacket layers over a shirt or over a dress
 // equally well, so it is never blocked and never blocks.
 // mirrorRegion: the coarser region id the Mirror critique perceives garments in
-// (scripts/style-rules.mjs). Several parts may share a region — the FIRST part
-// listed for a region is the canonical one used for reverse lookups. null when
-// a part has no Mirror-critique counterpart, as `socks` never has.
+// (scripts/style-rules.mjs). Several parts may share a region — REGION_TO_PARTS
+// keeps ALL of them, so a replacement offered for a lower-body problem can be a
+// skirt or a pair of shorts and not only a trouser. null when a part has no
+// Mirror-critique counterpart.
+// surface: roughly how much of the visible outfit the part occupies, 1-5. The
+// critique weights colour and pattern by this, so a sock never outweighs a
+// coat, and it decides which garment a whole-outfit problem is pinned on.
 export const GARMENT_PARTS = [
-  { id: "upperbody", label: "Tops", singular: "Top", coverage: "upper", mirrorRegion: "upperbody" },
-  { id: "bodysuit", label: "Bodysuits", singular: "Bodysuit", coverage: "upper", mirrorRegion: "upperbody" },
-  { id: "wholebody_up", label: "Jackets", singular: "Jacket", coverage: "upper", mirrorRegion: "outerwear", layer: true },
-  { id: "dress", label: "Dresses", singular: "Dress", coverage: "full", mirrorRegion: "fullbody" },
-  { id: "jumpsuit", label: "Jumpsuits", singular: "Jumpsuit", coverage: "full", mirrorRegion: "fullbody" },
-  { id: "lowerbody", label: "Bottoms", singular: "Bottom", coverage: "lower", mirrorRegion: "lowerbody" },
-  { id: "skirt", label: "Skirts", singular: "Skirt", coverage: "lower", mirrorRegion: "lowerbody" },
-  { id: "shorts", label: "Shorts", singular: "Shorts", coverage: "lower", mirrorRegion: "lowerbody" },
-  { id: "accessories_up", label: "Accessories", singular: "Accessory", coverage: "accessory", mirrorRegion: "accessory" },
-  { id: "shoes", label: "Shoes", singular: "Shoes", coverage: "feet", mirrorRegion: "footwear" },
-  { id: "socks", label: "Socks", singular: "Socks", coverage: "feet", mirrorRegion: null },
+  { id: "upperbody", label: "Tops", singular: "Top", coverage: "upper", mirrorRegion: "upperbody", surface: 4 },
+  { id: "bodysuit", label: "Bodysuits", singular: "Bodysuit", coverage: "upper", mirrorRegion: "upperbody", surface: 4 },
+  { id: "wholebody_up", label: "Jackets", singular: "Jacket", coverage: "upper", mirrorRegion: "outerwear", layer: true, surface: 4 },
+  { id: "dress", label: "Dresses", singular: "Dress", coverage: "full", mirrorRegion: "fullbody", surface: 5 },
+  { id: "jumpsuit", label: "Jumpsuits", singular: "Jumpsuit", coverage: "full", mirrorRegion: "fullbody", surface: 5 },
+  { id: "lowerbody", label: "Bottoms", singular: "Bottom", coverage: "lower", mirrorRegion: "lowerbody", surface: 4 },
+  { id: "skirt", label: "Skirts", singular: "Skirt", coverage: "lower", mirrorRegion: "lowerbody", surface: 4 },
+  { id: "shorts", label: "Shorts", singular: "Shorts", coverage: "lower", mirrorRegion: "lowerbody", surface: 3 },
+  { id: "accessories_up", label: "Accessories", singular: "Accessory", coverage: "accessory", mirrorRegion: "accessory", surface: 1 },
+  { id: "shoes", label: "Shoes", singular: "Shoes", coverage: "feet", mirrorRegion: "footwear", surface: 2 },
+  { id: "socks", label: "Socks", singular: "Socks", coverage: "feet", mirrorRegion: "legwear", surface: 1 },
 ];
 
 export const GARMENT_PART_IDS = GARMENT_PARTS.map((part) => part.id);
@@ -73,14 +77,59 @@ export const GARMENT_DISAMBIGUATION_RULES = [
 export const GARMENT_DISAMBIGUATION_PROSE = GARMENT_DISAMBIGUATION_RULES.map((rule) => `- ${rule}`).join("\n");
 
 // Mirror perception region <-> wardrobe part vocabulary. Only parts carrying a
-// mirrorRegion participate. Region -> part keeps the first part listed for that
-// region, so adding e.g. `skirt` alongside `lowerbody` never steals the
-// canonical target the critique offers as a replacement.
-export const REGION_TO_PART = GARMENT_PARTS.reduce((map, part) => {
-  if (part.mirrorRegion && !(part.mirrorRegion in map)) map[part.mirrorRegion] = part.id;
+// mirrorRegion participate.
+//
+// REGION_TO_PARTS keeps EVERY part in a region, and it is what the critique
+// searches when it offers a replacement. The old single-part map silently threw
+// the rest away: `lowerbody` resolved to trousers alone, so someone wearing
+// shorts could only ever be offered a trouser, and their own shorts and skirts
+// were unreachable. REGION_TO_PART is kept as the canonical//first part for the
+// places that need one name rather than a set.
+export const REGION_TO_PARTS = GARMENT_PARTS.reduce((map, part) => {
+  if (!part.mirrorRegion) return map;
+  (map[part.mirrorRegion] ??= []).push(part.id);
   return map;
 }, {});
+export const REGION_TO_PART = Object.fromEntries(
+  Object.entries(REGION_TO_PARTS).map(([region, parts]) => [region, parts[0]]),
+);
 export const PART_TO_REGION = Object.fromEntries(
   GARMENT_PARTS.filter((part) => part.mirrorRegion).map((part) => [part.id, part.mirrorRegion]),
 );
-export const MIRROR_REGIONS = Object.keys(REGION_TO_PART);
+export const MIRROR_REGIONS = Object.keys(REGION_TO_PARTS);
+
+// How much of the visible outfit a region occupies. A whole-outfit problem gets
+// pinned on what is actually driving it rather than on whatever is cheapest to
+// change — the old priority list blamed `accessory` first for every colour
+// problem, which is how a hat came to be offered as the cure for a shirt.
+export const REGION_SURFACE = Object.fromEntries(
+  Object.entries(REGION_TO_PARTS).map(([region, parts]) => [
+    region,
+    Math.max(...parts.map((id) => GARMENT_PART_MAP[id].surface)),
+  ]),
+);
+
+// Accessories are one wardrobe part but many different objects. Without a
+// sub-type the critique will answer a belt problem with a hat, because both are
+// `accessories_up` and nothing distinguishes them. Free text is all we have to
+// go on (item names and tags, and the vision model's short description), so
+// these match on the words people actually use.
+export const ACCESSORY_KINDS = [
+  { id: "headwear", label: "hat", pattern: /\b(hat|cap|beanie|bucket|visor|headband|bandana)\b/ },
+  { id: "belt", label: "belt", pattern: /\bbelt\b/ },
+  { id: "bag", label: "bag", pattern: /\b(bag|backpack|tote|sling|crossbody|fanny|bumbag|purse|satchel)\b/ },
+  { id: "scarf", label: "scarf", pattern: /\b(scarf|shawl|neckerchief|tie|bowtie)\b/ },
+  { id: "eyewear", label: "eyewear", pattern: /\b(glasses|sunglasses|shades|eyewear|spectacles)\b/ },
+  { id: "jewellery", label: "jewellery", pattern: /\b(necklace|chain|bracelet|ring|earring|watch|pendant)\b/ },
+  { id: "gloves", label: "gloves", pattern: /\bglove/ },
+];
+
+/**
+ * Best-effort accessory sub-type from free text. Returns null when nothing
+ * matches, which the caller must treat as "could be anything" — never as a
+ * licence to swap it for an unrelated object.
+ */
+export function accessoryKind(text) {
+  const haystack = String(text || "").toLowerCase();
+  return ACCESSORY_KINDS.find((kind) => kind.pattern.test(haystack))?.id || null;
+}

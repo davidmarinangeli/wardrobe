@@ -1,0 +1,107 @@
+{
+  "overall": "3 things worth a look here: colors don't echo, fabrics from different weather and nothing leads.",
+  "verdict": "notable",
+  "garments": [
+    {
+      "region": "accessory",
+      "description": "knit beanie",
+      "colorHex": "#4a6fa5"
+    },
+    {
+      "region": "upperbody",
+      "description": "patterned camp shirt",
+      "colorHex": "#7b5ea7"
+    },
+    {
+      "region": "upperbody",
+      "description": "mesh tank top",
+      "colorHex": "#b8d94a"
+    },
+    {
+      "region": "accessory",
+      "description": "webbing belt",
+      "colorHex": "#e8547c"
+    },
+    {
+      "region": "accessory",
+      "description": "crossbody sling bag",
+      "colorHex": "#2fa8a0"
+    },
+    {
+      "region": "lowerbody",
+      "description": "corduroy shorts",
+      "colorHex": "#a8763f"
+    },
+    {
+      "region": "legwear",
+      "description": "ribbed crew socks",
+      "colorHex": "#e2622a"
+    },
+    {
+      "region": "footwear",
+      "description": "suede work boots",
+      "colorHex": "#a8895e"
+    }
+  ],
+  "register": "eclectic",
+  "photoQuality": "clear",
+  "works": [
+    "The tan cords and the boots hold the bottom half completely steady, which is what lets the top half be as loud as it is."
+  ],
+  "issues": [
+    {
+      "id": "no-color-echo",
+      "region": "upperbody",
+      "targetIndex": 2,
+      "citedIndices": [
+        0,
+        2,
+        3,
+        4,
+        6
+      ],
+      "label": "Colors don't echo",
+      "summary": "The blue beanie, green tank, pink belt, teal bag and orange socks each bring a color that turns up nowhere else.",
+      "confidence": "high",
+      "remedy": {
+        "action": "none",
+        "guidance": "Repeating one of these colors somewhere else — a second piece in the same family — would tie them together."
+      }
+    },
+    {
+      "id": "weather-split",
+      "region": "upperbody",
+      "targetIndex": 2,
+      "citedIndices": [
+        2,
+        5,
+        7
+      ],
+      "label": "Fabrics from different weather",
+      "summary": "The mesh tank is a hot-weather fabric against corduroy shorts and suede boots.",
+      "confidence": "high",
+      "remedy": {
+        "action": "replace",
+        "itemId": "import-a40cb146-22a7-4ea8-bd9c-37a91d521d80",
+        "reason": "Made of something that belongs to the same weather as the rest."
+      }
+    },
+    {
+      "id": "no-focal-point",
+      "region": "upperbody",
+      "targetIndex": 2,
+      "citedIndices": [
+        1,
+        2,
+        4
+      ],
+      "label": "Nothing leads",
+      "summary": "The printed camp shirt, the green mesh tank and the sling bag are all pitched at the same volume, so nothing gets to lead.",
+      "confidence": "medium",
+      "remedy": {
+        "action": "none",
+        "guidance": "Decide which piece is the one you want noticed first, and let everything else sit behind it."
+      }
+    }
+  ]
+}

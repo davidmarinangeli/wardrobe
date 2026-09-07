@@ -1,0 +1,312 @@
+<title>Mirror bench</title>
+<style>
+  :root { --ink:#1c1b19; --muted:#6b6862; --line:#e2ded6; --paper:#faf8f4; --raised:#fff; --ok:#3f7d4e; --warn:#a8762a; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --ink:#f0ece5; --muted:#9d988f; --line:#33312e; --paper:#171614; --raised:#201f1c; --ok:#7fb389; --warn:#d0a25c; } }
+  :root[data-theme="dark"] { --ink:#f0ece5; --muted:#9d988f; --line:#33312e; --paper:#171614; --raised:#201f1c; --ok:#7fb389; --warn:#d0a25c; }
+  body { background:var(--paper); color:var(--ink); font:15px/1.55 ui-sans-serif,system-ui,sans-serif; margin:0; padding:40px 24px 64px; }
+  .wrap { max-width:1200px; margin:0 auto; }
+  h1 { font-size:28px; letter-spacing:-0.02em; margin:0 0 4px; }
+  .lede { color:var(--muted); margin:0 0 32px; max-width:60ch; }
+  .grid { display:grid; gap:16px; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); }
+  .card { background:var(--raised); border:1px solid var(--line); border-radius:14px; padding:18px; }
+  .card[data-verdict="clean"] { border-left:3px solid var(--ok); }
+  .card[data-verdict="notable"] { border-left:3px solid var(--warn); }
+  h2 { font-size:15px; margin:0; }
+  .meta { color:var(--muted); font-size:12px; margin:2px 0 12px; text-transform:lowercase; }
+  .overall { margin:0 0 12px; font-size:14px; }
+  h3 { font-size:10px; text-transform:uppercase; letter-spacing:.12em; color:var(--muted); margin:16px 0 6px; }
+  ul { margin:0; padding-left:18px; font-size:13px; }
+  .garments { list-style:none; padding:0; display:flex; flex-wrap:wrap; gap:6px; font-size:11px; color:var(--muted); }
+  .garments li { display:flex; align-items:center; gap:4px; border:1px solid var(--line); border-radius:999px; padding:2px 8px; }
+  .swatch { width:9px; height:9px; border-radius:50%; border:1px solid rgba(128,128,128,.35); }
+  .issue { border-top:1px solid var(--line); padding-top:10px; margin-top:10px; font-size:13px; }
+  .issue p { margin:0 0 4px; }
+  .label { font-weight:600; }
+  .remedy { color:var(--muted); font-size:12px; }
+</style>
+<div class="wrap">
+  <h1>Mirror bench</h1>
+  <p class="lede">Every scenario the engine is tested against, rendered as the panel would show it. Read it for tone and repetition — the assertions are in test/mirror-invariants.test.mjs.</p>
+  <div class="grid">
+<article class="card" data-verdict="minor">
+  <header><h2>three loud colors in a plain outfit</h2><p class="meta">classic · clear · minor</p></header>
+  <p class="overall">One thing worth a look here: too many competing colors.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#be2033"></span>logo tee</li><li><span class="swatch" style="background:#2a9d8f"></span>corduroy trousers</li><li><span class="swatch" style="background:#4a6fa5"></span>knit beanie</li><li><span class="swatch" style="background:#f2f3f5"></span>leather sneakers</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Burgundy logo tee stays controlled against teal corduroy trousers, so the proportions read balanced.</li></ul>
+  <h3>Room to improve</h3><div class="issue"><p class="label">Too many competing colors</p><p>Three or more different non-neutral colors are competing across pieces that take up real space in the outfit.</p><p class="remedy">replace with white mock neck t-shirt — A neutral, so it won't add another competing color.</p></div>
+</article>
+<article class="card" data-verdict="clean">
+  <header><h2>all-neutral outfit</h2><p class="meta">classic · clear · clean</p></header>
+  <p class="overall">This works — nothing here is fighting itself.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#232a3d"></span>open-collar shirt</li><li><span class="swatch" style="background:#f2f4f7"></span>crew neck tee</li><li><span class="swatch" style="background:#1f1f21"></span>pleated trousers</li><li><span class="swatch" style="background:#f2f3f5"></span>leather sneakers</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Navy open-collar shirt stays controlled against black pleated trousers, so the proportions read balanced.</li><li>Everything here (navy, white, black and white) is a neutral, so there's no clash to worry about.</li></ul>
+  
+</article>
+<article class="card" data-verdict="clean">
+  <header><h2>navy shirt with brown cargos</h2><p class="meta">classic · clear · clean</p></header>
+  <p class="overall">This works — nothing here is fighting itself.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#232a3d"></span>open-collar shirt</li><li><span class="swatch" style="background:#f2f4f7"></span>crew neck tee</li><li><span class="swatch" style="background:#71502c"></span>cargo pants</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Navy open-collar shirt stays controlled against brown cargo pants, so the proportions read balanced.</li><li>Everything here (navy, white and brown) is a neutral, so there's no clash to worry about.</li></ul>
+  
+</article>
+<article class="card" data-verdict="minor">
+  <header><h2>red top against olive trousers</h2><p class="meta">classic · clear · minor</p></header>
+  <p class="overall">One thing worth a look here: near-miss color pairing.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#be2033"></span>logo tee</li><li><span class="swatch" style="background:#555c3c"></span>tailored trousers</li><li><span class="swatch" style="background:#f2f3f5"></span>leather sneakers</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Burgundy logo tee stays controlled against olive tailored trousers, so the proportions read balanced.</li></ul>
+  <h3>Room to improve</h3><div class="issue"><p class="label">Near-miss color pairing</p><p>Two non-neutral colors sit far enough apart to look unrelated but close enough to look like they were meant to match — the gap reads as an accident rather than a choice.</p><p class="remedy">replace with white mock neck t-shirt — A neutral, so it sidesteps the near-miss pairing entirely.</p></div>
+</article>
+<article class="card" data-verdict="clean">
+  <header><h2>red top against teal trousers</h2><p class="meta">classic · clear · clean</p></header>
+  <p class="overall">This works — nothing here is fighting itself.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#be2033"></span>logo tee</li><li><span class="swatch" style="background:#2a9d8f"></span>corduroy trousers</li><li><span class="swatch" style="background:#f2f3f5"></span>leather sneakers</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Burgundy logo tee stays controlled against teal corduroy trousers, so the proportions read balanced.</li><li>Red and teal sit opposite on the color wheel — a bold, intentional-looking contrast rather than a mismatch.</li></ul>
+  
+</article>
+<article class="card" data-verdict="notable">
+  <header><h2>six colors, none repeating</h2><p class="meta">eclectic · clear · notable</p></header>
+  <p class="overall">3 things worth a look here: both halves are relaxed, patterns competing and colors don't echo.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#4a6fa5"></span>knit beanie</li><li><span class="swatch" style="background:#7b5ea7"></span>printed camp shirt</li><li><span class="swatch" style="background:#b8d94a"></span>mesh tank top</li><li><span class="swatch" style="background:#e8547c"></span>webbing belt</li><li><span class="swatch" style="background:#2fa8a0"></span>crossbody sling bag</li><li><span class="swatch" style="background:#a8763f"></span>corduroy shorts</li><li><span class="swatch" style="background:#e2622a"></span>ribbed crew socks</li><li><span class="swatch" style="background:#a8895e"></span>suede work boots</li></ul>
+  <h3>What's working</h3><ul class="works"><li>The pieces here sit together without any one of them fighting the rest.</li></ul>
+  <h3>Room to improve</h3><div class="issue"><p class="label">Both halves are relaxed</p><p>The top and the bottom are both relaxed or oversized at once, so the silhouette has no line through it.</p><p class="remedy">replace with olive green tailored trousers — Keeps a fitted line here, balancing out the relaxed piece staying on.</p></div><div class="issue"><p class="label">Patterns competing</p><p>Two or more patterned pieces at a similar scale are asking for attention at once, so neither wins.</p><p class="remedy">replace with navy pullover hoodie — Plain, so the patterned piece staying on gets to lead.</p></div><div class="issue"><p class="label">Colors don't echo</p><p>Four or more different non-neutral colors, and not one of them turns up twice.</p><p class="remedy">no swap — Repeating one of these colors somewhere else — a second piece in the same family — would tie them together.</p></div>
+</article>
+<article class="card" data-verdict="notable">
+  <header><h2>loud but every color repeats</h2><p class="meta">eclectic · clear · notable</p></header>
+  <p class="overall">2 things worth a look here: nothing anchoring it and nothing leads.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#c0392b"></span>wool beanie</li><li><span class="swatch" style="background:#1f8a80"></span>striped rugby shirt</li><li><span class="swatch" style="background:#2a9d8f"></span>corduroy trousers</li><li><span class="swatch" style="background:#b83a2e"></span>ribbed socks</li><li><span class="swatch" style="background:#a8895e"></span>suede work boots</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Teal striped rugby shirt stays controlled against teal corduroy trousers, so the proportions read balanced.</li><li>Red and teal sit opposite on the color wheel — a bold, intentional-looking contrast rather than a mismatch.</li></ul>
+  <h3>Room to improve</h3><div class="issue"><p class="label">Nothing anchoring it</p><p>The outfit carries a lot of color or pattern and has no quiet piece — a neutral, or something dark and plain — holding it down.</p><p class="remedy">replace with Nike Grey Short-Sleeve Oversize T-Shirt — Turns one of the loud pieces into the calm one the rest can sit against.</p></div><div class="issue"><p class="label">Nothing leads</p><p>Every piece is pitched at the same volume, so the eye has nowhere to land first.</p><p class="remedy">replace with corduroy trousers — Quiet enough to let the louder piece lead instead of competing with it.</p></div>
+</article>
+<article class="card" data-verdict="notable">
+  <header><h2>everything at the same lightness</h2><p class="meta">minimal · clear · notable</p></header>
+  <p class="overall">2 things worth a look here: hem needs cleaning up and not much separation.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#a8abad"></span>relaxed tee</li><li><span class="swatch" style="background:#8b8b8b"></span>slim trousers</li><li><span class="swatch" style="background:#9a9da0"></span>mesh runners</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Everything here (grey, grey and grey) is a neutral, so there's no clash to worry about.</li></ul>
+  <h3>Room to improve</h3><div class="issue"><p class="label">Hem needs cleaning up</p><p>The hem stacks or pools at the shoe by more than the cut of the garment calls for.</p><p class="remedy">replace with olive green cargo pants — A cleaner break instead of pooling at the shoe.</p></div><div class="issue"><p class="label">Not much separation</p><p>Every piece sits at roughly the same lightness, so the outfit reads as one block and the individual pieces stop being legible.</p><p class="remedy">replace with Oversized Crew Neck T-Shirt — Opens up the gap in lightness so the pieces read separately.</p></div>
+</article>
+<article class="card" data-verdict="minor">
+  <header><h2>mid greys broken by a white shoe</h2><p class="meta">minimal · clear · minor</p></header>
+  <p class="overall">One thing worth a look here: hem needs cleaning up.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#a8abad"></span>relaxed tee</li><li><span class="swatch" style="background:#8b8b8b"></span>slim trousers</li><li><span class="swatch" style="background:#f2f3f5"></span>leather sneakers</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Everything here (grey, grey and white) is a neutral, so there's no clash to worry about.</li></ul>
+  <h3>Room to improve</h3><div class="issue"><p class="label">Hem needs cleaning up</p><p>The hem stacks or pools at the shoe by more than the cut of the garment calls for.</p><p class="remedy">replace with olive green cargo pants — A cleaner break instead of pooling at the shoe.</p></div>
+</article>
+<article class="card" data-verdict="notable">
+  <header><h2>two bold patterns at once</h2><p class="meta">classic · clear · notable</p></header>
+  <p class="overall">3 things worth a look here: patterns competing, pieces pulling in different directions and near-miss color pairing.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#7b5ea7"></span>printed camp shirt</li><li><span class="swatch" style="background:#1f1f21"></span>pleated trousers</li><li><span class="swatch" style="background:#e2622a"></span>trail runners</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Purple printed camp shirt stays controlled against black pleated trousers, so the proportions read balanced.</li></ul>
+  <h3>Room to improve</h3><div class="issue"><p class="label">Patterns competing</p><p>Two or more patterned pieces at a similar scale are asking for attention at once, so neither wins.</p><p class="remedy">replace with navy pullover hoodie — Plain, so the patterned piece staying on gets to lead.</p></div><div class="issue"><p class="label">Pieces pulling in different directions</p><p>The pieces sit at very different levels of formality and the distance reads as accidental rather than deliberate.</p><p class="remedy">no swap — Bringing this piece closer to the level the rest sits at is the move, whether or not you own the piece that does it.</p></div><div class="issue"><p class="label">Near-miss color pairing</p><p>Two non-neutral colors sit far enough apart to look unrelated but close enough to look like they were meant to match — the gap reads as an accident rather than a choice.</p><p class="remedy">no swap — Either commit to the contrast or take one of the two colors out — the near-miss is the part that reads as accidental.</p></div>
+</article>
+<article class="card" data-verdict="clean">
+  <header><h2>one print against plain pieces</h2><p class="meta">classic · clear · clean</p></header>
+  <p class="overall">This works — nothing here is fighting itself.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#7b5ea7"></span>printed camp shirt</li><li><span class="swatch" style="background:#1f1f21"></span>pleated trousers</li><li><span class="swatch" style="background:#f2f3f5"></span>leather sneakers</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Purple printed camp shirt stays controlled against black pleated trousers, so the proportions read balanced.</li><li>Purple is the only real color in the mix, grounded by neutrals elsewhere — an easy, safe combination.</li></ul>
+  
+</article>
+<article class="card" data-verdict="notable">
+  <header><h2>nothing quiet in a loud outfit</h2><p class="meta">eclectic · clear · notable</p></header>
+  <p class="overall">3 things worth a look here: patterns competing, nothing anchoring it and nothing leads.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#1f8a80"></span>striped rugby shirt</li><li><span class="swatch" style="background:#2a9d8f"></span>corduroy trousers</li><li><span class="swatch" style="background:#e8547c"></span>webbing belt</li><li><span class="swatch" style="background:#e2622a"></span>trail runners</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Teal striped rugby shirt stays controlled against teal corduroy trousers, so the proportions read balanced.</li></ul>
+  <h3>Room to improve</h3><div class="issue"><p class="label">Patterns competing</p><p>Two or more patterned pieces at a similar scale are asking for attention at once, so neither wins.</p><p class="remedy">replace with Nike Grey Short-Sleeve Oversize T-Shirt — Plain, so the patterned piece staying on gets to lead.</p></div><div class="issue"><p class="label">Nothing anchoring it</p><p>The outfit carries a lot of color or pattern and has no quiet piece — a neutral, or something dark and plain — holding it down.</p><p class="remedy">replace with brown wide-leg cargo pants — Turns one of the loud pieces into the calm one the rest can sit against.</p></div><div class="issue"><p class="label">Nothing leads</p><p>Every piece is pitched at the same volume, so the eye has nowhere to land first.</p><p class="remedy">no swap — Decide which piece is the one you want noticed first, and let everything else sit behind it.</p></div>
+</article>
+<article class="card" data-verdict="minor">
+  <header><h2>loud pieces over a plain neutral base</h2><p class="meta">eclectic · clear · minor</p></header>
+  <p class="overall">One thing worth a look here: patterns competing.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#7b5ea7"></span>printed camp shirt</li><li><span class="swatch" style="background:#1f1f21"></span>pleated trousers</li><li><span class="swatch" style="background:#2fa8a0"></span>crossbody sling bag</li><li><span class="swatch" style="background:#f2f3f5"></span>leather sneakers</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Purple printed camp shirt stays controlled against black pleated trousers, so the proportions read balanced.</li></ul>
+  <h3>Room to improve</h3><div class="issue"><p class="label">Patterns competing</p><p>Two or more patterned pieces at a similar scale are asking for attention at once, so neither wins.</p><p class="remedy">take off the crossbody sling bag — Leaves one pattern doing the talking instead of two.</p></div>
+</article>
+<article class="card" data-verdict="notable">
+  <header><h2>several pieces competing to lead</h2><p class="meta">eclectic · clear · notable</p></header>
+  <p class="overall">3 things worth a look here: both halves are relaxed, patterns competing and colors don't echo.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#7b5ea7"></span>printed camp shirt</li><li><span class="swatch" style="background:#b8d94a"></span>mesh tank top</li><li><span class="swatch" style="background:#2fa8a0"></span>crossbody sling bag</li><li><span class="swatch" style="background:#a8763f"></span>corduroy shorts</li><li><span class="swatch" style="background:#e2622a"></span>ribbed crew socks</li></ul>
+  <h3>What's working</h3><ul class="works"><li>The pieces here sit together without any one of them fighting the rest.</li></ul>
+  <h3>Room to improve</h3><div class="issue"><p class="label">Both halves are relaxed</p><p>The top and the bottom are both relaxed or oversized at once, so the silhouette has no line through it.</p><p class="remedy">replace with olive green tailored trousers — Keeps a fitted line here, balancing out the relaxed piece staying on.</p></div><div class="issue"><p class="label">Patterns competing</p><p>Two or more patterned pieces at a similar scale are asking for attention at once, so neither wins.</p><p class="remedy">take off the crossbody sling bag — Leaves one pattern doing the talking instead of two.</p></div><div class="issue"><p class="label">Colors don't echo</p><p>Four or more different non-neutral colors, and not one of them turns up twice.</p><p class="remedy">replace with Nike Grey Short-Sleeve Oversize T-Shirt — Picks up a color already in the outfit instead of introducing another one.</p></div>
+</article>
+<article class="card" data-verdict="notable">
+  <header><h2>linen under wool</h2><p class="meta">classic · clear · notable</p></header>
+  <p class="overall">2 things worth a look here: fabrics from different weather and pieces pulling in different directions.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#3a3d42"></span>wool overcoat</li><li><span class="swatch" style="background:#efe6d5"></span>linen shirt</li><li><span class="swatch" style="background:#3c3f44"></span>wool trousers</li><li><span class="swatch" style="background:#1b1b1d"></span>oxford shoes</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Grey wool overcoat stays controlled against grey wool trousers, so the proportions read balanced.</li><li>Everything here (grey, beige, grey and black) is a neutral, so there's no clash to worry about.</li></ul>
+  <h3>Room to improve</h3><div class="issue"><p class="label">Fabrics from different weather</p><p>Hot-weather fabrics (mesh, linen, silk) are being worn with cold-weather ones (corduroy, wool, fleece, suede).</p><p class="remedy">no swap — The fabrics are pulling toward different weather — worth knowing even if you keep it.</p></div><div class="issue"><p class="label">Pieces pulling in different directions</p><p>The pieces sit at very different levels of formality and the distance reads as accidental rather than deliberate.</p><p class="remedy">no swap — Bringing this piece closer to the level the rest sits at is the move, whether or not you own the piece that does it.</p></div>
+</article>
+<article class="card" data-verdict="clean">
+  <header><h2>wool, corduroy and suede together</h2><p class="meta">classic · clear · clean</p></header>
+  <p class="overall">This works — nothing here is fighting itself.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#c0392b"></span>wool beanie</li><li><span class="swatch" style="background:#3d4e3f"></span>ribbed sweater</li><li><span class="swatch" style="background:#2a9d8f"></span>corduroy trousers</li><li><span class="swatch" style="background:#a8895e"></span>suede work boots</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Grey ribbed sweater stays controlled against teal corduroy trousers, so the proportions read balanced.</li><li>Red and teal sit opposite on the color wheel — a bold, intentional-looking contrast rather than a mismatch.</li></ul>
+  
+</article>
+<article class="card" data-verdict="minor">
+  <header><h2>mesh with corduroy and suede</h2><p class="meta">eclectic · clear · minor</p></header>
+  <p class="overall">One thing worth a look here: fabrics from different weather.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#b8d94a"></span>mesh tank top</li><li><span class="swatch" style="background:#a8763f"></span>corduroy shorts</li><li><span class="swatch" style="background:#a8895e"></span>suede work boots</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Olive mesh tank top stays controlled against tan corduroy shorts, so the proportions read balanced.</li><li>Green is the only real color in the mix, grounded by neutrals elsewhere — an easy, safe combination.</li></ul>
+  <h3>Room to improve</h3><div class="issue"><p class="label">Fabrics from different weather</p><p>Hot-weather fabrics (mesh, linen, silk) are being worn with cold-weather ones (corduroy, wool, fleece, suede).</p><p class="remedy">replace with striped crewneck t-shirt — Made of something that belongs to the same weather as the rest.</p></div>
+</article>
+<article class="card" data-verdict="minor">
+  <header><h2>relaxed top over relaxed bottom</h2><p class="meta">classic · clear · minor</p></header>
+  <p class="overall">One thing worth a look here: both halves are relaxed.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#a8abad"></span>relaxed tee</li><li><span class="swatch" style="background:#a5bed8"></span>wide-leg jeans</li><li><span class="swatch" style="background:#f2f3f5"></span>leather sneakers</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Blue wide-leg jeans carries a bit of drape at the shoe — expected for that cut, not a mistake.</li><li>Sky-blue is the only real color in the mix, grounded by neutrals elsewhere — an easy, safe combination.</li></ul>
+  <h3>Room to improve</h3><div class="issue"><p class="label">Both halves are relaxed</p><p>The top and the bottom are both relaxed or oversized at once, so the silhouette has no line through it.</p><p class="remedy">replace with Light blue dress shirt slim — Keeps a fitted line here, balancing out the relaxed piece staying on.</p></div>
+</article>
+<article class="card" data-verdict="minor">
+  <header><h2>fitted top over relaxed bottom</h2><p class="meta">classic · clear · minor</p></header>
+  <p class="overall">One thing worth a look here: pieces pulling in different directions.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#f6f7f9"></span>dress shirt</li><li><span class="swatch" style="background:#a5bed8"></span>wide-leg jeans</li><li><span class="swatch" style="background:#f2f3f5"></span>leather sneakers</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Blue wide-leg jeans carries a bit of drape at the shoe — expected for that cut, not a mistake.</li><li>Sky-blue is the only real color in the mix, grounded by neutrals elsewhere — an easy, safe combination.</li></ul>
+  <h3>Room to improve</h3><div class="issue"><p class="label">Pieces pulling in different directions</p><p>The pieces sit at very different levels of formality and the distance reads as accidental rather than deliberate.</p><p class="remedy">no swap — Bringing this piece closer to the level the rest sits at is the move, whether or not you own the piece that does it.</p></div>
+</article>
+<article class="card" data-verdict="clean">
+  <header><h2>wide-leg with a slight break</h2><p class="meta">classic · clear · clean</p></header>
+  <p class="overall">This works — nothing here is fighting itself.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#232a3d"></span>open-collar shirt</li><li><span class="swatch" style="background:#a5bed8"></span>wide-leg jeans</li><li><span class="swatch" style="background:#f2f3f5"></span>leather sneakers</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Blue wide-leg jeans carries a bit of drape at the shoe — expected for that cut, not a mistake.</li><li>Sky-blue is the only real color in the mix, grounded by neutrals elsewhere — an easy, safe combination.</li></ul>
+  
+</article>
+<article class="card" data-verdict="minor">
+  <header><h2>wide-leg bunching heavily</h2><p class="meta">classic · clear · minor</p></header>
+  <p class="overall">One thing worth a look here: hem needs cleaning up.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#232a3d"></span>open-collar shirt</li><li><span class="swatch" style="background:#a5bed8"></span>wide-leg jeans</li><li><span class="swatch" style="background:#f2f3f5"></span>leather sneakers</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Sky-blue is the only real color in the mix, grounded by neutrals elsewhere — an easy, safe combination.</li></ul>
+  <h3>Room to improve</h3><div class="issue"><p class="label">Hem needs cleaning up</p><p>The hem stacks or pools at the shoe by more than the cut of the garment calls for.</p><p class="remedy">replace with olive green tailored trousers — A cleaner break instead of pooling at the shoe.</p></div>
+</article>
+<article class="card" data-verdict="minor">
+  <header><h2>slim trousers stacking at the shoe</h2><p class="meta">classic · clear · minor</p></header>
+  <p class="overall">One thing worth a look here: hem needs cleaning up.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#f2f4f7"></span>crew neck tee</li><li><span class="swatch" style="background:#8b8b8b"></span>slim trousers</li><li><span class="swatch" style="background:#f2f3f5"></span>leather sneakers</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Everything here (white, grey and white) is a neutral, so there's no clash to worry about.</li></ul>
+  <h3>Room to improve</h3><div class="issue"><p class="label">Hem needs cleaning up</p><p>The hem stacks or pools at the shoe by more than the cut of the garment calls for.</p><p class="remedy">replace with olive green cargo pants — A cleaner break instead of pooling at the shoe.</p></div>
+</article>
+<article class="card" data-verdict="minor">
+  <header><h2>dress shoes with running shorts</h2><p class="meta">classic · clear · minor</p></header>
+  <p class="overall">One thing worth a look here: pieces pulling in different directions.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#f6f7f9"></span>dress shirt</li><li><span class="swatch" style="background:#1d1c1e"></span>running shorts</li><li><span class="swatch" style="background:#1b1b1d"></span>oxford shoes</li></ul>
+  <h3>What's working</h3><ul class="works"><li>White dress shirt stays controlled against black running shorts, so the proportions read balanced.</li><li>Everything here (white, black and black) is a neutral, so there's no clash to worry about.</li></ul>
+  <h3>Room to improve</h3><div class="issue"><p class="label">Pieces pulling in different directions</p><p>The pieces sit at very different levels of formality and the distance reads as accidental rather than deliberate.</p><p class="remedy">no swap — Bringing this piece closer to the level the rest sits at is the move, whether or not you own the piece that does it.</p></div>
+</article>
+<article class="card" data-verdict="clean">
+  <header><h2>everything pitched the same</h2><p class="meta">classic · clear · clean</p></header>
+  <p class="overall">This works — nothing here is fighting itself.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#232a3d"></span>open-collar shirt</li><li><span class="swatch" style="background:#1f1f21"></span>pleated trousers</li><li><span class="swatch" style="background:#f2f3f5"></span>leather sneakers</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Navy open-collar shirt stays controlled against black pleated trousers, so the proportions read balanced.</li><li>Everything here (navy, black and white) is a neutral, so there's no clash to worry about.</li></ul>
+  
+</article>
+<article class="card" data-verdict="clean">
+  <header><h2>a dress on its own</h2><p class="meta">classic · clear · clean</p></header>
+  <p class="overall">This works — nothing here is fighting itself.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#b3222a"></span>floral midi dress</li><li><span class="swatch" style="background:#f2f3f5"></span>leather sneakers</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Red is the only real color in the mix, grounded by neutrals elsewhere — an easy, safe combination.</li></ul>
+  
+</article>
+<article class="card" data-verdict="minor">
+  <header><h2>a dress under a jacket</h2><p class="meta">eclectic · clear · minor</p></header>
+  <p class="overall">One thing worth a look here: both halves are relaxed.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#b3222a"></span>floral midi dress</li><li><span class="swatch" style="background:#263548"></span>denim jacket</li><li><span class="swatch" style="background:#a8895e"></span>suede work boots</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Red is the only real color in the mix, grounded by neutrals elsewhere — an easy, safe combination.</li></ul>
+  <h3>Room to improve</h3><div class="issue"><p class="label">Both halves are relaxed</p><p>The top and the bottom are both relaxed or oversized at once, so the silhouette has no line through it.</p><p class="remedy">no swap — Keeping one half fitted is the move, whether or not you own the piece that does it.</p></div>
+</article>
+<article class="card" data-verdict="minor">
+  <header><h2>black tie</h2><p class="meta">formal · clear · minor</p></header>
+  <p class="overall">One thing worth a look here: not much separation.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#1a1a1c"></span>column dress</li><li><span class="swatch" style="background:#1b1b1d"></span>oxford shoes</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Everything here (black and black) is a neutral, so there's no clash to worry about.</li></ul>
+  <h3>Room to improve</h3><div class="issue"><p class="label">Not much separation</p><p>Every piece sits at roughly the same lightness, so the outfit reads as one block and the individual pieces stop being legible.</p><p class="remedy">replace with Nike Full Force Low sneaker — Opens up the gap in lightness so the pieces read separately.</p></div>
+</article>
+<article class="card" data-verdict="clean">
+  <header><h2>gym kit</h2><p class="meta">sporty · clear · clean</p></header>
+  <p class="overall">This works — nothing here is fighting itself.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#1f5fbf"></span>training top</li><li><span class="swatch" style="background:#1d1c1e"></span>running shorts</li><li><span class="swatch" style="background:#e2622a"></span>trail runners</li><li><span class="swatch" style="background:#f8f8f8"></span>crew socks</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Blue training top stays controlled against black running shorts, so the proportions read balanced.</li><li>Blue and orange sit opposite on the color wheel — a bold, intentional-looking contrast rather than a mismatch.</li></ul>
+  
+</article>
+<article class="card" data-verdict="minor">
+  <header><h2>workwear layers</h2><p class="meta">workwear · clear · minor</p></header>
+  <p class="overall">One thing worth a look here: both halves are relaxed.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#6e715e"></span>camo overshirt</li><li><span class="swatch" style="background:#1c1b20"></span>pocket tee</li><li><span class="swatch" style="background:#71502c"></span>cargo pants</li><li><span class="swatch" style="background:#a8895e"></span>suede work boots</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Olive is the only real color in the mix, grounded by neutrals elsewhere — an easy, safe combination.</li></ul>
+  <h3>Room to improve</h3><div class="issue"><p class="label">Both halves are relaxed</p><p>The top and the bottom are both relaxed or oversized at once, so the silhouette has no line through it.</p><p class="remedy">replace with olive green tailored trousers — Keeps a fitted line here, balancing out the relaxed piece staying on.</p></div>
+</article>
+<article class="card" data-verdict="clean">
+  <header><h2>no garments at all</h2><p class="meta">classic · clear · clean</p></header>
+  <p class="overall">This works — nothing here is fighting itself.</p>
+  <ul class="garments"></ul>
+  
+  
+</article>
+<article class="card" data-verdict="clean">
+  <header><h2>a single garment</h2><p class="meta">classic · clear · clean</p></header>
+  <p class="overall">This works — nothing here is fighting itself.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#f2f4f7"></span>crew neck tee</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Everything here (white) is a neutral, so there's no clash to worry about.</li></ul>
+  
+</article>
+<article class="card" data-verdict="notable">
+  <header><h2>ten garments</h2><p class="meta">eclectic · clear · notable</p></header>
+  <p class="overall">3 things worth a look here: patterns competing, colors don't echo and nothing leads.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#f2f4f7"></span>crew neck tee</li><li><span class="swatch" style="background:#1c1b20"></span>pocket tee</li><li><span class="swatch" style="background:#a8abad"></span>relaxed tee</li><li><span class="swatch" style="background:#232a3d"></span>open-collar shirt</li><li><span class="swatch" style="background:#efe6d5"></span>linen shirt</li><li><span class="swatch" style="background:#7b5ea7"></span>printed camp shirt</li><li><span class="swatch" style="background:#1f8a80"></span>striped rugby shirt</li><li><span class="swatch" style="background:#b8d94a"></span>mesh tank top</li><li><span class="swatch" style="background:#be2033"></span>logo tee</li><li><span class="swatch" style="background:#3d4e3f"></span>ribbed sweater</li></ul>
+  <h3>What's working</h3><ul class="works"><li>The pieces here sit together without any one of them fighting the rest.</li></ul>
+  <h3>Room to improve</h3><div class="issue"><p class="label">Patterns competing</p><p>Two or more patterned pieces at a similar scale are asking for attention at once, so neither wins.</p><p class="remedy">replace with navy pullover hoodie — Plain, so the patterned piece staying on gets to lead.</p></div><div class="issue"><p class="label">Colors don't echo</p><p>Four or more different non-neutral colors, and not one of them turns up twice.</p><p class="remedy">replace with navy short sleeve open collar shirt — Picks up a color already in the outfit instead of introducing another one.</p></div><div class="issue"><p class="label">Nothing leads</p><p>Every piece is pitched at the same volume, so the eye has nowhere to land first.</p><p class="remedy">no swap — Decide which piece is the one you want noticed first, and let everything else sit behind it.</p></div>
+</article>
+<article class="card" data-verdict="clean">
+  <header><h2>every garment read at low confidence</h2><p class="meta">classic · clear · clean</p></header>
+  <p class="overall">This works — nothing here is fighting itself.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#7b5ea7"></span>printed camp shirt</li><li><span class="swatch" style="background:#a5bed8"></span>wide-leg jeans</li><li><span class="swatch" style="background:#e2622a"></span>trail runners</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Blue wide-leg jeans carries a bit of drape at the shoe — expected for that cut, not a mistake.</li></ul>
+  
+</article>
+<article class="card" data-verdict="notable">
+  <header><h2>a photo the model could barely read</h2><p class="meta">classic · poor · notable</p></header>
+  <p class="overall">2 things worth a look here: both halves are relaxed and near-miss color pairing.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#7b5ea7"></span>printed camp shirt</li><li><span class="swatch" style="background:#a5bed8"></span>wide-leg jeans</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Blue wide-leg jeans carries a bit of drape at the shoe — expected for that cut, not a mistake.</li></ul>
+  <h3>Room to improve</h3><div class="issue"><p class="label">Both halves are relaxed</p><p>The top and the bottom are both relaxed or oversized at once, so the silhouette has no line through it.</p><p class="remedy">replace with patterned knit polo sweater — Keeps a fitted line here, balancing out the relaxed piece staying on.</p></div><div class="issue"><p class="label">Near-miss color pairing</p><p>Two non-neutral colors sit far enough apart to look unrelated but close enough to look like they were meant to match — the gap reads as an accident rather than a choice.</p><p class="remedy">replace with wide-leg pleated trousers — A neutral, so it sidesteps the near-miss pairing entirely.</p></div>
+</article>
+<article class="card" data-verdict="notable">
+  <header><h2>no hex was read off the photo</h2><p class="meta">classic · clear · notable</p></header>
+  <p class="overall">2 things worth a look here: both halves are relaxed and near-miss color pairing.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#bbb"></span>printed camp shirt</li><li><span class="swatch" style="background:#bbb"></span>wide-leg jeans</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Sky-blue wide-leg jeans carries a bit of drape at the shoe — expected for that cut, not a mistake.</li></ul>
+  <h3>Room to improve</h3><div class="issue"><p class="label">Both halves are relaxed</p><p>The top and the bottom are both relaxed or oversized at once, so the silhouette has no line through it.</p><p class="remedy">replace with patterned knit polo sweater — Keeps a fitted line here, balancing out the relaxed piece staying on.</p></div><div class="issue"><p class="label">Near-miss color pairing</p><p>Two non-neutral colors sit far enough apart to look unrelated but close enough to look like they were meant to match — the gap reads as an accident rather than a choice.</p><p class="remedy">replace with corduroy trousers — A neutral, so it sidesteps the near-miss pairing entirely.</p></div>
+</article>
+<article class="card" data-verdict="clean">
+  <header><h2>an unknown material</h2><p class="meta">classic · clear · clean</p></header>
+  <p class="overall">This works — nothing here is fighting itself.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#f2f4f7"></span>crew neck tee</li><li><span class="swatch" style="background:#2a9d8f"></span>corduroy trousers</li></ul>
+  <h3>What's working</h3><ul class="works"><li>White crew neck tee stays controlled against teal corduroy trousers, so the proportions read balanced.</li><li>Teal is the only real color in the mix, grounded by neutrals elsewhere — an easy, safe combination.</li></ul>
+  
+</article>
+<article class="card" data-verdict="clean">
+  <header><h2>a color name outside the vocabulary</h2><p class="meta">classic · clear · clean</p></header>
+  <p class="overall">This works — nothing here is fighting itself.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#bbb"></span>crew neck tee</li><li><span class="swatch" style="background:#bbb"></span>pleated trousers</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Crew neck tee stays controlled against pleated trousers, so the proportions read balanced.</li><li>Nothing here is carrying a strong color, so there's no clash to worry about.</li></ul>
+  
+</article>
+<article class="card" data-verdict="clean">
+  <header><h2>fields the perception step never filled in</h2><p class="meta">classic · clear · clean</p></header>
+  <p class="overall">This works — nothing here is fighting itself.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#bbb"></span>shirt</li><li><span class="swatch" style="background:#bbb"></span>trousers</li></ul>
+  <h3>What's working</h3><ul class="works"><li>Shirt stays controlled against trousers, so the proportions read balanced.</li><li>Nothing here is carrying a strong color, so there's no clash to worry about.</li></ul>
+  
+</article>
+<article class="card" data-verdict="clean">
+  <header><h2>a register nobody defined</h2><p class="meta">interpretive-dance · clear · clean</p></header>
+  <p class="overall">This works — nothing here is fighting itself.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#f2f4f7"></span>crew neck tee</li><li><span class="swatch" style="background:#1f1f21"></span>pleated trousers</li></ul>
+  <h3>What's working</h3><ul class="works"><li>White crew neck tee stays controlled against black pleated trousers, so the proportions read balanced.</li><li>Everything here (white and black) is a neutral, so there's no clash to worry about.</li></ul>
+  
+</article>
+<article class="card" data-verdict="notable">
+  <header><h2>nothing but accessories</h2><p class="meta">eclectic · clear · notable</p></header>
+  <p class="overall">3 things worth a look here: colors don't echo, nothing anchoring it and nothing leads.</p>
+  <ul class="garments"><li><span class="swatch" style="background:#4a6fa5"></span>knit beanie</li><li><span class="swatch" style="background:#e8547c"></span>webbing belt</li><li><span class="swatch" style="background:#2fa8a0"></span>crossbody sling bag</li><li><span class="swatch" style="background:#e2622a"></span>ribbed crew socks</li></ul>
+  <h3>What's working</h3><ul class="works"><li>The pieces here sit together without any one of them fighting the rest.</li></ul>
+  <h3>Room to improve</h3><div class="issue"><p class="label">Colors don't echo</p><p>Four or more different non-neutral colors, and not one of them turns up twice.</p><p class="remedy">take off the knit beanie — One fewer unrepeated color for the rest to account for.</p></div><div class="issue"><p class="label">Nothing anchoring it</p><p>The outfit carries a lot of color or pattern and has no quiet piece — a neutral, or something dark and plain — holding it down.</p><p class="remedy">no swap — One quiet piece with some size to it — a plain neutral layer — is what the loud pieces need to sit against.</p></div><div class="issue"><p class="label">Nothing leads</p><p>Every piece is pitched at the same volume, so the eye has nowhere to land first.</p><p class="remedy">no swap — Decide which piece is the one you want noticed first, and let everything else sit behind it.</p></div>
+</article>
+  </div>
+</div>

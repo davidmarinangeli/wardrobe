@@ -7,6 +7,27 @@ import { buildMirrorCritique, classifyColor, evaluateColorHarmony, evaluatePropo
 // zero at the lightness extremes), so these near-white/near-black items used
 // to compute a large enough "saturation" to get misclassified as vividly
 // chromatic. classifyColor must use chroma (raw channel spread) instead.
+
+// buildMirrorCritique now takes what the judge returned alongside the perceived
+// facts. These tests are about the half that matters most — whether the engine
+// accepts a claim, and what it offers once it has — so the helper stands in for
+// the judge and asserts the finding through, exactly as a real one would. Every
+// gate downstream of it is the code under test.
+const judged = (garments, ruleIds, wardrobe = [], register = "classic", photoQuality = "clear") =>
+  buildMirrorCritique(
+    { garments, register, photoQuality },
+    {
+      findings: ruleIds.map((ruleId) => ({
+        ruleId,
+        garmentIndices: garments.map((_, index) => index),
+        confidence: "high",
+        summary: `Reported ${ruleId}.`,
+      })),
+      works: [],
+    },
+    wardrobe,
+  );
+
 test("regression: near-white and near-black items classify as neutral, not chromatic", () => {
   assert.equal(classifyColor("#f2f4f7").neutral, true, "white mock neck t-shirt");
   assert.equal(classifyColor("#ece7e1").neutral, true, "white graphic t-shirt");
@@ -98,22 +119,28 @@ test("a wide-leg trouser with severe pooling is still flagged, but never called 
   assert.doesNotMatch(issue.summary, /not a style choice/);
 });
 
-test("coherence guard: when a color issue and a fit issue would both target outerwear, only the fit issue survives", () => {
-  // Outerwear (red) + upperbody (green) are a 45-150deg near-miss -> color issue
-  // targets outerwear (least essential of the two). Outerwear + lowerbody are both
-  // relaxed -> proportion issue also targets outerwear (the first top-ish garment).
-  // These would collide on the same region without the guard.
+test("coherence guard: two findings never land on the same garment, and neither is thrown away for wanting to", () => {
+  // Both of these prefer the same piece: the near-miss colour pairing and the
+  // double-volume silhouette each point first at the red overshirt. They are
+  // genuinely different observations, so the second one retargets to another
+  // garment it cited rather than being dropped — what must never happen is two
+  // pieces of advice about the same garment, which is how a critique starts
+  // contradicting itself.
   const relaxedRedJacket = { region: "outerwear", description: "overshirt", color: "red", volume: "relaxed", hemNotes: null };
   const relaxedGreenTop = { region: "upperbody", description: "tee", color: "green", volume: "regular", hemNotes: null };
   const relaxedBottom = { region: "lowerbody", description: "trousers", color: "navy", volume: "relaxed", hemNotes: null };
-  const critique = buildMirrorCritique([relaxedRedJacket, relaxedGreenTop, relaxedBottom], []);
-  assert.equal(critique.issues.length, 1, "only one issue should survive the region collision");
-  assert.equal(critique.issues[0].id, "double-volume", "fit/proportion evidence should win over the color heuristic");
+  const critique = judged([relaxedRedJacket, relaxedGreenTop, relaxedBottom], ["off-match", "double-volume"]);
+  assert.equal(critique.issues[0].id, "double-volume", "fit evidence is more directly observable, so it claims its preferred garment first");
   assert.equal(critique.issues[0].region, "outerwear");
+
+  // The invariant is about advice, not about observations: two findings may
+  // both be ABOUT the overshirt, but only one of them may tell you to change it.
+  const acted = critique.issues.filter((issue) => issue.remedy.action !== "none").map((issue) => issue.region);
+  assert.equal(new Set(acted).size, acted.length, "no two remedies may act on the same garment");
 });
 
 test("no grounded issues found: positive, honest critique with no swaps", () => {
-  const critique = buildMirrorCritique([navyShirt, whiteTee, brownCargo], []);
+  const critique = judged([navyShirt, whiteTee, brownCargo], []);
   assert.equal(critique.verdict, "clean");
   assert.equal(critique.issues.length, 0);
   assert.ok(critique.works.length > 0);
@@ -124,10 +151,10 @@ test("regression via full pipeline: the exact bug-report outfit no longer flags 
     { id: "black-trousers", name: "Black Pleated Trousers", part: "lowerbody", color: "#1c1c1c", tags: ["slim", "tailored", "pleated"] },
     { id: "wide-trousers", name: "Wide Chino", part: "lowerbody", color: "#2b2b2b", tags: ["wide-leg", "relaxed"] },
   ];
-  const critique = buildMirrorCritique([navyShirt, whiteTee, brownCargoPooling], wardrobe);
-  assert.equal(critique.issues.length, 1);
+  const critique = judged([navyShirt, whiteTee, brownCargoPooling], ["off-match", "pooling-hem"], wardrobe);
+  assert.equal(critique.issues.length, 1, "navy and brown are both neutrals — there is no colour finding to make");
   assert.equal(critique.issues[0].id, "pooling-hem");
-  assert.equal(critique.issues[0].fix.itemId, "black-trousers");
+  assert.equal(critique.issues[0].remedy.itemId, "black-trousers");
 });
 
 test("regression: the wardrobe fix accounts for the specific outfit's colors, not just fit keywords", () => {
@@ -142,23 +169,23 @@ test("regression: the wardrobe fix accounts for the specific outfit's colors, no
     { id: "olive-tailored", name: "olive green tailored trousers", part: "lowerbody", color: "#555c3c", tags: ["olive", "trousers", "pleated", "tailored"] },
     { id: "brown-tailored", name: "long dark brown loose fit pleated trousers", part: "lowerbody", color: "#3a2b22", tags: ["trousers", "long", "pleated", "tailored", "brown", "loose fit"] },
   ];
-  const critique = buildMirrorCritique([redTop, poolingNavyBottom], wardrobe);
-  assert.equal(critique.issues[0].fix.itemId, "brown-tailored");
+  const critique = judged([redTop, poolingNavyBottom], ["pooling-hem"], wardrobe);
+  assert.equal(critique.issues[0].remedy.itemId, "brown-tailored");
 
   // With a neutral top, both candidates are equally color-safe on fit grounds
   // alone — real wardrobes hit this a lot (most tops here are black/navy/grey).
   // The tie should resolve to the neutral candidate (the grounded safe default),
   // not silently fall back to wardrobe list order every single time.
   const navyTop = { region: "upperbody", description: "shirt", color: "navy", volume: "regular", hemNotes: null };
-  const secondCritique = buildMirrorCritique([navyTop, poolingNavyBottom], wardrobe);
-  assert.equal(secondCritique.issues[0].fix.itemId, "brown-tailored");
+  const secondCritique = judged([navyTop, poolingNavyBottom], ["pooling-hem"], wardrobe);
+  assert.equal(secondCritique.issues[0].remedy.itemId, "brown-tailored");
 });
 
 test("a fix is only ever suggested when a wardrobe item clears the confidence bar", () => {
   const relaxedTop = { region: "upperbody", description: "overshirt", color: "olive", volume: "relaxed", hemNotes: null };
   const relaxedBottom = { region: "lowerbody", description: "trousers", color: "olive", volume: "relaxed", hemNotes: null };
   const noHelpfulWardrobe = [{ id: "another-relaxed-top", name: "Boxy Overshirt", part: "upperbody", color: "#556b2f", tags: ["relaxed", "boxy"] }];
-  const critique = buildMirrorCritique([relaxedTop, relaxedBottom], noHelpfulWardrobe);
+  const critique = judged([relaxedTop, relaxedBottom], ["double-volume"], noHelpfulWardrobe);
   assert.equal(critique.issues.length, 1);
-  assert.equal(critique.issues[0].fix, null);
+  assert.equal(critique.issues[0].remedy.action, "none", "no swap beats a swap that changes nothing");
 });

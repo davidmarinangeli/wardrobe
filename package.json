@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "check": "npm run build",
     "test": "node --test test/*.test.mjs",
-    "bulk-import": "node --env-file=.env scripts/bulk-import.mjs"
+    "bulk-import": "node --env-file=.env scripts/bulk-import.mjs",
+    "bench": "node scripts/mirror-bench.mjs"
   },
   "dependencies": {
     "@fontsource-variable/instrument-sans": "^5.2.8",

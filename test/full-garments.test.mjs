@@ -117,10 +117,14 @@ test("Mirror critiques a dress outfit without erroring or going quiet", () => {
     piece("shoes-1", "shoes"),
     piece("jacket-1", "wholebody_up"),
   ];
-  const critique = buildMirrorCritique([
-    { region: "fullbody", color: "red", volume: "regular", description: "red midi dress" },
-    { region: "footwear", color: "white", volume: "regular", description: "white sneakers" },
-  ], wardrobe);
+  const critique = buildMirrorCritique({
+    register: "classic",
+    photoQuality: "clear",
+    garments: [
+      { region: "fullbody", color: "red", volume: "regular", description: "red midi dress", formality: 3, confidence: "high" },
+      { region: "footwear", color: "white", volume: "regular", description: "white sneakers", formality: 2, confidence: "high" },
+    ],
+  }, { findings: [], works: [] }, wardrobe);
 
   assert.ok(critique.overall, "there is always something to say");
   assert.ok(["clean", "minor", "notable"].includes(critique.verdict));

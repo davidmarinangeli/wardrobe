@@ -1,0 +1,19 @@
+{
+  "name": "slim trousers stacking at the shoe",
+  "why": "The counterpart to the wide-leg case: on a cut that is not voluminous, any stacking is a real length problem and must still be caught.",
+  "perception": {
+    "register": "classic",
+    "photoQuality": "clear",
+    "garments": [
+      { "region": "upperbody", "description": "mock neck tee", "color": "white", "colorHex": "#f2f4f7", "secondaryHex": null, "patterned": false, "patternScale": null, "volume": "fitted", "formality": 2, "hemNotes": null, "hemSeverity": null, "confidence": "high" },
+      { "region": "lowerbody", "description": "slim trousers", "color": "grey", "colorHex": "#8b8b8b", "secondaryHex": null, "patterned": false, "patternScale": null, "volume": "fitted", "formality": 3, "hemNotes": "stacks over the shoe", "hemSeverity": "slight", "confidence": "high" }
+    ]
+  },
+  "judgment": {
+    "findings": [
+      { "ruleId": "pooling-hem", "garmentIndices": [1], "confidence": "high", "summary": "The slim trousers stack over the shoe rather than breaking cleanly." }
+    ],
+    "works": [{ "text": "The fitted top against the fitted trouser keeps a clean line all the way down.", "garmentIndices": [0, 1] }]
+  },
+  "expect": { "verdict": "minor", "issueIds": ["pooling-hem"], "remedyRegion": "lowerbody", "minWorks": 1 }
+}

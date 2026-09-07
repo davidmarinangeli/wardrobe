@@ -1,0 +1,15 @@
+{
+  "name": "a genuinely clean minimal outfit",
+  "why": "The judge returning nothing must produce a warm, positive critique — not an empty panel, and not the least-bad item from the catalogue.",
+  "perception": {
+    "register": "minimal",
+    "photoQuality": "clear",
+    "garments": [
+      { "region": "upperbody", "description": "crew neck tee", "color": "white", "colorHex": "#f2f4f7", "secondaryHex": null, "patterned": false, "patternScale": null, "volume": "regular", "formality": 2, "hemNotes": null, "hemSeverity": null, "confidence": "high" },
+      { "region": "lowerbody", "description": "pleated trousers", "color": "black", "colorHex": "#1f1f21", "secondaryHex": null, "patterned": false, "patternScale": null, "volume": "regular", "formality": 3, "hemNotes": null, "hemSeverity": null, "confidence": "high" },
+      { "region": "footwear", "description": "leather sneakers", "color": "white", "colorHex": "#f2f3f5", "secondaryHex": null, "patterned": false, "patternScale": null, "volume": "regular", "formality": 2, "hemNotes": null, "hemSeverity": null, "confidence": "high" }
+    ]
+  },
+  "judgment": { "findings": [], "works": [{ "text": "White against black with nothing else asking for attention — the whole thing reads as one decision.", "garmentIndices": [0, 1] }] },
+  "expect": { "verdict": "clean", "issueIds": [], "minWorks": 1 }
+}
