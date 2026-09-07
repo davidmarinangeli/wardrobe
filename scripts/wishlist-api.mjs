@@ -13,10 +13,12 @@ import {
   normalizeMetadata,
   openAIAnalyze,
   openAIEdit,
+  openRouterEdit,
   readAiMode,
   removeChromaBackground,
   removeUnwornGarmentBackground,
   resolveApiKey,
+  resolveOpenAICompatibleBaseUrl,
   resolveProvider,
 } from "./import-job-api.mjs";
 import { GARMENT_PART_ID_SET } from "../shared/garments.mjs";
@@ -67,12 +69,18 @@ export async function detectAndCreateWishlistItems({ imageBytes, sourcePinId = n
   const mode = await readAiMode(dataDir);
   const { key, keyName } = resolveApiKey(setting, provider, mode);
   if (!key) throw new Error(`${keyName} is not configured for ${mode.toUpperCase()} mode`);
-  const apiBaseUrl = () => setting("OPENAI_API_BASE_URL", "https://api.openai.com/v1").replace(/\/$/, "");
+  const apiBaseUrl = () => resolveOpenAICompatibleBaseUrl(setting, provider);
 
   const normalizedImage = await normalizeImage(imageBytes);
   const detected = provider === "gemini"
     ? await geminiAnalyze({ key, model: setting("GEMINI_VISION_MODEL", "gemini-3.6-flash"), image: normalizedImage, mime: "image/png" })
-    : await openAIAnalyze({ key, baseUrl: apiBaseUrl(), model: setting("OPENAI_VISION_MODEL", "gpt-5.4-mini"), image: normalizedImage, mime: "image/png" });
+    : await openAIAnalyze({
+      key,
+      baseUrl: apiBaseUrl(),
+      model: provider === "openrouter" ? setting("OPENROUTER_VISION_MODEL", "openai/gpt-5.4-mini") : setting("OPENAI_VISION_MODEL", "gpt-5.4-mini"),
+      image: normalizedImage,
+      mime: "image/png",
+    });
 
   if (!detected.length) return { created: [], aggregate: null };
 
@@ -135,10 +143,15 @@ async function generateCutout({ cropBytes, metadata, provider, key, apiBaseUrl, 
   const requestedChromaKey = chooseChromaKey(metadata.color);
   const prompt = buildGarmentPrompt(metadata, requestedChromaKey);
   const source = { data: cropBytes, mime: "image/png", name: "crop.png" };
-  let bytes = provider === "gemini"
-    ? await geminiEdit({ key, model: setting("GEMINI_IMAGE_MODEL", "gemini-2.5-flash-image"), imageSize: setting("GEMINI_IMAGE_SIZE", "1K"), size: "1024x1024", images: [source], prompt })
-    : await openAIEdit({ key, baseUrl: apiBaseUrl, model: setting("OPENAI_GARMENT_MODEL", setting("OPENAI_IMAGE_MODEL", "gpt-image-2")), quality: setting("OPENAI_IMAGE_QUALITY", "high"), size: "1024x1024", images: [source], prompt });
-  const chromaKeyUsed = provider === "gemini" ? await detectBorderColor(bytes) : requestedChromaKey;
+  let bytes;
+  if (provider === "gemini") {
+    bytes = await geminiEdit({ key, model: setting("GEMINI_IMAGE_MODEL", "gemini-2.5-flash-image"), imageSize: setting("GEMINI_IMAGE_SIZE", "1K"), size: "1024x1024", images: [source], prompt });
+  } else if (provider === "openrouter") {
+    bytes = await openRouterEdit({ key, baseUrl: apiBaseUrl, model: setting("OPENROUTER_GARMENT_MODEL", setting("OPENROUTER_IMAGE_MODEL", "openai/gpt-image-2")), quality: setting("OPENROUTER_IMAGE_QUALITY", "high"), size: "1024x1024", images: [source], prompt });
+  } else {
+    bytes = await openAIEdit({ key, baseUrl: apiBaseUrl, model: setting("OPENAI_GARMENT_MODEL", setting("OPENAI_IMAGE_MODEL", "gpt-image-2")), quality: setting("OPENAI_IMAGE_QUALITY", "high"), size: "1024x1024", images: [source], prompt });
+  }
+  const chromaKeyUsed = provider === "openai" ? requestedChromaKey : await detectBorderColor(bytes);
   return removeChromaBackground(bytes, chromaKeyUsed);
 }
 
@@ -154,7 +167,7 @@ export function wishlistApi(options = {}) {
   let wishlistAssetDir;
   const retrying = new Map();
   const setting = (name, fallback = "") => options.env?.[name] || process.env[name] || fallback;
-  const apiBaseUrl = () => setting("OPENAI_API_BASE_URL", "https://api.openai.com/v1").replace(/\/$/, "");
+  const apiBaseUrl = (provider) => resolveOpenAICompatibleBaseUrl(setting, provider);
 
   async function loadItems() {
     return loadWishlist(wishlistFile);
@@ -173,7 +186,7 @@ export function wishlistApi(options = {}) {
         if (!key) throw new Error(`${keyName} is not configured for ${mode.toUpperCase()} mode`);
         const cropName = path.basename(item.cropImage);
         const cropBytes = await readFile(path.join(wishlistAssetDir, cropName));
-        const cutoutBytes = await generateCutout({ cropBytes, metadata: item, provider, key, apiBaseUrl: apiBaseUrl(), setting });
+        const cutoutBytes = await generateCutout({ cropBytes, metadata: item, provider, key, apiBaseUrl: apiBaseUrl(provider), setting });
         const cutoutName = `${id}-cutout.png`;
         await writeFile(path.join(wishlistAssetDir, cutoutName), cutoutBytes);
         const image = `${ASSET_ROOT}/${cutoutName}`;

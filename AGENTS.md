@@ -38,7 +38,13 @@ The setup wizard covers the essentials (`AI_PROVIDER` and the matching key, plus
 
 | Variable | Default |
 | --- | --- |
-| `AI_PROVIDER` | `openai` (or `gemini`, `minimax`) |
+| `AI_PROVIDER` | `openai` (or `openrouter`, `gemini`, `minimax`) |
+| `OPENROUTER_API_KEY` | Required if `AI_PROVIDER=openrouter` |
+| `OPENROUTER_API_BASE_URL` | `https://openrouter.ai/api/v1` |
+| `OPENROUTER_VISION_MODEL` | `openai/gpt-5.4-mini` |
+| `OPENROUTER_IMAGE_MODEL` | `openai/gpt-image-2` |
+| `OPENROUTER_IMAGE_QUALITY` | `high` |
+| `OPENROUTER_SUGGESTIONS_MODEL` | Falls back to `OPENROUTER_VISION_MODEL` |
 | `OPENAI_API_KEY` | Required if `AI_PROVIDER=openai` |
 | `OPENAI_VISION_MODEL` | `gpt-5.4-mini` |
 | `OPENAI_IMAGE_MODEL` | `gpt-image-2` |
@@ -61,6 +67,8 @@ The setup wizard covers the essentials (`AI_PROVIDER` and the matching key, plus
 | `WARDROBE_DATA_DIR` | `data` |
 
 Set `AI_PROVIDER=gemini` to run the import pipeline on Gemini instead of OpenAI. `gemini-2.5-flash-image` ("Nano Banana") has a free tier (up to 500 images/day via a [Google AI Studio](https://aistudio.google.com/apikey) key, no credit card). For higher-quality output at a small per-image cost, set `GEMINI_IMAGE_MODEL` to `gemini-3.1-flash-image` or `gemini-3-pro-image` ("Nano Banana 2" / "Nano Banana 2 Pro").
+
+Set `AI_PROVIDER=openrouter` to use one OpenRouter key for vision analysis, outfit suggestions, garment cutouts, and modeled photos. Vision and structured text calls use OpenRouter's OpenAI-compatible Responses API; image generation uses its unified `/images` endpoint with reference images. The selected image model must support `input_references`.
 
 Set `AI_PROVIDER=minimax` to run the garment and modeled-photo image generation through MiniMax's `/v1/image_generation` endpoint instead. Reference images (the garment, or the model photo plus garments) are mapped to `subject_reference`; both `url` and `base64` response formats are decoded into the same review pipeline. Use `https://api.minimaxi.com/v1` for the China endpoint, and set `MINIMAX_GARMENT_MODEL` / `MINIMAX_MODELED_MODEL` to override `MINIMAX_IMAGE_MODEL` per stage. Clothing detection and outfit-style analysis still use the OpenAI vision model regardless of `AI_PROVIDER`.
 

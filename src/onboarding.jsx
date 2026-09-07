@@ -54,6 +54,14 @@ const PROVIDERS = [
     getKeyLabel: "platform.openai.com/api-keys",
   },
   {
+    id: "openrouter",
+    label: "OpenRouter",
+    tagline: "One key, multiple models",
+    description: "Uses OpenRouter for both vision analysis and image generation through its unified APIs.",
+    getKeyUrl: "https://openrouter.ai/settings/keys",
+    getKeyLabel: "openrouter.ai/settings/keys",
+  },
+  {
     id: "minimax",
     label: "MiniMax",
     tagline: "Subject-reference images",
@@ -178,6 +186,7 @@ function ProviderStep({ provider, setProvider, onNext, onBack }) {
 function KeysStep({ provider, onSaved, onBack }) {
   const option = PROVIDERS.find((item) => item.id === provider);
   const [openaiKey, setOpenaiKey] = useState("");
+  const [openrouterKey, setOpenrouterKey] = useState("");
   const [geminiTestKey, setGeminiTestKey] = useState("");
   const [geminiProdKey, setGeminiProdKey] = useState("");
   const [minimaxKey, setMinimaxKey] = useState("");
@@ -189,6 +198,8 @@ function KeysStep({ provider, onSaved, onBack }) {
     ? { GEMINI_API_KEY_TEST: geminiTestKey.trim(), GEMINI_API_KEY_PROD: geminiProdKey.trim() }
     : provider === "minimax"
       ? { MINIMAX_API_KEY: minimaxKey.trim() }
+      : provider === "openrouter"
+        ? { OPENROUTER_API_KEY: openrouterKey.trim() }
       : { OPENAI_API_KEY: openaiKey.trim() };
   const canSave = Object.values(values).some(Boolean);
 
@@ -250,6 +261,11 @@ function KeysStep({ provider, onSaved, onBack }) {
         <div className="onboarding-field">
           <label htmlFor="minimax-key">MINIMAX_API_KEY</label>
           <input id="minimax-key" type="password" autoComplete="off" spellCheck="false" value={minimaxKey} onChange={(event) => setMinimaxKey(event.target.value)} placeholder="sk-…" />
+        </div>
+      ) : provider === "openrouter" ? (
+        <div className="onboarding-field">
+          <label htmlFor="openrouter-key">OPENROUTER_API_KEY</label>
+          <input id="openrouter-key" type="password" autoComplete="off" spellCheck="false" value={openrouterKey} onChange={(event) => setOpenrouterKey(event.target.value)} placeholder="sk-or-v1-…" />
         </div>
       ) : (
         <div className="onboarding-field">

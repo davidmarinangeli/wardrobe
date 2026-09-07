@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { geminiPerceiveOutfit, normalizeImage, openAIPerceiveOutfit, readAiMode, resolveApiKey, resolveProvider } from "./import-job-api.mjs";
+import { geminiPerceiveOutfit, normalizeImage, openAIPerceiveOutfit, readAiMode, resolveApiKey, resolveOpenAICompatibleBaseUrl, resolveProvider } from "./import-job-api.mjs";
 import { buildMirrorCritique } from "./style-rules.mjs";
 import { recordSignal } from "./preferences-api.mjs";
 
@@ -38,7 +38,7 @@ export function mirrorApi(options = {}) {
   let root;
   let dataDir;
   const setting = (name, fallback = "") => options.env?.[name] || process.env[name] || fallback;
-  const apiBaseUrl = () => setting("OPENAI_API_BASE_URL", "https://api.openai.com/v1").replace(/\/$/, "");
+  const apiBaseUrl = (provider) => resolveOpenAICompatibleBaseUrl(setting, provider);
 
   async function handler(req, res, next) {
     const url = new URL(req.url, "http://localhost");
@@ -52,9 +52,8 @@ export function mirrorApi(options = {}) {
 
         const { provider } = resolveProvider(setting);
         const mode = await readAiMode(dataDir);
-        // Vision critique has no MiniMax path, so fall back to OpenAI the same way outfit
-        // style analysis does (outfits-api.mjs) — a MiniMax setup can still use this feature.
-        const critiqueProvider = provider === "gemini" ? "gemini" : "openai";
+        // MiniMax has no vision path, so only it falls back to OpenAI.
+        const critiqueProvider = provider === "gemini" || provider === "openrouter" ? provider : "openai";
         const { key, keyName } = resolveApiKey(setting, critiqueProvider, mode);
         if (!key) return json(res, 503, { error: `${keyName} is not configured for ${mode.toUpperCase()} mode.` });
 
@@ -65,7 +64,13 @@ export function mirrorApi(options = {}) {
 
         const garments = critiqueProvider === "gemini"
           ? await geminiPerceiveOutfit({ key, model: setting("GEMINI_VISION_MODEL", "gemini-3.6-flash"), image: normalized, mime: "image/png" })
-          : await openAIPerceiveOutfit({ key, baseUrl: apiBaseUrl(), model: setting("OPENAI_VISION_MODEL", "gpt-5.4-mini"), image: normalized, mime: "image/png" });
+          : await openAIPerceiveOutfit({
+            key,
+            baseUrl: apiBaseUrl(critiqueProvider),
+            model: critiqueProvider === "openrouter" ? setting("OPENROUTER_VISION_MODEL", "openai/gpt-5.4-mini") : setting("OPENAI_VISION_MODEL", "gpt-5.4-mini"),
+            image: normalized,
+            mime: "image/png",
+          });
 
         // Judgment happens locally, deterministically, from the perceived facts —
         // not a second model call — so the critique and its swaps can't drift apart.

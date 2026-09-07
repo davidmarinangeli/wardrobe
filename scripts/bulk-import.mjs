@@ -16,6 +16,7 @@ import {
   normalizeMetadata,
   openAIAnalyze,
   openAIEdit,
+  openRouterEdit,
   removeChromaBackground,
   removeUnwornGarmentBackground,
 } from "./import-job-api.mjs";
@@ -38,7 +39,7 @@ Options:
   --no-modeled          Skip generating modeled photos even if data/model-reference.png exists
   -h, --help            Show this help
 
-Uses the same AI_PROVIDER / OPENAI_* / GEMINI_* settings as .env for the web app.`);
+Uses the same AI_PROVIDER and provider-specific settings as .env for the web app.`);
 }
 
 function parseArgs(argv) {
@@ -82,7 +83,7 @@ async function detectPhotoItems({ provider, key, baseUrl, filePath }) {
   const normalized = await normalizeImage(raw);
   const detected = provider === "gemini"
     ? await geminiAnalyze({ key, model: process.env.GEMINI_VISION_MODEL || "gemini-3.6-flash", image: normalized, mime: "image/png" })
-    : await openAIAnalyze({ key, baseUrl, model: process.env.OPENAI_VISION_MODEL || "gpt-5.4-mini", image: normalized, mime: "image/png" });
+    : await openAIAnalyze({ key, baseUrl, model: provider === "openrouter" ? process.env.OPENROUTER_VISION_MODEL || "openai/gpt-5.4-mini" : process.env.OPENAI_VISION_MODEL || "gpt-5.4-mini", image: normalized, mime: "image/png" });
   const items = [];
   for (const rawItem of detected) {
     const metadata = normalizeMetadata(rawItem);
@@ -118,7 +119,7 @@ async function geminiFindDuplicates({ key, prompt, thumbnails }) {
   return parsed.groups;
 }
 
-async function openAIFindDuplicates({ key, baseUrl, prompt, thumbnails }) {
+async function openAIFindDuplicates({ provider, key, baseUrl, prompt, thumbnails }) {
   const content = [
     { type: "input_text", text: prompt },
     ...thumbnails.map((data) => ({ type: "input_image", image_url: `data:image/png;base64,${data}` })),
@@ -127,7 +128,7 @@ async function openAIFindDuplicates({ key, baseUrl, prompt, thumbnails }) {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: process.env.OPENAI_VISION_MODEL || "gpt-5.4-mini",
+      model: provider === "openrouter" ? process.env.OPENROUTER_VISION_MODEL || "openai/gpt-5.4-mini" : process.env.OPENAI_VISION_MODEL || "gpt-5.4-mini",
       input: [{ role: "user", content }],
       text: { format: { type: "json_schema", name: "duplicate_groups", strict: true, schema: { type: "object", additionalProperties: false, properties: { groups: { type: "array", items: { type: "array", items: { type: "integer" } } } }, required: ["groups"] } } },
     }),
@@ -166,7 +167,7 @@ async function findDuplicateGroups({ provider, key, baseUrl, items }) {
   try {
     const groups = provider === "gemini"
       ? await geminiFindDuplicates({ key, prompt, thumbnails })
-      : await openAIFindDuplicates({ key, baseUrl, prompt, thumbnails });
+      : await openAIFindDuplicates({ provider, key, baseUrl, prompt, thumbnails });
     return normalizeGroups(groups, items.length);
   } catch (error) {
     console.warn(`Cross-photo duplicate detection failed (${error.message}); importing every detected item separately.`);
@@ -181,11 +182,15 @@ async function generateGarmentCutout({ provider, key, baseUrl, item }) {
   const requestedChromaKey = chooseChromaKey(item.metadata.color);
   const prompt = buildGarmentPrompt(item.metadata, requestedChromaKey);
   const source = { data: item.crop, mime: "image/png", name: "source.png" };
-  const rawBytes = provider === "gemini"
-    ? await geminiEdit({ key, model: process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image", imageSize: process.env.GEMINI_IMAGE_SIZE || "1K", size: "1024x1024", images: [source], prompt })
-    : await openAIEdit({ key, baseUrl, model: process.env.OPENAI_GARMENT_MODEL || process.env.OPENAI_IMAGE_MODEL || "gpt-image-2", quality: process.env.OPENAI_IMAGE_QUALITY || "high", size: "1024x1024", images: [source], prompt });
-  // Gemini doesn't reliably render the exact requested chroma color, so detect whatever solid backdrop it actually used instead of trusting the request.
-  const actualChromaKey = provider === "gemini" ? await detectBorderColor(rawBytes) : requestedChromaKey;
+  let rawBytes;
+  if (provider === "gemini") {
+    rawBytes = await geminiEdit({ key, model: process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image", imageSize: process.env.GEMINI_IMAGE_SIZE || "1K", size: "1024x1024", images: [source], prompt });
+  } else if (provider === "openrouter") {
+    rawBytes = await openRouterEdit({ key, baseUrl, model: process.env.OPENROUTER_GARMENT_MODEL || process.env.OPENROUTER_IMAGE_MODEL || "openai/gpt-image-2", quality: process.env.OPENROUTER_IMAGE_QUALITY || "high", size: "1024x1024", images: [source], prompt });
+  } else {
+    rawBytes = await openAIEdit({ key, baseUrl, model: process.env.OPENAI_GARMENT_MODEL || process.env.OPENAI_IMAGE_MODEL || "gpt-image-2", quality: process.env.OPENAI_IMAGE_QUALITY || "high", size: "1024x1024", images: [source], prompt });
+  }
+  const actualChromaKey = provider === "openai" ? requestedChromaKey : await detectBorderColor(rawBytes);
   return removeChromaBackground(rawBytes, actualChromaKey);
 }
 
@@ -195,9 +200,13 @@ async function generateModeledPhoto({ provider, key, baseUrl, garmentBuffer, mod
   const face = faceBuffer ? { data: faceBuffer, mime: "image/png", name: "model-face.png" } : null;
   const referenceImages = face ? [model, face] : [model];
   const prompt = buildModeledPrompt([{ name: metadata?.name, tags: metadata?.tags }], { hasFaceReference: Boolean(face) });
-  return provider === "gemini"
-    ? await geminiEdit({ key, model: process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image", imageSize: process.env.GEMINI_IMAGE_SIZE || "1K", size: "1536x1024", images: [...referenceImages, garment], prompt })
-    : await openAIEdit({ key, baseUrl, model: process.env.OPENAI_MODELED_MODEL || process.env.OPENAI_IMAGE_MODEL || "gpt-image-2", quality: process.env.OPENAI_IMAGE_QUALITY || "high", size: "1536x1024", images: [...referenceImages, garment], prompt });
+  if (provider === "gemini") {
+    return geminiEdit({ key, model: process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image", imageSize: process.env.GEMINI_IMAGE_SIZE || "1K", size: "1536x1024", images: [...referenceImages, garment], prompt });
+  }
+  if (provider === "openrouter") {
+    return openRouterEdit({ key, baseUrl, model: process.env.OPENROUTER_MODELED_MODEL || process.env.OPENROUTER_IMAGE_MODEL || "openai/gpt-image-2", quality: process.env.OPENROUTER_IMAGE_QUALITY || "high", size: "1536x1024", images: [...referenceImages, garment], prompt });
+  }
+  return openAIEdit({ key, baseUrl, model: process.env.OPENAI_MODELED_MODEL || process.env.OPENAI_IMAGE_MODEL || "gpt-image-2", quality: process.env.OPENAI_IMAGE_QUALITY || "high", size: "1536x1024", images: [...referenceImages, garment], prompt });
 }
 
 async function writeLibraryItem({ libraryAssetDir, id, metadata, garmentBuffer, modeledBuffer }) {
@@ -249,14 +258,16 @@ async function main() {
   const modelReferencePath = path.resolve(root, process.env.WARDROBE_MODEL_REFERENCE || "data/model-reference.png");
   const faceReferencePath = path.resolve(root, process.env.WARDROBE_FACE_REFERENCE || "data/model-reference-face.png");
 
-  const provider = process.env.AI_PROVIDER === "gemini" ? "gemini" : "openai";
-  const keyName = provider === "gemini" ? "GEMINI_API_KEY" : "OPENAI_API_KEY";
+  const provider = ["openai", "openrouter", "gemini"].includes(process.env.AI_PROVIDER) ? process.env.AI_PROVIDER : "openai";
+  const keyName = provider === "gemini" ? "GEMINI_API_KEY" : provider === "openrouter" ? "OPENROUTER_API_KEY" : "OPENAI_API_KEY";
   const key = process.env[keyName];
   if (!key) {
     console.error(`Missing ${keyName}. Set it in .env, then run with:\n  node --env-file=.env scripts/bulk-import.mjs --input <folder>`);
     process.exit(1);
   }
-  const baseUrl = (process.env.OPENAI_API_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
+  const baseUrl = (provider === "openrouter"
+    ? process.env.OPENROUTER_API_BASE_URL || "https://openrouter.ai/api/v1"
+    : process.env.OPENAI_API_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
 
   const inputDir = path.resolve(args.input);
   let files;
