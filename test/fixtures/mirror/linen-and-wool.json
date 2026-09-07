@@ -1,0 +1,20 @@
+{
+  "name": "linen shirt under a wool overcoat",
+  "why": "The fabric rule doing its job in a quiet outfit, where colour and cut are beyond reproach and the only thing off is that the pieces belong to two different kinds of day. Nothing in the old vocabulary could see this at all.",
+  "perception": {
+    "register": "classic",
+    "photoQuality": "clear",
+    "garments": [
+      { "region": "outerwear", "description": "wool overcoat", "color": "charcoal", "colorHex": "#3a3d42", "secondaryHex": null, "material": "wool", "patterned": false, "patternScale": null, "volume": "regular", "formality": 4, "hemNotes": null, "hemSeverity": null, "confidence": "high" },
+      { "region": "upperbody", "description": "linen shirt", "color": "cream", "colorHex": "#efe6d5", "secondaryHex": null, "material": "linen", "patterned": false, "patternScale": null, "volume": "regular", "formality": 3, "hemNotes": null, "hemSeverity": null, "confidence": "high" },
+      { "region": "lowerbody", "description": "wool trousers", "color": "charcoal", "colorHex": "#3c3f44", "secondaryHex": null, "material": "wool", "patterned": false, "patternScale": null, "volume": "regular", "formality": 4, "hemNotes": null, "hemSeverity": null, "confidence": "high" }
+    ]
+  },
+  "judgment": {
+    "findings": [
+      { "ruleId": "weather-split", "garmentIndices": [0, 1, 2], "confidence": "high", "summary": "The linen shirt is a hot-weather cloth against a wool coat and wool trousers." }
+    ],
+    "works": [{ "text": "Cream against charcoal is about as legible a pairing as there is, and the cut is consistent all the way down.", "garmentIndices": [0, 1] }]
+  },
+  "expect": { "verdict": "minor", "issueIds": ["weather-split"], "remedyRegion": "upperbody", "minWorks": 1 }
+}

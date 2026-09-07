@@ -3,10 +3,11 @@
 // Two different enforcement problems live here:
 //  - Generative surfaces (suggestions, style DNA, captions) are constrained by a
 //    prompt block. The test asserts the block is actually present in each prompt.
-//  - Mirror builds its critique deterministically in style-rules.mjs. No prompt
-//    can constrain it, so its strings are audited directly — this is the surface
-//    where the user has explicitly asked to be judged and the honest answer is
-//    still about proportion and color, never about era.
+//  - Mirror is both. Its judge is a prompt (constrained like the others), and
+//    the labels, remedies and fallback copy it assembles around that judgment
+//    are written in source, so those strings are audited directly. This is the
+//    surface where the user has explicitly asked to be judged, and the honest
+//    answer is still about proportion and color, never about era.
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -20,6 +21,7 @@ import {
   findJudgmentLanguage,
 } from "../shared/prompt-guardrails.mjs";
 import { buildMirrorCritique } from "../scripts/style-rules.mjs";
+import { MIRROR_RULE_IDS } from "../shared/style-catalogue.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const source = (file) => readFile(path.join(ROOT, file), "utf8");
@@ -95,7 +97,7 @@ test("detection is told to classify, never appraise", async () => {
 const critiqueStrings = (critique) => [
   critique.overall,
   ...(critique.works || []),
-  ...(critique.issues || []).flatMap((issue) => [issue.label, issue.detail, issue.fix?.reason].filter(Boolean)),
+  ...(critique.issues || []).flatMap((issue) => [issue.label, issue.summary, issue.remedy?.reason].filter(Boolean)),
 ].filter((value) => typeof value === "string");
 
 test("Mirror never reaches for era language, whatever it is shown", () => {
@@ -107,20 +109,36 @@ test("Mirror never reaches for era language, whatever it is shown", () => {
 
   // A deliberately awkward outfit, a clean one, and the empty case — the three
   // shapes the critique can take.
+  // Colours are given as hex, the way perception now reports them — the old
+  // shape passed hex into a field read as a colour NAME, so every garment in
+  // this test silently classified as neutral and the outfits it thought it was
+  // checking were never actually awkward.
   const outfits = [
     [
-      { region: "upperbody", color: "#b3222a", volume: "oversized", description: "red oversized tee" },
-      { region: "lowerbody", color: "#5c6b3f", volume: "oversized", description: "olive baggy trousers", hemSeverity: "severe" },
+      { region: "upperbody", colorHex: "#b3222a", volume: "oversized", description: "red oversized tee", patterned: true, patternScale: "bold", formality: 2, confidence: "high" },
+      { region: "lowerbody", colorHex: "#5c6b3f", volume: "oversized", description: "olive baggy trousers", patterned: true, patternScale: "bold", formality: 2, hemNotes: "stacks heavily over the shoe", hemSeverity: "severe", confidence: "high" },
     ],
     [
-      { region: "upperbody", color: "#1f2a44", volume: "regular", description: "navy tee" },
-      { region: "lowerbody", color: "#3d3d3d", volume: "regular", description: "charcoal trousers" },
+      { region: "upperbody", colorHex: "#1f2a44", volume: "regular", description: "navy tee", formality: 2, confidence: "high" },
+      { region: "lowerbody", colorHex: "#3d3d3d", volume: "regular", description: "charcoal trousers", formality: 3, confidence: "high" },
     ],
     [],
   ];
 
+  // Every rule in the catalogue is asserted at once, so whatever the engine is
+  // willing to accept about these outfits, it is checked for era language.
+  const everything = (garments) => ({
+    findings: MIRROR_RULE_IDS.map((ruleId) => ({
+      ruleId,
+      garmentIndices: garments.map((_, index) => index),
+      confidence: "high",
+      summary: `Reported ${ruleId}.`,
+    })),
+    works: [],
+  });
+
   for (const garments of outfits) {
-    const critique = buildMirrorCritique(garments, wardrobe);
+    const critique = buildMirrorCritique({ garments, register: "classic", photoQuality: "clear" }, everything(garments), wardrobe);
     for (const text of critiqueStrings(critique)) {
       assert.deepEqual(
         findJudgmentLanguage(text),
@@ -131,8 +149,14 @@ test("Mirror never reaches for era language, whatever it is shown", () => {
   }
 });
 
-test("the style-rules source carries no era vocabulary in its user-facing strings", async () => {
-  const text = await source("scripts/style-rules.mjs");
+test("the judge is constrained by the shared guardrail like every other generative surface", async () => {
+  const text = await source("scripts/mirror-judge.mjs");
+  const uses = text.split("NO_JUDGMENT_PROMPT").length - 1;
+  assert.ok(uses >= 2, "mirror-judge.mjs should import the guardrail and inject it into its prompt");
+});
+
+test("the style-rules and catalogue sources carry no era vocabulary in their user-facing strings", async () => {
+  const text = `${await source("scripts/style-rules.mjs")}\n${await source("shared/style-catalogue.mjs")}`;
   // Comments cite sources with words like "conventions"; only the quoted strings
   // that can reach a user are checked.
   const strings = [...text.matchAll(/"([^"\\]{12,240})"|`([^`\\]{12,240})`/g)]
@@ -140,6 +164,6 @@ test("the style-rules source carries no era vocabulary in its user-facing string
     .filter((value) => !value.startsWith("http"));
 
   for (const value of strings) {
-    assert.deepEqual(findJudgmentLanguage(value), [], `style-rules.mjs string would judge the user: ${JSON.stringify(value)}`);
+    assert.deepEqual(findJudgmentLanguage(value), [], `a Mirror string would judge the user: ${JSON.stringify(value)}`);
   }
 });

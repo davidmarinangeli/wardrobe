@@ -56,7 +56,10 @@ test("region -> part keeps the canonical part when several parts share a region"
   assert.equal(REGION_TO_PART.accessory, "accessories_up");
   assert.equal(REGION_TO_PART.fullbody, "dress");
   // Order is irrelevant (it feeds a JSON-schema enum); the set is what matters.
-  assert.deepEqual([...MIRROR_REGIONS].sort(), ["accessory", "footwear", "fullbody", "lowerbody", "outerwear", "upperbody"]);
+  // `legwear` exists so socks have somewhere to be reported. Without it the
+  // Mirror either dropped them or filed them under `accessory`, where a loud
+  // sock could be answered with a hat.
+  assert.deepEqual([...MIRROR_REGIONS].sort(), ["accessory", "footwear", "fullbody", "legwear", "lowerbody", "outerwear", "upperbody"]);
 });
 
 test("part -> region maps every sharing part, not just the canonical one", () => {

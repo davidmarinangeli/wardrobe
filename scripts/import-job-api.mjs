@@ -4,6 +4,7 @@ import path from "node:path";
 import sharp from "sharp";
 import { COLOR_NAMES } from "./style-rules.mjs";
 import { GARMENT_DISAMBIGUATION_PROSE, GARMENT_PART_ID_SET, GARMENT_PART_IDS, GARMENT_PART_IDS_PROSE, MIRROR_REGIONS } from "../shared/garments.mjs";
+import { MIRROR_MATERIALS, OUTFIT_REGISTERS } from "../shared/style-catalogue.mjs";
 import { NO_JUDGMENT_PROMPT } from "../shared/prompt-guardrails.mjs";
 
 const API_ROOT = "/api/import/jobs";
@@ -995,22 +996,43 @@ export async function openAIAnalyzeOutfitStyle({ key, baseUrl, model, image, mim
 
 const MIRROR_VOLUMES = ["fitted", "regular", "relaxed", "oversized"];
 const MIRROR_HEM_SEVERITIES = ["slight", "moderate", "severe"];
+const MIRROR_PATTERN_SCALES = ["fine", "medium", "bold"];
+const MIRROR_CONFIDENCE = ["low", "medium", "high"];
+const MIRROR_PHOTO_QUALITY = ["clear", "partial", "poor"];
 
-// Perception-only prompt: the vision model reports what it sees (garment, color,
-// silhouette, hem behavior) and nothing else. All judgment — what's actually a
-// problem, what single fix addresses it — happens afterward in the deterministic
-// style-rules engine, so the critique can never contradict itself the way a single
-// free-form "describe and judge in one shot" call could.
+// Perception-only prompt: the vision model reports what it sees and nothing
+// else. Judgment happens afterward, against the closed rule catalogue in
+// shared/style-catalogue.mjs, so a critique can never rest on a fact that was
+// never observed.
+//
+// The fields here are the ones the catalogue's rules actually need as evidence.
+// An earlier version reported only colour name, volume and hem behaviour, and
+// the result was a critique that could reason about exactly two things: a
+// patterned shirt was "purple", a sock had nowhere to be reported at all, and
+// every outfit — deliberate or accidental — got measured against the same hue
+// count. If a rule needs it, it is observed here; nothing here is optional
+// decoration.
 function buildMirrorPerceptionPrompt() {
   return `You are looking at a photo of a person wearing an outfit. Identify each distinct visible garment and describe ONLY what you observe — do not judge, critique, rate, or suggest anything.
 
 For each visible garment, report:
-- region: one of ${MIRROR_REGIONS.map((region) => `"${region}"`).join(", ")} (use "outerwear" for a jacket/overshirt worn open over another top, "accessory" for belts/bags/hats/scarves/jewelry, and "fullbody" for a single garment that dresses both halves at once, such as a dress or a jumpsuit — never report a dress as an upperbody plus a lowerbody)
-- description: a short 2-4 word description, e.g. "open-collar shirt" or "wide-leg cargo pants"
+- region: one of ${MIRROR_REGIONS.map((region) => `"${region}"`).join(", ")} (use "outerwear" for a jacket/overshirt worn open over another top, "accessory" for belts/bags/hats/scarves/eyewear/jewellery, "legwear" for socks and tights, and "fullbody" for a single garment that dresses both halves at once, such as a dress or a jumpsuit — never report a dress as an upperbody plus a lowerbody)
+- description: a short 2-4 word description, e.g. "open-collar shirt" or "wide-leg cargo pants". For an accessory, always name the object itself ("webbing belt", "bucket hat", "crossbody bag") — never just "accessory".
 - color: the closest match from this exact list: ${COLOR_NAMES.join(", ")}
+- colorHex: the dominant colour of the garment as a "#rrggbb" hex, read from the photo as faithfully as you can. If the piece is patterned, this is the colour covering the most of it.
+- secondaryHex: for a patterned or two-tone piece, the second most present colour as "#rrggbb"; otherwise null.
+- patterned: true if the piece carries a print, check, stripe, graphic or any repeating motif; false for a solid.
+- patternScale: when patterned, how large the motif reads at a glance — "fine" (reads as texture from a distance), "medium", or "bold" (individual motifs are the first thing you notice); otherwise null.
+- material: what the piece looks like it is made of, the closest match from: ${MIRROR_MATERIALS.join(", ")}. Judge it on the visible surface — the nap of corduroy, the open weave of mesh, the grain of suede. Use "other" when you genuinely cannot tell rather than guessing.
 - volume: how the piece sits on the body — one of "fitted", "regular", "relaxed", "oversized"
+- formality: where the piece sits on a 1-5 scale, judged on the garment itself and nothing else — 1 athletic or beachwear, 2 casual, 3 smart casual, 4 business, 5 formal or evening.
 - hemNotes: for lowerbody and fullbody garments ONLY, a short factual note if the hem visibly pools, stacks, or bunches at the shoe or drags on the ground (e.g. "pools over the shoe"); otherwise null
 - hemSeverity: only when hemNotes is set — one of "slight" (a light break/rest on the shoe, barely bunching), "moderate" (visibly bunches but doesn't obstruct the shoe), "severe" (heavy bunching, fabric mostly covers the shoe or drags); otherwise null. Judge this purely on how much fabric is stacked, not on whether the trouser is a wide-leg or relaxed cut — a wide-leg trouser can have a slight, normal amount of break just like a slim one.
+- confidence: how sure you are that you read this garment correctly — "low", "medium" or "high". Use "low" freely for anything cropped, shadowed, or mostly hidden. An honest "low" is more useful than a confident guess.
+
+Then report on the outfit as a whole:
+- register: how the outfit reads overall, one of ${OUTFIT_REGISTERS.map((value) => `"${value}"`).join(", ")}. "eclectic" means the mixing of colour, pattern or era looks deliberate and is the point of the outfit rather than an accident — judge this on whether the combinations look chosen, not on how many there are. "minimal" is a restrained palette and plain shapes; "classic" is conventional smart-casual tailoring; "sporty" is athletic or technical pieces; "workwear" is utility fabrics and hard-wearing shapes; "formal" is suiting or evening dress.
+- photoQuality: "clear" if the whole outfit is visible and well lit, "partial" if part of it is cropped out or obscured, "poor" if the light or angle makes the pieces genuinely hard to read.
 
 List every clearly visible garment. Do not invent garments you can't see, and do not add commentary.`;
 }
@@ -1020,23 +1042,99 @@ const MIRROR_PERCEPTION_SCHEMA_GEMINI = {
   properties: {
     garments: {
       type: "array",
-      maxItems: 8,
+      maxItems: 10,
       items: {
         type: "object",
         properties: {
           region: { type: "string", enum: MIRROR_REGIONS },
           description: { type: "string" },
           color: { type: "string", enum: COLOR_NAMES },
+          colorHex: { type: "string" },
+          secondaryHex: { type: "string", nullable: true },
+          material: { type: "string", enum: MIRROR_MATERIALS },
+          patterned: { type: "boolean" },
+          patternScale: { type: "string", enum: MIRROR_PATTERN_SCALES, nullable: true },
           volume: { type: "string", enum: MIRROR_VOLUMES },
+          formality: { type: "integer" },
           hemNotes: { type: "string", nullable: true },
           hemSeverity: { type: "string", enum: MIRROR_HEM_SEVERITIES, nullable: true },
+          confidence: { type: "string", enum: MIRROR_CONFIDENCE },
         },
-        required: ["region", "description", "color", "volume", "hemNotes", "hemSeverity"],
+        required: ["region", "description", "color", "colorHex", "secondaryHex", "material", "patterned", "patternScale", "volume", "formality", "hemNotes", "hemSeverity", "confidence"],
       },
     },
+    register: { type: "string", enum: OUTFIT_REGISTERS },
+    photoQuality: { type: "string", enum: MIRROR_PHOTO_QUALITY },
   },
-  required: ["garments"],
+  required: ["garments", "register", "photoQuality"],
 };
+
+const MIRROR_PERCEPTION_SCHEMA_OPENAI = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    garments: {
+      type: "array",
+      maxItems: 10,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          region: { type: "string", enum: MIRROR_REGIONS },
+          description: { type: "string" },
+          color: { type: "string", enum: COLOR_NAMES },
+          colorHex: { type: "string" },
+          secondaryHex: { type: ["string", "null"] },
+          material: { type: "string", enum: MIRROR_MATERIALS },
+          patterned: { type: "boolean" },
+          patternScale: { type: ["string", "null"], enum: [...MIRROR_PATTERN_SCALES, null] },
+          volume: { type: "string", enum: MIRROR_VOLUMES },
+          formality: { type: "integer" },
+          hemNotes: { type: ["string", "null"] },
+          hemSeverity: { type: ["string", "null"], enum: [...MIRROR_HEM_SEVERITIES, null] },
+          confidence: { type: "string", enum: MIRROR_CONFIDENCE },
+        },
+        required: ["region", "description", "color", "colorHex", "secondaryHex", "material", "patterned", "patternScale", "volume", "formality", "hemNotes", "hemSeverity", "confidence"],
+      },
+    },
+    register: { type: "string", enum: OUTFIT_REGISTERS },
+    photoQuality: { type: "string", enum: MIRROR_PHOTO_QUALITY },
+  },
+  required: ["garments", "register", "photoQuality"],
+};
+
+// Anything the model got structurally wrong is corrected here rather than left
+// for the judge to trip over: an out-of-range formality, a pattern scale on a
+// solid, a hem note on a top. The critique downstream treats these fields as
+// facts, so they have to be facts.
+export function normalizePerception(parsed) {
+  if (!parsed || !Array.isArray(parsed.garments)) throw new Error("Perception returned an invalid result");
+  const hex = (value) => (/^#[0-9a-f]{6}$/i.test(String(value || "")) ? String(value).toLowerCase() : null);
+  const garments = parsed.garments.map((garment) => {
+    const patterned = garment.patterned === true;
+    const carriesHem = garment.region === "lowerbody" || garment.region === "fullbody";
+    return {
+      region: garment.region,
+      description: String(garment.description || "").trim(),
+      color: garment.color,
+      colorHex: hex(garment.colorHex),
+      secondaryHex: patterned ? hex(garment.secondaryHex) : null,
+      material: MIRROR_MATERIALS.includes(garment.material) ? garment.material : "other",
+      patterned,
+      patternScale: patterned && MIRROR_PATTERN_SCALES.includes(garment.patternScale) ? garment.patternScale : null,
+      volume: MIRROR_VOLUMES.includes(garment.volume) ? garment.volume : "regular",
+      formality: Math.min(5, Math.max(1, Math.round(Number(garment.formality) || 3))),
+      hemNotes: carriesHem && garment.hemNotes ? String(garment.hemNotes) : null,
+      hemSeverity: carriesHem && garment.hemNotes && MIRROR_HEM_SEVERITIES.includes(garment.hemSeverity) ? garment.hemSeverity : (carriesHem && garment.hemNotes ? "moderate" : null),
+      confidence: MIRROR_CONFIDENCE.includes(garment.confidence) ? garment.confidence : "medium",
+    };
+  });
+  return {
+    garments,
+    register: OUTFIT_REGISTERS.includes(parsed.register) ? parsed.register : "classic",
+    photoQuality: MIRROR_PHOTO_QUALITY.includes(parsed.photoQuality) ? parsed.photoQuality : "clear",
+  };
+}
 
 export async function geminiPerceiveOutfit({ key, model, image, mime }) {
   const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
@@ -1054,9 +1152,7 @@ export async function geminiPerceiveOutfit({ key, model, image, mime }) {
   if (!response.ok) throw new Error(result.error?.message || `Gemini perception failed (${response.status})`);
   const outputText = result.candidates?.[0]?.content?.parts?.find((part) => typeof part.text === "string")?.text;
   if (!outputText) throw new Error("Gemini perception returned no structured result");
-  const parsed = JSON.parse(outputText);
-  if (!Array.isArray(parsed.garments)) throw new Error("Gemini perception returned an invalid result");
-  return parsed.garments;
+  return normalizePerception(JSON.parse(outputText));
 }
 
 export async function openAIPerceiveOutfit({ key, baseUrl, model, image, mime }) {
@@ -1069,36 +1165,14 @@ export async function openAIPerceiveOutfit({ key, baseUrl, model, image, mime })
         { type: "input_text", text: buildMirrorPerceptionPrompt() },
         { type: "input_image", image_url: `data:${mime};base64,${image.toString("base64")}` },
       ] }],
-      text: { format: { type: "json_schema", name: "mirror_perception", strict: true, schema: {
-        type: "object", additionalProperties: false,
-        properties: {
-          garments: {
-            type: "array", maxItems: 8,
-            items: {
-              type: "object", additionalProperties: false,
-              properties: {
-                region: { type: "string", enum: MIRROR_REGIONS },
-                description: { type: "string" },
-                color: { type: "string", enum: COLOR_NAMES },
-                volume: { type: "string", enum: MIRROR_VOLUMES },
-                hemNotes: { type: ["string", "null"] },
-                hemSeverity: { type: ["string", "null"], enum: [...MIRROR_HEM_SEVERITIES, null] },
-              },
-              required: ["region", "description", "color", "volume", "hemNotes", "hemSeverity"],
-            },
-          },
-        },
-        required: ["garments"],
-      } } },
+      text: { format: { type: "json_schema", name: "mirror_perception", strict: true, schema: MIRROR_PERCEPTION_SCHEMA_OPENAI } },
     }),
   });
   const result = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(result.error?.message || `OpenAI perception failed (${response.status})`);
   const outputText = result.output_text || result.output?.flatMap((item) => item.content || []).find((item) => item.type === "output_text")?.text;
   if (!outputText) throw new Error("OpenAI perception returned no structured result");
-  const parsed = JSON.parse(outputText);
-  if (!Array.isArray(parsed.garments)) throw new Error("OpenAI perception returned an invalid result");
-  return parsed.garments;
+  return normalizePerception(JSON.parse(outputText));
 }
 
 export function wardrobeImportApi(options = {}) {

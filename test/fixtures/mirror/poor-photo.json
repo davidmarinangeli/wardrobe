@@ -1,0 +1,25 @@
+{
+  "name": "a photo the model could barely read",
+  "why": "Abstention. When the reading is shaky the feature must say less, not manufacture a confident answer — this is the failure mode that produced the navy-cap advice.",
+  "perception": {
+    "register": "classic",
+    "photoQuality": "poor",
+    "garments": [
+      { "region": "upperbody", "description": "dark jacket", "color": "green", "colorHex": "#3d5a3f", "secondaryHex": null, "patterned": false, "patternScale": null, "volume": "relaxed", "formality": 3, "hemNotes": null, "hemSeverity": null, "confidence": "low" },
+      { "region": "lowerbody", "description": "trousers", "color": "red", "colorHex": "#b3222a", "secondaryHex": null, "patterned": false, "patternScale": null, "volume": "relaxed", "formality": 2, "hemNotes": null, "hemSeverity": null, "confidence": "low" }
+    ]
+  },
+  "judgment": {
+    "findings": [
+      { "ruleId": "double-volume", "garmentIndices": [0, 1], "confidence": "medium", "summary": "Both halves look relaxed." },
+      { "ruleId": "off-match", "garmentIndices": [0, 1], "confidence": "medium", "summary": "The green and the red do not quite line up." }
+    ],
+    "works": []
+  },
+  "expect": {
+    "verdict": "clean",
+    "issueIds": [],
+    "rejects": { "double-volume": "a poor photo needs high confidence, and both garments were read at low confidence", "off-match": "same" },
+    "minWorks": 1
+  }
+}

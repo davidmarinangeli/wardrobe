@@ -1,0 +1,29 @@
+{
+  "name": "navy shirt, white tee, brown cargos — the original bug report",
+  "why": "A free-form model once called navy-with-brown a clash and proposed two swaps that contradicted each other. Both colours are neutrals; there is nothing here to report.",
+  "perception": {
+    "register": "classic",
+    "photoQuality": "clear",
+    "garments": [
+      { "region": "upperbody", "description": "open-collar shirt", "color": "navy", "colorHex": "#232a3d", "secondaryHex": null, "patterned": false, "patternScale": null, "volume": "regular", "formality": 3, "hemNotes": null, "hemSeverity": null, "confidence": "high" },
+      { "region": "upperbody", "description": "crew neck tee", "color": "white", "colorHex": "#f2f4f7", "secondaryHex": null, "patterned": false, "patternScale": null, "volume": "regular", "formality": 2, "hemNotes": null, "hemSeverity": null, "confidence": "high" },
+      { "region": "lowerbody", "description": "wide-leg cargo pants", "color": "brown", "colorHex": "#71502c", "secondaryHex": null, "patterned": false, "patternScale": null, "volume": "relaxed", "formality": 2, "hemNotes": "rests on the shoe", "hemSeverity": "slight", "confidence": "high" }
+    ]
+  },
+  "judgment": {
+    "findings": [
+      { "ruleId": "off-match", "garmentIndices": [0, 2], "confidence": "high", "summary": "The navy and the brown do not quite agree." },
+      { "ruleId": "pooling-hem", "garmentIndices": [2], "confidence": "medium", "summary": "The cargos rest on the shoe." }
+    ],
+    "works": []
+  },
+  "expect": {
+    "verdict": "clean",
+    "issueIds": [],
+    "rejects": {
+      "off-match": "navy and brown are both neutrals, so there are no two chromatic hues to be near-missing",
+      "pooling-hem": "a wide-leg cut is designed to break at the shoe; slight drape on a relaxed trouser is the silhouette, not a fault"
+    },
+    "minWorks": 1
+  }
+}

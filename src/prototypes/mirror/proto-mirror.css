@@ -1,0 +1,143 @@
+/* PROTOTYPE — throwaway styles for the three Mirror critique variants.
+   Borrows the app's tokens so the variants are judged against the real panel
+   rather than against a blank page. Delete with the variants. */
+
+.pm { display: flex; flex-direction: column; }
+.pm b { font-weight: 620; color: var(--ink); }
+
+/* ── A · Lede ───────────────────────────────────────────────────────────── */
+
+.pm--lede { gap: 22px; }
+
+.pm-lede {
+  margin: 0;
+  font: 400 clamp(19px, 2.4vw, 23px)/1.32 "Instrument Sans", sans-serif;
+  letter-spacing: -0.02em;
+  color: var(--muted);
+}
+.pm-lede b { color: var(--ink); font-weight: 560; }
+
+.pm-block { display: flex; flex-direction: column; gap: 6px; }
+.pm-block--quiet { opacity: 0.9; }
+
+.pm-block__title {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.pm-block__body { margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink); }
+
+/* ── B · Read ───────────────────────────────────────────────────────────── */
+
+.pm--read { gap: 20px; }
+
+.pm-read__head { padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+.pm-read__eyebrow {
+  margin: 0 0 2px;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.pm-read__register {
+  margin: 0;
+  font: 500 clamp(34px, 6vw, 52px)/1 "Instrument Sans", sans-serif;
+  letter-spacing: -0.04em;
+  text-transform: capitalize;
+}
+.pm-read__gloss { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
+
+.pm-read__praise { margin: 0; font-size: 14px; line-height: 1.5; }
+
+.pm-read__list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 16px; }
+.pm-read__list li { padding-left: 14px; border-left: 2px solid var(--line); }
+.pm-read__label { margin: 0 0 2px; font-size: 14px; }
+.pm-read__summary { margin: 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
+
+/* ── C · Scored ─────────────────────────────────────────────────────────── */
+
+.pm--scored { gap: 18px; }
+
+.pm-score { display: flex; align-items: center; gap: 16px; }
+.pm-score__dial {
+  flex: none;
+  width: 78px; height: 78px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background:
+    conic-gradient(var(--ink) var(--fill), var(--line) var(--fill)) border-box;
+  position: relative;
+}
+.pm-score__dial::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  background: var(--paper-raised, #fff);
+}
+.pm-score__number {
+  position: relative; z-index: 1;
+  font: 500 30px/1 "Instrument Sans", sans-serif;
+  letter-spacing: -0.04em;
+}
+.pm-score__out { position: relative; z-index: 1; font-size: 10px; color: var(--muted); margin-top: 1px; }
+.pm-score__verdict { margin: 0 0 3px; font-size: 16px; font-weight: 560; }
+.pm-score__basis { margin: 0; font-size: 11px; line-height: 1.45; color: var(--muted); }
+
+.pm-scored__row { display: flex; gap: 12px; padding-top: 14px; border-top: 1px solid var(--line); }
+.pm-scored__cost {
+  flex: none;
+  min-width: 34px;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.pm-scored__cost--plus { color: var(--ink); }
+.pm-scored__label { margin: 0 0 2px; font-size: 14px; }
+.pm-scored__summary { margin: 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
+
+/* ── shared remedy blocks ───────────────────────────────────────────────── */
+
+.pm-guidance {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.pm-swap { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
+.pm-swap__thumb {
+  flex: none;
+  width: 44px; height: 44px;
+  display: grid; place-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm, 8px);
+  background: var(--paper-raised);
+}
+.pm-swap__thumb img { width: 100%; height: 100%; object-fit: contain; }
+.pm-swap__name { margin: 0; font-size: 13px; }
+.pm-swap__reason { margin: 1px 0 0; font-size: 12px; color: var(--muted); }
+
+/* ── the prototype's own chrome, deliberately not part of the design ────── */
+
+.pm-banner {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  margin-bottom: 16px; padding: 7px 10px;
+  border: 1px dashed var(--line); border-radius: 8px;
+  font-size: 11px; color: var(--muted);
+}
+.pm-banner strong { color: var(--ink); font-weight: 600; }
+
+/* PROTOTYPE: stand-in for the photo frame while reviewing a saved critique. */
+.mirror-photo__placeholder {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border-radius: var(--r-md, 12px);
+  border: 1px dashed var(--line);
+  background: var(--paper-raised);
+}
