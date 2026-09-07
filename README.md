@@ -39,7 +39,7 @@ The core import pipeline above is still here, but this fork turns it into a full
 
 **AI & providers**
 
-- **Choice of provider** — the original shipped on OpenAI only; this fork adds **Gemini** (with a free tier via Google AI Studio) and **MiniMax** as full alternatives, configurable with `AI_PROVIDER`.
+- **Choice of provider** — the original shipped on OpenAI only; this fork adds **OpenRouter**, **Gemini** (with a free tier via Google AI Studio), and **MiniMax** as alternatives, configurable with `AI_PROVIDER`.
 - **Gemini TEST/PROD mode** — a header toggle that switches between a free, unbilled key for everyday use and a billed key for higher-quality output, with no restart needed.
 - **Face reference photo** — an optional close-up face/shoulders photo, sent alongside the full-body reference to sharpen facial identity across generations.
 - **Outfit-level and item-level modeled photos** — Standard vs. Premium quality tiers, with regeneration notes.

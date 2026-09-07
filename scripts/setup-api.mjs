@@ -3,7 +3,7 @@ import path from "node:path";
 import sharp from "sharp";
 import { AI_PROVIDERS } from "./import-job-api.mjs";
 
-const WRITABLE_KEYS = new Set(["AI_PROVIDER", "OPENAI_API_KEY", "GEMINI_API_KEY_TEST", "GEMINI_API_KEY_PROD", "MINIMAX_API_KEY"]);
+const WRITABLE_KEYS = new Set(["AI_PROVIDER", "OPENAI_API_KEY", "OPENROUTER_API_KEY", "GEMINI_API_KEY_TEST", "GEMINI_API_KEY_PROD", "MINIMAX_API_KEY"]);
 const ENV_LINE = /^([A-Z0-9_]+)=/;
 
 function json(res, status, value) {

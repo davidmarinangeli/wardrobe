@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { atomicJson, readAiMode, resolveApiKey, resolveProvider } from "./import-job-api.mjs";
+import { atomicJson, readAiMode, resolveApiKey, resolveOpenAICompatibleBaseUrl, resolveProvider } from "./import-job-api.mjs";
 import { PART_TO_REGION, classifyColor, describeColorHarmonyRules, evaluateColorHarmony } from "./style-rules.mjs";
 import { NO_JUDGMENT_PROMPT } from "../shared/prompt-guardrails.mjs";
 import { GARMENT_PART_MAP, describeCoverageRule, isFullCoverage } from "../shared/garments.mjs";
@@ -211,7 +211,30 @@ async function readClassifiedPins(inspoFile) {
   return Array.isArray(pins) ? pins.filter((pin) => pin.category && pin.name) : [];
 }
 
-async function computeStyleDNA(classified, styleDnaFile, setting, mode) {
+function responseOutputText(result) {
+  return result.output_text
+    || result.output?.flatMap((item) => item.content || []).find((item) => item.type === "output_text")?.text;
+}
+
+async function openRouterText({ key, baseUrl, model, prompt, schema = null, schemaName = "result", maxOutputTokens = 1200 }) {
+  const response = await fetch(`${baseUrl}/responses`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      input: prompt,
+      max_output_tokens: maxOutputTokens,
+      ...(schema ? { text: { format: { type: "json_schema", name: schemaName, strict: true, schema } } } : {}),
+    }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error?.message || `OpenRouter request failed (${response.status})`);
+  const text = responseOutputText(result);
+  if (!text) throw new Error("OpenRouter returned no text result");
+  return text;
+}
+
+async function computeStyleDNA(classified, styleDnaFile, setting, mode, provider) {
   if (classified.length < STYLE_DNA_MIN_PINS) return null;
 
   const hash = inspoHash(classified);
@@ -231,10 +254,12 @@ async function computeStyleDNA(classified, styleDnaFile, setting, mode) {
     return parts.join(" — ");
   }).join("\n");
 
-  const { key } = resolveApiKey(setting, "gemini", mode);
+  const { key } = resolveApiKey(setting, provider, mode);
   if (!key) return null;
 
-  const model = setting("GEMINI_SUGGESTIONS_MODEL", "gemini-3.6-flash");
+  const model = provider === "openrouter"
+    ? setting("OPENROUTER_SUGGESTIONS_MODEL", setting("OPENROUTER_VISION_MODEL", "openai/gpt-5.4-mini"))
+    : setting("GEMINI_SUGGESTIONS_MODEL", "gemini-3.6-flash");
 
   // This text is shown back to the user as well as injected into the suggestion
   // prompt, so it has to read as a description of an aesthetic rather than as a
@@ -250,17 +275,32 @@ ${NO_JUDGMENT_PROMPT}
 Inspiration pins:
 ${pinSummaries}`;
 
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-    method: "POST",
-    headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: 300 },
-    }),
-  });
-  if (!response.ok) return null;
-  const result = await response.json().catch(() => ({}));
-  const text = result.candidates?.[0]?.content?.parts?.find((p) => typeof p.text === "string")?.text;
+  let text;
+  if (provider === "openrouter") {
+    try {
+      text = await openRouterText({
+        key,
+        baseUrl: resolveOpenAICompatibleBaseUrl(setting, provider),
+        model,
+        prompt,
+        maxOutputTokens: 300,
+      });
+    } catch {
+      return null;
+    }
+  } else {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: "POST",
+      headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { maxOutputTokens: 300 },
+      }),
+    });
+    if (!response.ok) return null;
+    const result = await response.json().catch(() => ({}));
+    text = result.candidates?.[0]?.content?.parts?.find((p) => typeof p.text === "string")?.text;
+  }
   if (!text) return null;
 
   // Cache
@@ -303,11 +343,13 @@ const SUGGESTION_SCHEMA = {
   required: ["outfits"],
 };
 
-async function generateSuggestions({ filteredItems, weather, occasion, colorProfile, styleDna, preferences, existingOutfits, setting, mode }) {
-  const { key, keyName } = resolveApiKey(setting, "gemini", mode);
+async function generateSuggestions({ filteredItems, weather, occasion, colorProfile, styleDna, preferences, existingOutfits, setting, mode, provider }) {
+  const { key, keyName } = resolveApiKey(setting, provider, mode);
   if (!key) throw new Error(`${keyName} is not configured for ${mode.toUpperCase()} mode`);
 
-  const model = setting("GEMINI_SUGGESTIONS_MODEL", "gemini-3.6-flash");
+  const model = provider === "openrouter"
+    ? setting("OPENROUTER_SUGGESTIONS_MODEL", setting("OPENROUTER_VISION_MODEL", "openai/gpt-5.4-mini"))
+    : setting("GEMINI_SUGGESTIONS_MODEL", "gemini-3.6-flash");
 
   // Build wardrobe text — colors are classified through the same shared vocabulary
   // Mirror uses, so navy/brown/etc. are correctly labeled neutral instead of being
@@ -378,23 +420,35 @@ Rules:
 - Each outfit needs a short name (2-4 words) and a "reasoning" object with style, color, weather, and occasion explanations. Keep each explanation to 1-2 sentences.
 - Reasoning explains why these pieces work together. It never comments on how current the wardrobe is, and never suggests buying or replacing anything.`;
 
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-    method: "POST",
-    headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: SUGGESTION_SCHEMA,
-        temperature: 0.9,
-      },
-    }),
-  });
+  let outputText;
+  if (provider === "openrouter") {
+    outputText = await openRouterText({
+      key,
+      baseUrl: resolveOpenAICompatibleBaseUrl(setting, provider),
+      model,
+      prompt,
+      schema: SUGGESTION_SCHEMA,
+      schemaName: "wardrobe_suggestions",
+    });
+  } else {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: "POST",
+      headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: SUGGESTION_SCHEMA,
+          temperature: 0.9,
+        },
+      }),
+    });
 
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(result.error?.message || `Gemini suggestions failed (${response.status})`);
-  const outputText = result.candidates?.[0]?.content?.parts?.find((p) => typeof p.text === "string")?.text;
-  if (!outputText) throw new Error("Gemini returned no suggestion result");
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error?.message || `Gemini suggestions failed (${response.status})`);
+    outputText = result.candidates?.[0]?.content?.parts?.find((p) => typeof p.text === "string")?.text;
+    if (!outputText) throw new Error("Gemini returned no suggestion result");
+  }
   const parsed = JSON.parse(outputText);
   if (!Array.isArray(parsed.outfits)) throw new Error("Gemini returned invalid suggestions format");
 
@@ -452,12 +506,12 @@ export function suggestionsApi(options = {}) {
           ? input.occasion : "casual";
 
         const { provider } = resolveProvider(setting);
-        if (provider !== "gemini") {
-          return json(res, 400, { error: "Outfit suggestions require Gemini. Set AI_PROVIDER=gemini in .env." });
+        if (provider !== "gemini" && provider !== "openrouter") {
+          return json(res, 400, { error: "Outfit suggestions require Gemini or OpenRouter." });
         }
 
         const mode = await readAiMode(dataDir);
-        const { key, keyName } = resolveApiKey(setting, "gemini", mode);
+        const { key, keyName } = resolveApiKey(setting, provider, mode);
         if (!key) return json(res, 503, { error: `${keyName} is not configured for ${mode.toUpperCase()} mode.` });
 
         // Load wardrobe
@@ -492,7 +546,7 @@ export function suggestionsApi(options = {}) {
         try {
           const classified = await readClassifiedPins(inspoFile);
           pinCount = classified.length;
-          styleDna = await computeStyleDNA(classified, styleDnaFile, setting, mode);
+          styleDna = await computeStyleDNA(classified, styleDnaFile, setting, mode, provider);
         } catch { /* style DNA is optional */ }
 
         // Color profile (passed from frontend)
@@ -518,6 +572,7 @@ export function suggestionsApi(options = {}) {
           existingOutfits,
           setting,
           mode,
+          provider,
         });
 
         // The style read is returned in full, not as a boolean. Showing the user

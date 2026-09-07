@@ -167,13 +167,26 @@ Avoid: person, body, skin, hair, mannequin, hanger, props, other garments, retai
 Critical: Use no ${chromaKey} anywhere in the garment. Produce exactly one complete garment with a crisp, separable outer silhouette.`;
 }
 
-export const AI_PROVIDERS = new Set(["openai", "gemini", "minimax"]);
+export const AI_PROVIDERS = new Set(["openai", "openrouter", "gemini", "minimax"]);
 
 export function resolveProvider(setting) {
   const requested = setting("AI_PROVIDER", "openai");
   const provider = AI_PROVIDERS.has(requested) ? requested : "openai";
-  const keyName = provider === "gemini" ? "GEMINI_API_KEY" : provider === "minimax" ? "MINIMAX_API_KEY" : "OPENAI_API_KEY";
+  const keyName = provider === "gemini"
+    ? "GEMINI_API_KEY"
+    : provider === "minimax"
+      ? "MINIMAX_API_KEY"
+      : provider === "openrouter"
+        ? "OPENROUTER_API_KEY"
+        : "OPENAI_API_KEY";
   return { provider, keyName };
+}
+
+export function resolveOpenAICompatibleBaseUrl(setting, provider) {
+  const [key, fallback] = provider === "openrouter"
+    ? ["OPENROUTER_API_BASE_URL", "https://openrouter.ai/api/v1"]
+    : ["OPENAI_API_BASE_URL", "https://api.openai.com/v1"];
+  return setting(key, fallback).replace(/\/$/, "");
 }
 
 const AI_MODE_FILE = "ai-mode.json";
@@ -198,9 +211,10 @@ export async function writeAiMode(dataDir, mode) {
   return mode;
 }
 
-// OpenAI and MiniMax have no free tier, so mode only changes which key/model is used for Gemini.
+// OpenAI, OpenRouter and MiniMax have no free tier, so mode only changes which key/model is used for Gemini.
 export function resolveApiKey(setting, provider, mode) {
   if (provider === "minimax") return { key: setting("MINIMAX_API_KEY"), keyName: "MINIMAX_API_KEY" };
+  if (provider === "openrouter") return { key: setting("OPENROUTER_API_KEY"), keyName: "OPENROUTER_API_KEY" };
   if (provider !== "gemini") return { key: setting("OPENAI_API_KEY"), keyName: "OPENAI_API_KEY" };
   if (mode === "test") return { key: setting("GEMINI_API_KEY_TEST"), keyName: "GEMINI_API_KEY_TEST" };
   const legacyKey = setting("GEMINI_API_KEY");
@@ -322,17 +336,24 @@ export async function computeIdentityProfile({ root, dataDir, setting, provider,
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
   }
-  // Vision analysis has no MiniMax path, so fall back to OpenAI the same way outfit style
-  // analysis does (outfits-api.mjs) — a MiniMax setup can still get an identity profile.
-  const identityProvider = provider === "gemini" ? "gemini" : "openai";
-  const identityKey = identityProvider === "gemini" ? resolveApiKey(setting, "gemini", mode).key : setting("OPENAI_API_KEY");
+  // MiniMax has no vision path, so it falls back to OpenAI. OpenRouter is itself
+  // vision-capable and keeps using its own key and model.
+  const identityProvider = provider === "gemini" || provider === "openrouter" ? provider : "openai";
+  const identityKey = resolveApiKey(setting, identityProvider, mode).key;
   if (!identityKey) return null;
   const images = face ? [modelData, face.data] : [modelData];
   let profile;
   try {
     profile = identityProvider === "gemini"
       ? await geminiDescribeIdentity({ key: identityKey, model: setting("GEMINI_VISION_MODEL", "gemini-3.6-flash"), images })
-      : await openAIDescribeIdentity({ key: identityKey, baseUrl: setting("OPENAI_API_BASE_URL", "https://api.openai.com/v1").replace(/\/$/, ""), model: setting("OPENAI_VISION_MODEL", "gpt-5.4-mini"), images });
+      : await openAIDescribeIdentity({
+        key: identityKey,
+        baseUrl: resolveOpenAICompatibleBaseUrl(setting, identityProvider),
+        model: identityProvider === "openrouter"
+          ? setting("OPENROUTER_VISION_MODEL", "openai/gpt-5.4-mini")
+          : setting("OPENAI_VISION_MODEL", "gpt-5.4-mini"),
+        images,
+      });
   } catch (error) {
     console.warn(`Identity profile generation failed (${error.message})`);
     return null;
@@ -358,6 +379,14 @@ export function resolveModeledModel(provider, tier, setting) {
       model: premium
         ? setting("MINIMAX_MODELED_PREMIUM_MODEL", setting("MINIMAX_MODELED_MODEL", setting("MINIMAX_IMAGE_MODEL", "image-01")))
         : setting("MINIMAX_MODELED_MODEL", setting("MINIMAX_IMAGE_MODEL", "image-01")),
+    };
+  }
+  if (provider === "openrouter") {
+    return {
+      model: premium
+        ? setting("OPENROUTER_MODELED_PREMIUM_MODEL", setting("OPENROUTER_IMAGE_MODEL", "openai/gpt-image-2"))
+        : setting("OPENROUTER_MODELED_MODEL", setting("OPENROUTER_IMAGE_MODEL", "openai/gpt-image-2")),
+      quality: premium ? "high" : "medium",
     };
   }
   return {
@@ -718,6 +747,35 @@ export async function openAIEdit({ key, baseUrl, model, prompt, images, size, ba
   return Buffer.from(encoded, "base64");
 }
 
+export async function openRouterEdit({ key, baseUrl, model, prompt, images, size, background, quality }) {
+  const inputReferences = [];
+  for (const image of images) {
+    const normalized = await normalizeImage(image.data);
+    inputReferences.push({
+      type: "image_url",
+      image_url: { url: `data:image/png;base64,${normalized.toString("base64")}` },
+    });
+  }
+  const response = await fetch(`${baseUrl}/images`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      prompt,
+      input_references: inputReferences,
+      size,
+      quality: quality || "high",
+      output_format: "png",
+      ...(background ? { background } : {}),
+    }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error?.message || `OpenRouter image request failed (${response.status})`);
+  const encoded = result.data?.[0]?.b64_json;
+  if (!encoded) throw new Error("OpenRouter response did not contain image data");
+  return Buffer.from(encoded, "base64");
+}
+
 function geminiImageFormat(size) {
   const [width, height] = size.split("x").map(Number);
   const divisor = (a, b) => (b ? divisor(b, a % b) : a) || 1;
@@ -1052,7 +1110,7 @@ export function wardrobeImportApi(options = {}) {
   const running = new Map();
   const runningModeled = new Map();
   const setting = (name, fallback = "") => options.env?.[name] || process.env[name] || fallback;
-  const apiBaseUrl = () => setting("OPENAI_API_BASE_URL", "https://api.openai.com/v1").replace(/\/$/, "");
+  const apiBaseUrl = (provider = activeProvider()) => resolveOpenAICompatibleBaseUrl(setting, provider);
   const miniMaxBaseUrl = () => setting("MINIMAX_API_BASE_URL", "https://api.minimax.io/v1").replace(/\/$/, "");
   const activeProvider = () => resolveProvider(setting).provider;
   const currentMode = () => readAiMode(dataDir);
@@ -1160,8 +1218,10 @@ export function wardrobeImportApi(options = {}) {
             promptOptimizer: setting("MINIMAX_PROMPT_OPTIMIZER") === "true",
             seed: /^-?\d+$/.test(seedValue) ? Number(seedValue) : undefined,
           });
+        } else if (provider === "openrouter") {
+          bytes = await openRouterEdit({ key, baseUrl: apiBaseUrl(provider), model: resolved.model, quality: resolved.quality, size: "1536x1024", images: [...referenceImages, garment], prompt: modeledPrompt });
         } else {
-          bytes = await openAIEdit({ key, baseUrl: apiBaseUrl(), model: resolved.model, quality: resolved.quality, size: "1536x1024", images: [...referenceImages, garment], prompt: modeledPrompt });
+          bytes = await openAIEdit({ key, baseUrl: apiBaseUrl(provider), model: resolved.model, quality: resolved.quality, size: "1536x1024", images: [...referenceImages, garment], prompt: modeledPrompt });
         }
         const modeledName = `${id}-modeled.png`;
         await writeFile(path.join(libraryAssetDir, modeledName), bytes);
@@ -1223,8 +1283,10 @@ export function wardrobeImportApi(options = {}) {
               promptOptimizer: setting("MINIMAX_PROMPT_OPTIMIZER") === "true",
               seed: /^-?\d+$/.test(seedValue) ? Number(seedValue) : undefined,
             });
+          } else if (provider === "openrouter") {
+            rawBytes = await openRouterEdit({ key, baseUrl: apiBaseUrl(provider), model: setting("OPENROUTER_GARMENT_MODEL", setting("OPENROUTER_IMAGE_MODEL", "openai/gpt-image-2")), quality: setting("OPENROUTER_IMAGE_QUALITY", "high"), size: "1024x1024", images: [original], prompt: garmentPrompt });
           } else {
-            rawBytes = await openAIEdit({ key, baseUrl: apiBaseUrl(), model: setting("OPENAI_GARMENT_MODEL", setting("OPENAI_IMAGE_MODEL", "gpt-image-2")), quality: setting("OPENAI_IMAGE_QUALITY", "high"), size: "1024x1024", images: [original], prompt: garmentPrompt });
+            rawBytes = await openAIEdit({ key, baseUrl: apiBaseUrl(provider), model: setting("OPENAI_GARMENT_MODEL", setting("OPENAI_IMAGE_MODEL", "gpt-image-2")), quality: setting("OPENAI_IMAGE_QUALITY", "high"), size: "1024x1024", images: [original], prompt: garmentPrompt });
           }
           // Gemini and MiniMax don't reliably render the exact requested chroma color, so detect whatever solid backdrop they actually used instead of trusting the request.
           chromaKeyUsed = provider === "openai" ? requestedChromaKey : await detectBorderColor(rawBytes);
@@ -1343,7 +1405,13 @@ export function wardrobeImportApi(options = {}) {
         const { key } = resolveApiKey(setting, provider, setup.mode);
         const detected = (provider === "gemini"
           ? await geminiAnalyze({ key, model: setting("GEMINI_VISION_MODEL", "gemini-3.6-flash"), image: normalizedImage, mime: "image/png" })
-          : await openAIAnalyze({ key, baseUrl: apiBaseUrl(), model: setting("OPENAI_VISION_MODEL", "gpt-5.4-mini"), image: normalizedImage, mime: "image/png" })
+          : await openAIAnalyze({
+            key,
+            baseUrl: apiBaseUrl(provider),
+            model: provider === "openrouter" ? setting("OPENROUTER_VISION_MODEL", "openai/gpt-5.4-mini") : setting("OPENAI_VISION_MODEL", "gpt-5.4-mini"),
+            image: normalizedImage,
+            mime: "image/png",
+          })
         ).map(normalizeMetadata);
         const jobs = [];
         for (const metadata of detected) {

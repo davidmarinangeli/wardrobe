@@ -7,6 +7,7 @@ import {
   normalizeImage,
   readAiMode,
   resolveApiKey,
+  resolveOpenAICompatibleBaseUrl,
   resolveProvider,
 } from "./import-job-api.mjs";
 import { SEASONS } from "../shared/color-seasons.mjs";
@@ -361,7 +362,7 @@ export function colorProfileApi(options = {}) {
   let root;
   let dataDir;
   const setting = (name, fallback = "") => options.env?.[name] || process.env[name] || fallback;
-  const apiBaseUrl = () => setting("OPENAI_API_BASE_URL", "https://api.openai.com/v1").replace(/\/$/, "");
+  const apiBaseUrl = (provider) => resolveOpenAICompatibleBaseUrl(setting, provider);
 
   async function getReferenceImage() {
     const face = await loadFaceReference(root, setting);
@@ -459,7 +460,7 @@ export function colorProfileApi(options = {}) {
 
         const { provider } = resolveProvider(setting);
         const mode = await readAiMode(dataDir);
-        const activeProvider = provider === "gemini" ? "gemini" : "openai";
+        const activeProvider = provider === "gemini" || provider === "openrouter" ? provider : "openai";
         const { key } = resolveApiKey(setting, activeProvider, mode);
 
         if (!key) {
@@ -476,8 +477,8 @@ export function colorProfileApi(options = {}) {
             })
           : await openAIAnalyzeDrapes({
               key,
-              baseUrl: apiBaseUrl(),
-              model: setting("OPENAI_VISION_MODEL", "gpt-5.4-mini"),
+              baseUrl: apiBaseUrl(activeProvider),
+              model: activeProvider === "openrouter" ? setting("OPENROUTER_VISION_MODEL", "openai/gpt-5.4-mini") : setting("OPENAI_VISION_MODEL", "gpt-5.4-mini"),
               candidates,
             });
 
@@ -515,7 +516,7 @@ export function colorProfileApi(options = {}) {
 
         const { provider } = resolveProvider(setting);
         const mode = await readAiMode(dataDir);
-        const activeProvider = provider === "gemini" ? "gemini" : "openai";
+        const activeProvider = provider === "gemini" || provider === "openrouter" ? provider : "openai";
         const { key, keyName } = resolveApiKey(setting, activeProvider, mode);
         if (!key) {
           return json(res, 503, { error: `${keyName} is not configured for ${mode.toUpperCase()} mode.` });
@@ -532,8 +533,8 @@ export function colorProfileApi(options = {}) {
             })
           : await openAIAnalyzeColorProfile({
               key,
-              baseUrl: apiBaseUrl(),
-              model: setting("OPENAI_VISION_MODEL", "gpt-5.4-mini"),
+              baseUrl: apiBaseUrl(activeProvider),
+              model: activeProvider === "openrouter" ? setting("OPENROUTER_VISION_MODEL", "openai/gpt-5.4-mini") : setting("OPENAI_VISION_MODEL", "gpt-5.4-mini"),
               image: normalized,
               mime: "image/png",
             });

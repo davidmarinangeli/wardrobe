@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { atomicJson, buildModeledPrompt, checkSetup, computeIdentityProfile, geminiAnalyzeOutfitStyle, geminiEdit, isLikelyBottom, isLikelyCroppedOrShortBottom, isLikelySocks, isPremiumAllowed, loadFaceReference, miniMaxEdit, openAIAnalyzeOutfitStyle, openAIEdit, readAiMode, resolveApiKey, resolveModeledModel, resolveProvider } from "./import-job-api.mjs";
+import { atomicJson, buildModeledPrompt, checkSetup, computeIdentityProfile, geminiAnalyzeOutfitStyle, geminiEdit, isLikelyBottom, isLikelyCroppedOrShortBottom, isLikelySocks, isPremiumAllowed, loadFaceReference, miniMaxEdit, openAIAnalyzeOutfitStyle, openAIEdit, openRouterEdit, readAiMode, resolveApiKey, resolveModeledModel, resolveOpenAICompatibleBaseUrl, resolveProvider } from "./import-job-api.mjs";
 
 import { recordSignal } from "./preferences-api.mjs";
 import { summarizeOutfits } from "../shared/outfit-index.mjs";
@@ -58,7 +58,7 @@ export function outfitsApi(options = {}) {
   let outfitAssetDir;
   const running = new Map();
   const setting = (name, fallback = "") => options.env?.[name] || process.env[name] || fallback;
-  const apiBaseUrl = () => setting("OPENAI_API_BASE_URL", "https://api.openai.com/v1").replace(/\/$/, "");
+  const apiBaseUrl = (provider) => resolveOpenAICompatibleBaseUrl(setting, provider);
   const miniMaxBaseUrl = () => setting("MINIMAX_API_BASE_URL", "https://api.minimax.io/v1").replace(/\/$/, "");
   const currentMode = () => readAiMode(dataDir);
 
@@ -140,8 +140,10 @@ export function outfitsApi(options = {}) {
             promptOptimizer: setting("MINIMAX_PROMPT_OPTIMIZER") === "true",
             seed: /^-?\d+$/.test(seedValue) ? Number(seedValue) : undefined,
           });
+        } else if (provider === "openrouter") {
+          bytes = await openRouterEdit({ key, baseUrl: apiBaseUrl(provider), model: resolved.model, quality: resolved.quality, size: "1536x1024", images: [...referenceImages, ...garments], prompt: modeledPrompt });
         } else {
-          bytes = await openAIEdit({ key, baseUrl: apiBaseUrl(), model: resolved.model, quality: resolved.quality, size: "1536x1024", images: [...referenceImages, ...garments], prompt: modeledPrompt });
+          bytes = await openAIEdit({ key, baseUrl: apiBaseUrl(provider), model: resolved.model, quality: resolved.quality, size: "1536x1024", images: [...referenceImages, ...garments], prompt: modeledPrompt });
         }
         const modeledName = `${id}-modeled.png`;
         await mkdir(outfitAssetDir, { recursive: true });
@@ -153,14 +155,19 @@ export function outfitsApi(options = {}) {
         // Non-fatal: the modeled photo already succeeded and was persisted above, so a style-analysis
         // failure (e.g. no OpenAI key configured when running on minimax) shouldn't surface as an error.
         try {
-          // Neither Gemini's nor MiniMax's setup here has a text/vision analysis path proven out for this
-          // free-form task, so style analysis always uses OpenAI vision, falling back to it for minimax too.
-          const styleProvider = provider === "gemini" ? "gemini" : "openai";
-          const styleKey = styleProvider === "gemini" ? key : setting("OPENAI_API_KEY");
+          // MiniMax has no text/vision path, so only it falls back to OpenAI.
+          const styleProvider = provider === "gemini" || provider === "openrouter" ? provider : "openai";
+          const styleKey = resolveApiKey(setting, styleProvider, mode).key;
           if (!styleKey) throw new Error("no vision API key configured for outfit style analysis");
           const style = styleProvider === "gemini"
             ? await geminiAnalyzeOutfitStyle({ key: styleKey, model: setting("GEMINI_VISION_MODEL", "gemini-3.6-flash"), image: bytes, mime: "image/png" })
-            : await openAIAnalyzeOutfitStyle({ key: styleKey, baseUrl: apiBaseUrl(), model: setting("OPENAI_VISION_MODEL", "gpt-5.4-mini"), image: bytes, mime: "image/png" });
+            : await openAIAnalyzeOutfitStyle({
+              key: styleKey,
+              baseUrl: apiBaseUrl(styleProvider),
+              model: styleProvider === "openrouter" ? setting("OPENROUTER_VISION_MODEL", "openai/gpt-5.4-mini") : setting("OPENAI_VISION_MODEL", "gpt-5.4-mini"),
+              image: bytes,
+              mime: "image/png",
+            });
           const afterStyle = await loadOutfits();
           await atomicJson(outfitsFile, afterStyle.map((item) => item.id === id
             ? { ...item, description: style.description, tags: style.tags }
