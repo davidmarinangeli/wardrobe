@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- viewport-fit=cover so env(safe-area-inset-*) reports real numbers —
+         without it the nav's home-indicator padding silently reads as 0. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#f4f0e8" />
+    <!-- Installable in its own right, so the gesture can be judged with no
+         browser chrome at all: Share → Add to Home Screen. That removes the
+         URL bar and pull-to-refresh entirely — but the gesture is fixed to
+         work in a plain tab too, because relying on standalone mode would be
+         hiding the bug rather than fixing it. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="WD Proto" />
+    <link rel="manifest" href="/prototype.webmanifest" />
+    <title>Mobile overhaul prototypes — Wardrobe</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📱</text></svg>" />
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/mobile-prototype-entry.jsx"></script>
+  </body>
+</html>

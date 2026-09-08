@@ -34,6 +34,13 @@ import { useLayoutEffect } from "react";
  */
 export function useExpandOrigin(entryRef, openedFrom) {
   useLayoutEffect(() => {
+    // On phones, every panel is a bottom sheet that slides up from the viewport bottom.
+    // Card expansion is desktop-only (>860px); running it on mobile would set --card-x/y
+    // and interrupt the sheet-in keyframes, causing sheets to inflate or clip.
+    if (typeof window !== "undefined" && window.matchMedia?.("(max-width: 860px)").matches) {
+      return undefined;
+    }
+
     const entry = entryRef.current;
     if (!entry || !openedFrom?.isConnected) return undefined;
 

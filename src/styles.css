@@ -60,6 +60,36 @@
   --glass-border: rgba(255, 255, 255, .5);
   --glass-border-hover: rgba(255, 255, 255, .75);
 
+  /* Refracting chrome — the dark register.
+     ────────────────────────────────────────────────────────────────────────
+     Two things this set exists for.
+
+     One: contrast. Refraction and specular highlights need something with
+     contrast behind them, and cream chrome on a cream ground has none — the
+     surface reads flat no matter how much blur goes on it. So floating chrome
+     switches register and goes dark, while the page, the grid and the garments
+     stay warm. The colour passing under a bar becomes the thing you see
+     through it.
+
+     Two: a budget. --glass-blur-chrome is 10px and carries no saturate() pass,
+     and that is a measured limit rather than a taste call. backdrop-filter
+     re-samples and re-blurs the region behind an element on every frame that
+     region changes; cost grows with the square of the radius and again with
+     device pixel ratio, so the 20px above is a ~70px kernel on a DPR-3.5 phone
+     and drops frames on a flagship Android. Surfaces that float over scrolling
+     content use this radius and get their richness from refraction (see
+     useGlassSurface) rather than from more blur. */
+  --glass-blur-chrome: blur(10px);
+  --glass-dark: rgba(30, 26, 22, .32);
+  /* The opaque equivalent, for prefers-reduced-transparency. Each surface must
+     fall back in its own register: a dark bar dropping to the light
+     --paper-raised keeps its shape and loses its labels. */
+  --glass-dark-solid: #2b2621;
+  --glass-dark-border: rgba(255, 255, 255, .20);
+  --glass-dark-edge: inset 0 1px 0 rgba(255, 255, 255, .22);
+  --glass-dark-ink: #f7f2e9;
+  --glass-dark-muted: rgba(247, 242, 233, .56);
+
   /* ─── Elevation ──────────────────────────────────────────────────────────
      Warm-toned shadows; a cool grey shadow on cream reads as dirt. */
   --shadow-xs: 0 1px 2px rgba(60, 47, 33, .05);
@@ -75,6 +105,17 @@
      One page gutter. Header and grid both align to it. */
   --page-x: 56px;
   --item-pad: 14px;
+
+  /* The mobile tab bar. --nav-h is the tab row itself and --nav-gap is how far
+     it floats off the bottom edge; --nav-inset adds those to the home indicator
+     and is what page content reserves so the last row of a grid isn't parked
+     under the nav. Anything positioning itself above the nav derives from
+     --nav-inset rather than guessing, so the bar and the things stacked on it
+     cannot drift apart. All three are inert above 860px, where the nav is
+     display:none and the top switcher takes over. */
+  --nav-h: 60px;
+  --nav-gap: 9px;
+  --nav-inset: calc(var(--nav-h) + var(--nav-gap) + env(safe-area-inset-bottom));
 
   /* Spacing. Extracted from the values already in use, not invented — the app
      was written on a 4px grid by hand. Hand-tuned one-offs that carry a comment
@@ -120,10 +161,12 @@
 
 html { background: var(--paper); }
 
+/* dvh, not vh: the nav sits on the bottom edge, and a 100vh body under a
+   collapsed mobile URL bar leaves a band of bare background exactly there. */
 body {
   margin: 0;
   min-width: 320px;
-  min-height: 100vh;
+  min-height: 100dvh;
   background: var(--paper);
   color: var(--ink-soft);
   -webkit-font-smoothing: antialiased;
@@ -164,7 +207,7 @@ body.viewer-open { overflow: hidden; }
 button { font: inherit; }
 
 .app-shell {
-  min-height: 100vh;
+  min-height: 100dvh;
   background: var(--paper);
 }
 
@@ -1000,6 +1043,16 @@ button { font: inherit; }
 
 @keyframes viewer-collapse {
   to { transform: scale(.92); opacity: 0; }
+}
+
+@keyframes sheet-in {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes sheet-out {
+  from { transform: translateY(0); }
+  to { transform: translateY(100%); }
 }
 
 /* Escape is a keyboard action — repeated, and always faster than an
@@ -2014,15 +2067,43 @@ button { font: inherit; }
     gap: 24px 14px;
     padding-bottom: 90px;
   }
-  .viewer-overlay { padding: 0; }
-  .viewer-entry { width: 100%; height: 100dvh; }
+  .viewer-overlay {
+    padding: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .viewer-entry {
+    position: relative;
+    top: auto;
+    right: auto;
+    bottom: 0;
+    left: auto;
+    width: 100%;
+    max-height: 92dvh;
+    height: auto;
+    transform-origin: center bottom;
+    animation: sheet-in var(--dur-panel) var(--ease-drawer) both;
+  }
+  .viewer-entry--from-card {
+    transform-origin: center bottom;
+    animation-name: sheet-in;
+  }
+  .viewer-overlay[data-closing="true"] .viewer-entry,
+  .viewer-overlay[data-closing="true"] .viewer-entry--from-card {
+    animation: sheet-out 160ms var(--ease-out) both;
+  }
   .viewer {
     border: 0;
-    border-radius: 0;
-    padding: 30px 30px 36px;
+    border-radius: var(--r-xl) var(--r-xl) 0 0;
+    max-height: 92dvh;
+    height: auto;
+    padding: 24px 22px calc(24px + env(safe-area-inset-bottom));
     background: var(--paper-warm);
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
-  .modeled-hero { border-radius: 0; }
+  .modeled-hero { border-radius: var(--r-xl) var(--r-xl) 0 0; }
   .viewer-heading { padding-top: 0; }
   .viewer-icon-close { top: 18px; right: 18px; }
   .has-modeled-image .viewer-icon-close { top: 20px; right: 20px; }

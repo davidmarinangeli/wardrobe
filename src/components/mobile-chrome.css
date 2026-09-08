@@ -1,0 +1,391 @@
+/* Mobile chrome: the floating bottom nav, and the top bar's actions relocated
+   to sit above it.
+
+   Everything here is scoped to <= 860px. Desktop keeps .app-view-switch and the
+   top bar exactly as they were.
+
+   A note on the selectors. main.jsx imports App.jsx before styles.css, and
+   App.jsx is what pulls this file in — so this stylesheet is injected *first*
+   and loses every equal-specificity tie to styles.css, media query or not.
+   Rules here that override an existing one are therefore qualified by an
+   ancestor to win on specificity rather than on order, which also means moving
+   the imports around later cannot silently break them. */
+
+.bottom-nav,
+.mobile-header,
+.mobile-headrow,
+.mobile-compactbar { display: none; }
+
+@media (max-width: 860px) {
+  /* ─── Mobile Header: Large title + gear on page; compact bar on scroll ─────── */
+  .mobile-headrow {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: max(18px, env(safe-area-inset-top)) var(--page-x) 0;
+  }
+
+  .mobile-largetitle {
+    margin: 0;
+    font-size: 34px;
+    font-weight: 500;
+    letter-spacing: var(--track-display);
+    line-height: 1.05;
+    color: var(--ink);
+    transform-origin: left center;
+  }
+
+  .mobile-subtitle {
+    margin: 4px 0 0;
+    padding: 0 var(--page-x);
+    font-size: 11px;
+    letter-spacing: var(--track-caps);
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .mobile-compactbar {
+    position: fixed;
+    top: calc(6px + env(safe-area-inset-top));
+    right: 68px;
+    left: 68px;
+    z-index: 25;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 44px;
+    border-radius: var(--r-full);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .mobile-compactbar::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    background: var(--paper-raised);
+    box-shadow: var(--glass-edge), var(--shadow-sm);
+    border: 1px solid var(--line);
+  }
+
+  .mobile-compactbar__title {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--ink);
+    letter-spacing: var(--track-tight);
+  }
+
+  .mobile-settings {
+    position: relative;
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-full);
+    background: var(--paper-raised);
+    box-shadow: var(--shadow-xs);
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition: transform var(--dur-press) var(--ease-out);
+  }
+
+  .mobile-settings:active { transform: scale(.92); }
+
+  /* ─── The desktop top bar yields to .mobile-header on mobile ──────────────── */
+  .app-shell .app-top-bar {
+    position: static;
+    height: 0;
+    min-height: 0;
+    padding: 0;
+    margin: 0;
+    border: none;
+    background: none;
+  }
+
+  .app-shell .app-top-bar::before,
+  .app-shell .app-top-bar::after {
+    display: none;
+  }
+
+  .app-top-bar .app-view-switch,
+  .app-top-bar .setup-trigger {
+    display: none;
+  }
+
+  .app-top-bar .app-top-bar__right {
+    display: contents;
+  }
+
+  .app-shell .gallery-header {
+    padding-top: 10px;
+  }
+
+  .app-top-bar .top-actions {
+    position: fixed;
+    right: 12px;
+    left: auto;
+    max-width: calc(100% - 24px);
+    /* Clear of the nav rather than nearly touching it: two floating rows a few
+       px apart read as one crowded object rather than two controls. */
+    bottom: calc(var(--nav-inset) + 14px);
+    z-index: 29;
+    /* Primary last (rightmost). With row-reverse, flex-start packs to the right
+       edge so the CTAs sit on the right above the bottom nav.
+       Reversing here keeps the desktop markup untouched. */
+    flex-direction: row-reverse;
+    gap: 8px;
+    justify-content: flex-start;
+    padding: 0;
+    border: none;
+    transition: transform 300ms var(--ease-out), opacity 200ms var(--ease-out);
+  }
+
+  .app-top-bar .top-actions[data-hidden="true"] {
+    transform: translateY(calc(100% + 26px));
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* With room to sit in, the actions get their labels back. The 860px block in
+     styles.css collapses them to 44px icon-only circles purely because the top
+     bar had no space — that compensation is obsolete down here, and an unlabelled
+     "+" was exactly the ambiguity worth removing. */
+  .app-top-bar .top-actions .top-action {
+    width: auto;
+    min-height: 44px;
+    padding: 0 16px;
+    border-radius: var(--r-full);
+  }
+
+  .app-top-bar .top-actions .top-action__label {
+    display: inline;
+    font-size: 13px;
+    letter-spacing: var(--track-tight);
+  }
+
+  /* The gallery has to clear both floating rows. Replaces the dead
+     padding-bottom the 860/520 blocks already carried for no reason. */
+  .app-shell .gallery-grid { padding-bottom: calc(var(--nav-inset) + var(--s-6)); }
+
+  /* ─── Bottom nav ─────────────────────────────────────────────────────────── */
+  .bottom-nav {
+    position: fixed;
+    right: 12px;
+    bottom: calc(var(--nav-gap) + env(safe-area-inset-bottom));
+    left: 12px;
+    z-index: 30;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    align-items: center;
+    padding: 5px 6px;
+    border-radius: var(--r-full);
+    color: var(--glass-dark-ink);
+
+    /* The material is on the element, not on a z-index:-1 pseudo-element.
+       backdrop-filter samples what is painted beneath it in its own backdrop
+       root, and a negative-z pseudo is a fragile place to ask that from — it
+       can blur on desktop Chrome and produce nothing on another Chromium build
+       or GPU. (.app-top-bar keeps the pseudo for a real reason: a
+       backdrop-filter would make it a containing block and break the
+       position:fixed popovers rendered inside it. This bar has no fixed
+       descendants.)
+
+       The blur radius is the whole performance story. Cost grows with the
+       square of the radius and again with device pixel ratio; 29px on a DPR-3.5
+       phone is a ~100px kernel across the screen and drops frames on a flagship
+       Android. 10px holds. The refraction filter is appended to this inline by
+       useGlassSurface. */
+    background: var(--glass-dark);
+    border: 1px solid var(--glass-dark-border);
+    box-shadow: var(--glass-dark-edge), var(--shadow-lg);
+    -webkit-backdrop-filter: var(--glass-blur-chrome);
+    backdrop-filter: var(--glass-blur-chrome);
+    transition: padding 260ms var(--ease-out), left 260ms var(--ease-out), right 260ms var(--ease-out);
+  }
+
+  /* Compact: past the threshold the labels collapse and the bar contracts on
+     both axes, leaving three centred icons. The horizontal inset is animated
+     rather than transformed — scaleX would squash the icons — which makes this
+     the one place here that animates layout, once per threshold crossing. */
+  .bottom-nav[data-compact="true"] {
+    right: 52px;
+    left: 52px;
+    padding: 3px 6px;
+  }
+
+  .bottom-nav__tab {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    /* Centres the icon+label group. Without it they stack from the top, and
+       once the label collapses there is nothing below to disguise that. */
+    justify-content: center;
+    gap: 2px;
+    min-height: 48px;
+    padding: 6px 0 5px;
+    border: 0;
+    border-radius: var(--r-full);
+    background: none;
+    color: var(--glass-dark-muted);
+    cursor: pointer;
+    transition: color var(--dur-press) var(--ease-out), transform var(--dur-press) var(--ease-out);
+  }
+
+  .bottom-nav[data-compact="true"] .bottom-nav__tab {
+    gap: 0;
+    padding: 0;
+    min-height: 44px;
+  }
+
+  .bottom-nav__tab[aria-current="page"] { color: var(--glass-dark-ink); }
+  .bottom-nav__tab:active { transform: scale(.94); }
+
+  .bottom-nav__labelwrap {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows 260ms var(--ease-out), opacity 200ms var(--ease-out);
+  }
+
+  .bottom-nav[data-compact="true"] .bottom-nav__labelwrap {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+
+  .bottom-nav__label {
+    overflow: hidden;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: var(--track-caps);
+    text-transform: uppercase;
+  }
+
+  /* Centred on the row, not pinned to its top: the bar's padding and the pill's
+     height both change when it compacts, and a fixed offset lines up at only
+     one of the two sizes. The -50% is written into the transform by BottomNav
+     so X and Y stay in one declaration. */
+  .bottom-nav__pill {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    z-index: 0;
+    height: 48px;
+    border-radius: var(--r-full);
+    background: linear-gradient(160deg, rgba(255, 255, 255, .26), rgba(255, 255, 255, .12));
+    box-shadow: var(--glass-dark-edge);
+    transition: transform 220ms var(--ease-in-out), width 220ms var(--ease-in-out), height 260ms var(--ease-out);
+    pointer-events: none;
+  }
+
+  .bottom-nav[data-compact="true"] .bottom-nav__pill { height: 44px; }
+
+/* Reduced motion: the contraction still happens, it just does not travel. */
+@media (max-width: 860px) and (prefers-reduced-motion: reduce) {
+  .bottom-nav,
+  .bottom-nav__pill,
+  .bottom-nav__labelwrap,
+  .app-top-bar .top-actions { transition-property: opacity; }
+  .bottom-nav__tab:active { transform: none; }
+}
+
+/* Translucency off: solid, and in this surface's own register. Falling back to
+   the light --paper-raised the rest of the chrome uses would put cream type on
+   a cream bar — the surface would survive and the labels would vanish. */
+@media (max-width: 860px) and (prefers-reduced-transparency: reduce) {
+  .bottom-nav {
+    background: var(--glass-dark-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (max-width: 860px) and (prefers-contrast: more) {
+  .bottom-nav {
+    background: var(--glass-dark-solid);
+    border-color: var(--glass-dark-ink);
+  }
+}
+
+  /* ─── The rest of the mobile chrome, in the same material ─────────────────
+     The nav was the only surface wearing this, which made it look bolted on
+     rather than like the app's material. These are the other floating and
+     semi-floating surfaces at phone width. */
+
+
+  /* The secondary action is glass; the primary stays solid accent. Refraction
+     through an opaque fill shows nothing, and the main CTA should be the most
+     solid thing on the screen. */
+  .app-top-bar .top-actions .top-action--secondary,
+  .app-top-bar .top-actions .mirror-trigger {
+    background: var(--glass-dark);
+    border: 1px solid var(--glass-dark-border);
+    box-shadow: var(--glass-dark-edge), var(--shadow-md);
+    color: var(--glass-dark-ink);
+    -webkit-backdrop-filter: var(--glass-blur-chrome);
+    backdrop-filter: var(--glass-blur-chrome);
+  }
+
+  /* ─── Page scale-back when sheet opens ───────────────────────────────────── */
+  .app-shell__page {
+    transform-origin: top center;
+    transition: transform var(--dur-panel) var(--ease-drawer), border-radius var(--dur-panel) var(--ease-drawer);
+    min-height: 100dvh;
+    background: var(--paper);
+  }
+
+  body.viewer-open .app-shell__page {
+    transform: scale(.94);
+    border-radius: var(--r-xl);
+    overflow: hidden;
+  }
+
+  /* ─── Sheets ─────────────────────────────────────────────────────────────
+     On a phone every panel is a bottom sheet with rounded top corners that
+     slides up from the bottom, replacing the desktop card-expansion animation. */
+  .viewer-overlay {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+  }
+
+  .viewer-overlay .viewer-entry,
+  .viewer-overlay .viewer-entry--from-card {
+    position: relative;
+    top: auto;
+    right: auto;
+    bottom: 0;
+    left: auto;
+    width: 100%;
+    max-height: 92dvh;
+    height: auto;
+    transform-origin: center bottom !important;
+    animation: sheet-in var(--dur-panel) var(--ease-drawer) both;
+  }
+
+  .viewer-overlay[data-closing="true"] .viewer-entry,
+  .viewer-overlay[data-closing="true"] .viewer-entry--from-card {
+    animation: sheet-out 160ms var(--ease-out) both;
+  }
+
+  .viewer-overlay .viewer {
+    border: 0;
+    border-radius: var(--r-xl) var(--r-xl) 0 0 !important;
+    border-bottom: 0 !important;
+    max-height: 92dvh;
+    height: auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+  }
+
+  .viewer.is-dragging {
+    cursor: grabbing;
+    user-select: none;
+  }
+}

@@ -32,10 +32,21 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
+// Entry points and assets this worker must never answer for.
+//
+// The prototype pages are separate Vite entry points, and the dev server's
+// module graph is not cacheable at all. Without this, a worker registered by an
+// earlier production run keeps intercepting on the same origin — and because
+// the navigation handler below falls back to the cached "/" shell, a prototype
+// URL comes back as the main app instead. That is invisible in a fresh profile
+// and permanent in the browser you actually use.
+const BYPASS = /^\/(prototype|@vite|@react-refresh|@fs\/|src\/|node_modules\/)/;
+
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   const url = new URL(request.url);
   if (request.method !== "GET" || url.origin !== self.location.origin || url.pathname.startsWith("/api/")) return;
+  if (BYPASS.test(url.pathname) || url.searchParams.has("t")) return;
 
   if (url.pathname.startsWith("/_ipx/")) {
     event.respondWith(caches.open(IMAGE_CACHE).then(async (cache) => {
@@ -55,6 +66,10 @@ self.addEventListener("fetch", (event) => {
       const copy = response.clone();
       caches.open(CACHE).then((cache) => cache.put(request, copy));
       return response;
-    }).catch(() => caches.match(request).then((cached) => cached || caches.match("/"))));
+    // Offline fallback: this exact page if we have it, and only then the app
+    // shell — and never the shell for some other entry point, which would
+    // silently answer one page with a different one.
+    }).catch(() => caches.match(request).then((cached) => cached
+      || (url.pathname === "/" ? caches.match("/") : undefined))));
   }
 });

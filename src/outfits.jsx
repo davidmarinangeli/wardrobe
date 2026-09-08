@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Check, Palette, PencilSimple, Sparkle, SpinnerGap, X } from "@phosphor-icons/react";
 import { OptimizedImage } from "./OptimizedImage.jsx";
 import { api } from "./api.js";
@@ -6,6 +7,8 @@ import { OUTFIT_CATEGORIES as CATEGORIES } from "./categories.js";
 import { GARMENT_PART_MAP } from "../shared/garments.mjs";
 import { ModeledPhotoPrompt } from "./item-editor.jsx";
 import { SuggestionPanel } from "./suggestions.jsx";
+import { useSheetGesture } from "./hooks/useSheetGesture.js";
+import { useIsPhone } from "./hooks/useIsPhone.js";
 import { OutfitStack } from "./components/OutfitStack.jsx";
 import { ViewerPanel } from "./components/ViewerPanel.jsx";
 import { ModeledHero } from "./components/ModeledHero.jsx";
@@ -151,6 +154,19 @@ function OutfitBuilder({ items, initialOutfit, onCancel, onSave }) {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const sheetRef = useRef(null);
+  const overlayRef = useRef(null);
+  const closeButtonRef = useRef(null);
+  const isPhone = useIsPhone();
+  const { dragHandlers } = useSheetGesture({
+    sheetRef,
+    overlayRef,
+    enabled: isPhone,
+    onDismiss: onCancel,
+  });
+
+  useViewerKeyboard(onCancel, closeButtonRef);
+
   const itemsByCategory = useMemo(() => {
     const groups = Object.fromEntries(CATEGORIES.map((category) => [category.id, []]));
     for (const item of items) if (groups[item.part]) groups[item.part].push(item);
@@ -204,11 +220,23 @@ function OutfitBuilder({ items, initialOutfit, onCancel, onSave }) {
     }
   };
 
-  return (
-    <div className="viewer-overlay" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onCancel()}>
+  const content = (
+    <div
+      ref={overlayRef}
+      className="viewer-overlay"
+      role="presentation"
+      onPointerDown={(event) => event.target === event.currentTarget && onCancel()}
+    >
       <div className="viewer-entry outfit-builder-entry">
-        <aside className="viewer outfit-builder" role="dialog" aria-modal="true" aria-label={initialOutfit ? "Edit outfit" : "New outfit"}>
-          <button className="icon-button viewer-icon-close" type="button" onClick={onCancel} aria-label="Close">
+        <aside
+          ref={sheetRef}
+          className="viewer outfit-builder"
+          role="dialog"
+          aria-modal="true"
+          aria-label={initialOutfit ? "Edit outfit" : "New outfit"}
+          {...(isPhone ? dragHandlers : null)}
+        >
+          <button className="icon-button viewer-icon-close" type="button" onClick={onCancel} aria-label="Close" ref={closeButtonRef}>
             <X size={24} weight="light" aria-hidden="true" />
           </button>
           <div className="viewer-heading">
@@ -265,6 +293,8 @@ function OutfitBuilder({ items, initialOutfit, onCancel, onSave }) {
       </div>
     </div>
   );
+
+  return typeof document !== "undefined" ? createPortal(content, document.body) : content;
 }
 
 function OutfitCard({ outfit, itemMap, onOpen }) {

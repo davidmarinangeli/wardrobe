@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ArrowCounterClockwise, Check, Plus, Sparkle, SpinnerGap, X } from "@phosphor-icons/react";
 import { OptimizedImage } from "./OptimizedImage.jsx";
 import { useViewerKeyboard } from "./hooks/useViewerKeyboard.js";
 import { useDismiss } from "./hooks/useDismiss.js";
+import { useSheetGesture } from "./hooks/useSheetGesture.js";
+import { useIsPhone } from "./hooks/useIsPhone.js";
 import { useExpandOrigin } from "./hooks/useExpandOrigin.js";
 import { ModeledHero } from "./components/ModeledHero.jsx";
 import { PanelActions } from "./components/PanelActions.jsx";
@@ -405,6 +408,8 @@ function OutfitsWithItem({ outfits, onOpen }) {
 export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled, premiumAllowed, showModeledPhoto = true, openedFrom = null, outfits = [], onOpenOutfit }) {
   const closeButtonRef = useRef(null);
   const entryRef = useRef(null);
+  const sheetRef = useRef(null);
+  const overlayRef = useRef(null);
   const imageRef = useRef(null);
   const samplingCanvasRef = useRef(null);
   const shakeTimerRef = useRef(null);
@@ -417,6 +422,7 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
   // unsaved-changes shake — so it opts into the card-anchored entry itself.
   useExpandOrigin(entryRef, openedFrom);
   const [closeBlocked, setCloseBlocked] = useState(false);
+  const isPhone = useIsPhone();
   const [generating, setGenerating] = useState(false);
   const [modeledNote, setModeledNote] = useState("");
   const type = TYPE_MAP[item.part]?.singular || "Wardrobe item";
@@ -473,6 +479,17 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
   }, [isDirty, nudgeUnsaved, dismiss]);
 
   useViewerKeyboard(requestClose, closeButtonRef);
+
+  // A swipe down is a close like any other, so it goes through requestClose and
+  // gets the same unsaved-changes guard: drag a sheet with unsaved edits and it
+  // springs back and shakes rather than discarding them. onDismiss fires only
+  // once the gesture has committed, so the shake reads as a refusal to leave.
+  const { dragHandlers } = useSheetGesture({
+    sheetRef,
+    overlayRef,
+    enabled: isPhone,
+    onDismiss: () => requestClose({ instant: true }),
+  });
 
   // Leaving for an outfit is still leaving: unsaved edits get the same shake
   // they get from the close button, not a silent discard.
@@ -551,10 +568,31 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
     </div>
   );
 
-  return (
-    <div className="viewer-overlay" role="presentation" data-closing={closing} onMouseDown={(event) => event.target === event.currentTarget && requestClose()}>
+  const content = (
+    <div
+      ref={overlayRef}
+      className="viewer-overlay"
+      role="presentation"
+      data-closing={closing}
+      // pointerdown, not mousedown: after a touch the browser replays a
+      // synthetic mousedown at the release point, which lands on the overlay
+      // once the sheet has moved out from under the finger and closes a panel
+      // the user was only dragging.
+      onPointerDown={(event) => event.target === event.currentTarget && requestClose()}
+    >
     <div ref={entryRef} className={`viewer-entry${openedFrom ? " viewer-entry--from-card" : ""}`}>
-    <aside className={`viewer editing${hasModeledImage ? " has-modeled-image" : ""}${shaking ? " shake" : ""}`} role="dialog" aria-modal="true" aria-label="Selected wardrobe item">
+    <aside
+      ref={sheetRef}
+      className={`viewer editing${hasModeledImage ? " has-modeled-image" : ""}${shaking ? " shake" : ""}`}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Selected wardrobe item"
+      {...(isPhone ? dragHandlers : null)}
+    >
+      {/* Hand-rolled rather than a ViewerPanel (it needs the unsaved-changes
+          shake), so it has to opt into the sheet gesture itself. requestClose
+          rather than onClose: a swipe is still a close, and it must respect the
+          same unsaved-changes guard the X button does. */}
       <button className="icon-button viewer-icon-close" type="button" onClick={() => requestClose()} aria-label="Close viewer" ref={closeButtonRef}>
         <X size={24} weight="light" aria-hidden="true" />
       </button>
@@ -605,4 +643,6 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
     </div>
     </div>
   );
+
+  return typeof document !== "undefined" ? createPortal(content, document.body) : content;
 }
