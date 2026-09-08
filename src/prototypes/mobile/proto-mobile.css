@@ -1,0 +1,659 @@
+/* Mobile overhaul prototypes. Deliberately written against the production
+   tokens rather than local values, so what survives here can be lifted into
+   src/components/bottom-nav.css and src/styles.css without a retune. */
+
+/* Pull-to-refresh is the browser's gesture and it starts exactly where the
+   sheet's does: a downward drag with the page at its top. Without this, the
+   tab reloads instead of the sheet moving. Chrome honours it on the root. */
+html { overscroll-behavior-y: none; }
+
+.proto-mobile,
+.proto-nav,
+.proto-actionbar,
+.proto-compactbar {
+  /* How much bottom chrome the page has to clear. */
+  --nav-inset: calc(64px + env(safe-area-inset-bottom));
+
+  /* Dark glass. The warm cream ground is the reason the chrome read flat:
+     refraction and specular highlights need contrast behind them, and cream
+     over cream has none. The page stays warm — this is only the floating
+     chrome, so the wardrobe grid and the garments are untouched, and now the
+     colour that passes under the bar is the thing you actually see through it. */
+  --glass-dark: rgba(30, 26, 22, .61);
+  /* The opaque version of the same surface, for when translucency is off. */
+  --glass-dark-solid: #2b2621;
+  --glass-dark-border: rgba(255, 255, 255, .14);
+  --glass-dark-edge: inset 0 1px 0 rgba(255, 255, 255, .22);
+  --glass-dark-ink: #f7f2e9;
+  --glass-dark-muted: rgba(247, 242, 233, .56);
+}
+
+body.proto-sheet-open { overflow: hidden; }
+
+.proto-mobile {
+  min-height: 100dvh;
+  /* Floating chrome overlaps content at both ends, so both ends reserve. */
+  padding-bottom: calc(var(--nav-inset) + var(--s-5));
+}
+
+/* ─── Scroll-aware title ──────────────────────────────────────────────────────
+   The large title lives in the content and scrolls away with it; a compact
+   glass bar takes over as it goes. Apple's rule is that floating chrome earns
+   its blur by having something pass underneath — so the bar is not painted at
+   all until content is actually behind it. */
+.proto-headrow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: max(18px, env(safe-area-inset-top)) var(--page-x) 0;
+}
+
+.proto-largetitle {
+  margin: 0;
+  font-size: 34px;
+  font-weight: 500;
+  /* Large type reads too loose as it grows; tracking tightens with size. */
+  letter-spacing: var(--track-display);
+  line-height: 1.05;
+  color: var(--ink);
+  transform-origin: left center;
+}
+
+.proto-subtitle {
+  margin: 4px 0 0;
+  padding: 0 var(--page-x);
+  font-size: 11px;
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.proto-compactbar {
+  position: fixed;
+  top: calc(6px + env(safe-area-inset-top));
+  /* Symmetric inset so the title stays on the true centre line while clearing
+     the settings button in the corner. */
+  right: 68px;
+  left: 68px;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  border-radius: var(--r-full);
+  /* Opacity and scale are written from the scroll handler, not transitioned —
+     the bar tracks the scroll position 1:1 the way the sheet tracks a finger.
+     It used to interpolate its blur radius here too, which meant re-blurring
+     the strip on every scrolled frame and defeated any compositor caching. */
+  opacity: 0;
+  pointer-events: none;
+}
+
+.proto-compactbar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--paper-raised);
+  box-shadow: var(--glass-edge), var(--shadow-sm);
+  border: 1px solid var(--line);
+}
+
+.proto-compactbar__title {
+  font-size: 15px;
+  font-weight: 500;
+  /* Vibrancy: over a translucent surface, flat grey text dissolves. Full ink
+     and a touch more weight instead. */
+  color: var(--ink);
+  letter-spacing: var(--track-tight);
+}
+
+/* ─── Lens mode ───────────────────────────────────────────────────────────────
+   The refraction variant. The lens is positioned in fractions of its container,
+   so the container has to be the viewport-sized thing and the scrolling has to
+   happen inside it — scroll the window instead and the lens rides up the page. */
+.proto-mobile--lens {
+  height: 100dvh;
+  overflow: hidden;
+  padding-bottom: 0;
+}
+
+.proto-lens-scroller {
+  height: 100dvh;
+  overflow: auto;
+  overscroll-behavior-y: none;
+  padding-bottom: calc(var(--nav-inset) + var(--s-5));
+}
+
+/* In lens mode the blur and the refraction both come from underneath, so the
+   bar must not blur again — stacking a second translucent layer on the first is
+   the one combination Apple's guidance rules out outright.
+
+   What it does keep is a thin dark wash. Refraction actively works against
+   legibility: it drags whatever is behind the bar into it, so label contrast
+   changes as garments scroll past. A fixed tint underneath the type gives
+   vibrancy something stable to sit on without hiding the effect. */
+.proto-nav[data-lens="true"] {
+  background: rgba(28, 24, 20, .35);
+  border-color: rgba(255, 255, 255, .18);
+  box-shadow: var(--glass-dark-edge);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.proto-toggle {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-warm);
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+.proto-grid.proto-mobile__grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px 10px;
+  padding: 20px var(--page-x) 0;
+}
+
+/* ─── Floating glass nav ──────────────────────────────────────────────────────
+   Detached from the bottom edge rather than welded to it. A floating bar reads
+   as a separate functional layer above the content — which is the point of the
+   material — and it lets content pass underneath on all four sides instead of
+   stopping at a hard strip. */
+.proto-nav {
+  position: fixed;
+  right: 12px;
+  bottom: calc(9px + env(safe-area-inset-bottom));
+  left: 12px;
+  z-index: 30;
+  display: grid;
+  /* Three destinations, nothing else. No action lives in here (see VIEW_ACTIONS
+     in shared.jsx) and neither does settings, which is not a destination. */
+  grid-template-columns: repeat(3, 1fr);
+  align-items: center;
+  padding: 5px 6px;
+  border-radius: var(--r-full);
+  color: var(--glass-dark-ink);
+  transition: padding 260ms var(--ease-out), left 260ms var(--ease-out), right 260ms var(--ease-out);
+
+  /* The material goes on the element itself, not on a z-index:-1 pseudo.
+     backdrop-filter samples whatever is painted beneath it *in its own backdrop
+     root*, and a negative-z pseudo-element is a notoriously fragile place to
+     ask that from: whether it has anything to sample depends on the ancestor
+     chain and on the compositing path, so it can blur correctly on desktop
+     Chrome and produce nothing on another Chromium build or another GPU. That
+     is the difference between "glass on Chrome, flat bar on Arc and Android".
+
+     The app's .app-top-bar keeps the pseudo-element for a real reason — a
+     backdrop-filter makes its element a containing block, which would break the
+     position:fixed popovers rendered inside it. This bar has no fixed
+     descendants, so it has nothing to lose and correctness to gain.
+
+     The material is solid rather than translucent. backdrop-filter re-snapshots
+     and re-blurs the region behind this bar on every scrolled frame, and its
+     cost scales with blur radius x area x device pixel ratio — a 29px radius on
+     a DPR-3.5 phone is a ~100px kernel over the full width of the screen, 120
+     times a second. It was smooth on desktop and dropped frames on a flagship
+     Android, so it is gone. Depth now comes from the lit top edge and the
+     shadow, which cost nothing per frame. */
+  background: var(--glass-dark-solid);
+  border: 1px solid var(--glass-dark-border);
+  box-shadow: var(--glass-dark-edge), var(--shadow-lg);
+}
+
+/* Now that the bar paints its own background, the pill can no longer sit at
+   z-index -1 — it would be behind it. It goes above the background and below
+   the labels instead. */
+.proto-nav__tab { z-index: 1; }
+
+/* Compact: past 40px of scroll the labels collapse and the bar contracts on
+   both axes, leaving three centred icons. Position-driven, so it settles once
+   and cannot oscillate mid-scroll.
+
+   The horizontal inset is animated rather than a transform: scaleX would squash
+   the icons, and this is a single 260ms transition at a threshold crossing, not
+   per-frame work. It is the one place in here that animates layout, and it is
+   deliberate. */
+.proto-nav[data-compact="true"] {
+  right: 52px;
+  left: 52px;
+  padding: 3px 6px;
+}
+
+/* With the label collapsed to zero the flex gap is all that is left below the
+   icon, which pushes it off centre. Both go. */
+.proto-nav[data-compact="true"] .proto-nav__tab {
+  gap: 0;
+  padding: 0;
+  min-height: 44px;
+}
+
+
+.proto-nav__tab {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* Centre the icon+label group in the tab's box. Without this they stack from
+     the top, so the icon sits high — and once the label collapses there is
+     nothing below it to disguise that. */
+  justify-content: center;
+  gap: 2px;
+  min-height: 48px;
+  padding: 6px 0 5px;
+  border: 0;
+  border-radius: var(--r-full);
+  background: none;
+  color: var(--glass-dark-muted);
+  cursor: pointer;
+  transition: color var(--dur-press) var(--ease-out), transform var(--dur-press) var(--ease-out);
+}
+
+.proto-nav__tab[aria-current="page"] { color: var(--glass-dark-ink); }
+.proto-nav__tab:active { transform: scale(.94); }
+
+/* 1fr → 0fr is the one way to interpolate a collapse to genuine zero without
+   inventing a height. The child needs overflow:hidden for the row to clip it. */
+.proto-nav__labelwrap {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 260ms var(--ease-out), opacity 200ms var(--ease-out);
+}
+
+.proto-nav[data-compact="true"] .proto-nav__labelwrap {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+
+.proto-nav__label {
+  overflow: hidden;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+}
+
+/* In the top bar beside the title, aligned to the page gutter, and scrolling
+   away with it. */
+.proto-settings {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-full);
+  background: var(--paper-raised);
+  box-shadow: var(--shadow-xs);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: transform var(--dur-press) var(--ease-out);
+}
+
+.proto-settings:active { transform: scale(.92); }
+
+/* ─── Contextual action bar ───────────────────────────────────────────────────
+   The two real CTAs, named, sitting above the nav rather than inside it. This
+   is what the centre + was standing in for and could not say: "Add clothes" and
+   "New outfit" are different actions, and "How do I look?" had nowhere to live
+   on a phone at all.
+
+   Hides on scroll *direction* — down conceals, up reveals — because it is
+   occasional and worth trading for reading room. The nav below it never hides,
+   only shrinks: moving navigation out from under a thumb that is already
+   reaching for it is a different and much worse trade. */
+.proto-actionbar {
+  position: fixed;
+  right: 12px;
+  bottom: calc(var(--nav-inset) + 14px);
+  left: 12px;
+  z-index: 29;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  transition: transform 300ms var(--ease-out), opacity 200ms var(--ease-out);
+}
+
+.proto-actionbar[data-hidden="true"] {
+  transform: translateY(calc(100% + 26px));
+  opacity: 0;
+  pointer-events: none;
+}
+
+.proto-actionbar__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--r-full);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: var(--track-tight);
+  cursor: pointer;
+  transition: transform var(--dur-press) var(--ease-out);
+}
+
+.proto-actionbar__btn:active { transform: scale(.96); }
+
+.proto-actionbar__btn--secondary {
+  position: relative;
+  background: var(--glass-dark-solid);
+  border: 1px solid var(--glass-dark-border);
+  box-shadow: var(--glass-dark-edge), var(--shadow-md);
+  color: var(--glass-dark-ink);
+}
+
+/* The one place glow is still earned: the AI action. Everything else on this
+   surface gets its depth from contact shadow and edge light instead. */
+.proto-actionbar__btn--primary {
+  background: var(--accent);
+  color: var(--paper);
+  box-shadow: var(--shadow-md), inset 0 1px 0 rgba(255, 255, 255, .18);
+}
+
+/* The sliding pill. Its transform is set inline on this element — never as an
+   index custom property on the nav, which would recalc styles for every child
+   on each change (review-animations/STANDARDS.md, Performance).
+
+   On glass, a flat wash reads as a smudge, so the pill is its own small piece
+   of material: a lighter fill with a lit top edge, sitting on the heavier
+   plate rather than tinting it. */
+.proto-nav__pill {
+  position: absolute;
+  /* Centred on the row rather than pinned 5px from the top: the bar's padding
+     and the pill's own height both change when it compacts, and a fixed offset
+     only lines up at one of the two sizes. The -50% lives in the transform the
+     nav writes, so X and Y stay in a single declaration. */
+  top: 50%;
+  left: 0;
+  z-index: 0;
+  height: 48px;
+  border-radius: var(--r-full);
+  /* On dark glass the pill is a lit patch of the same material, not a white
+     chip — a solid fill here would read as a sticker sitting on the bar. */
+  background: linear-gradient(160deg, rgba(255, 255, 255, .20), rgba(255, 255, 255, .09));
+  box-shadow: var(--glass-dark-edge);
+  transition: transform 220ms var(--ease-in-out), width 220ms var(--ease-in-out), height 260ms var(--ease-out);
+  pointer-events: none;
+}
+
+.proto-nav[data-compact="true"] .proto-nav__pill { height: 44px; }
+.proto-nav[data-indicator="weight"] .proto-nav__pill { display: none; }
+
+/* ─── Sheet ───────────────────────────────────────────────────────────────────
+   The production .viewer-overlay is a right-edge drawer. On a phone it becomes
+   a bottom sheet: same element, different edge. */
+.proto-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: var(--scrim);
+  -webkit-backdrop-filter: var(--glass-blur-scrim);
+  backdrop-filter: var(--glass-blur-scrim);
+  animation: proto-scrim-in var(--dur-panel) var(--ease-out) both;
+}
+
+.proto-sheet {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: 92dvh;
+  padding: 0 22px calc(20px + env(safe-area-inset-bottom));
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  background: var(--paper-warm);
+  box-shadow: var(--shadow-lg), var(--glass-edge);
+  overflow: auto;
+  overscroll-behavior: contain;
+  animation: proto-sheet-in var(--dur-panel) var(--ease-drawer) both;
+  /* The body must stay pan-y or its content cannot scroll. The hook calls
+     preventDefault on a non-passive touchmove once it has claimed the gesture,
+     which is what actually stops the browser scrolling underneath it. */
+  touch-action: pan-y;
+}
+
+/* The grab region never belongs to the scroller, so it opts out of browser
+   panning entirely — a drag started here always moves the sheet, even when
+   the content below is scrolled half way down. */
+.proto-sheet__grabhandle {
+  flex: none;
+  padding: 10px 0 12px;
+  touch-action: none;
+  cursor: grab;
+}
+
+.proto-sheet.is-dragging .proto-sheet__grabhandle { cursor: grabbing; }
+
+/* While the finger owns it, nothing else may. The entry keyframe holds its
+   final frame with `both`, so it has to be switched off or it fights every
+   transform the gesture writes. */
+.proto-sheet.is-dragging {
+  animation: none;
+  transition: none;
+}
+
+.proto-sheet__grabber {
+  display: block;
+  width: 40px;
+  height: 5px;
+  margin: 0 auto;
+  border-radius: var(--r-full);
+  background: var(--wash-2);
+}
+
+.proto-sheet__title {
+  margin: 0 0 4px;
+  font-size: clamp(20px, 5vw, 26px);
+  font-weight: 500;
+  letter-spacing: var(--track-tight);
+  color: var(--ink);
+}
+
+.proto-sheet__meta {
+  margin: 0 0 18px;
+  font-size: 11px;
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.proto-sheet__art {
+  flex: none;
+  height: 260px;
+  margin-bottom: 18px;
+  border-radius: var(--r-lg);
+  background: var(--surface-stage);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.proto-sheet__art img {
+  max-width: 78%;
+  max-height: 88%;
+  object-fit: contain;
+  filter: var(--shadow-contact);
+}
+
+.proto-sheet__filler {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* ─── Scale-back ──────────────────────────────────────────────────────────────
+   The page behind receding as the sheet rises. Applied to a wrapper, not to
+   .app-shell — see C-ScaleBack.jsx for why that distinction is load-bearing. */
+.proto-stage {
+  transform-origin: top center;
+  transition: transform var(--dur-panel) var(--ease-drawer), border-radius var(--dur-panel) var(--ease-drawer);
+}
+
+.proto-stage[data-receded="true"] {
+  transform: scale(.94);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+
+/* The shared variant picker also lives on the bottom edge, which is now the
+   nav's. Lift it clear — the whole point of these variants is the bar it would
+   otherwise be covering. */
+.proto-picker {
+  /* Clear of both bars: the nav and the action bar above it. */
+  bottom: calc(var(--nav-inset) + 78px);
+}
+
+/* ─── Live readout ────────────────────────────────────────────────────────────
+   A gesture is judged by feel, but tuning constants needs numbers. */
+.proto-readout {
+  position: fixed;
+  top: max(10px, env(safe-area-inset-top));
+  left: 50%;
+  z-index: 60;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 14px;
+  padding: 7px 12px;
+  border-radius: var(--r-full);
+  background: rgba(25, 25, 25, .82);
+  -webkit-backdrop-filter: var(--glass-blur-sm);
+  backdrop-filter: var(--glass-blur-sm);
+  color: #f4f0e8;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--track-caps);
+  pointer-events: none;
+}
+
+.proto-readout b { font-weight: 600; }
+.proto-readout [data-verdict="leave"] { color: #f0a58c; }
+.proto-readout [data-verdict="stay"] { color: #9dc3a4; }
+
+@keyframes proto-sheet-in {
+  from { transform: translateY(100%); }
+}
+
+@keyframes proto-scrim-in {
+  from { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .proto-sheet,
+  .proto-sheet-overlay { animation-name: proto-scrim-in; }
+  .proto-nav__pill { transition-property: opacity; }
+  .proto-nav__tab:active { transform: none; }
+  .proto-nav__add:active { transform: translateY(-6px); }
+  .proto-stage { transition-property: opacity; }
+  .proto-stage[data-receded="true"] { transform: none; }
+}
+
+/* Translucency off: frost becomes solid, and each surface goes solid in its own
+   register. The nav carries cream text on dark glass, so falling back to the
+   light --paper-raised the rest of the chrome uses would put cream type on a
+   cream bar — the surface would survive and the labels would vanish. The
+   compact title bar is genuinely light glass with dark ink, so it keeps it. */
+@media (prefers-reduced-transparency: reduce) {
+  .proto-nav,
+  .proto-nav[data-lens="true"],
+  .proto-actionbar__btn--secondary {
+    background: var(--glass-dark-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .proto-compactbar::before {
+    background: var(--paper-raised);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .proto-sheet-overlay {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .proto-nav,
+  .proto-compactbar::before {
+    background: var(--paper-raised);
+    border-color: var(--muted);
+  }
+}
+
+/* ─── Refracted chrome ────────────────────────────────────────────────────────
+   Frosted *and* refracted, on a budget. The blur is 10px with no saturate pass
+   (cost grows with the square of the radius and again with device pixel ratio),
+   and the displacement comes from a filter applied to the backdrop rather than
+   to the page — so it covers the bar's strip, not the whole viewport.
+
+   The background drops to a light tint because there is now real blur behind
+   it: at .61 the surface was doing the work the blur should do, and the
+   refraction was invisible underneath it. */
+.proto-nav[data-refracted="true"] {
+  background: rgba(30, 26, 22, .32);
+  border-color: rgba(255, 255, 255, .20);
+  box-shadow: var(--glass-dark-edge), var(--shadow-lg);
+}
+
+.proto-nav[data-refracted="true"] .proto-nav__pill {
+  background: linear-gradient(160deg, rgba(255, 255, 255, .26), rgba(255, 255, 255, .12));
+}
+
+/* The FPS meter. "It lags" is not a number; this is. */
+.proto-fps {
+  position: fixed;
+  top: max(8px, env(safe-area-inset-top));
+  left: 50%;
+  z-index: 70;
+  transform: translateX(-50%);
+  padding: 5px 11px;
+  border-radius: var(--r-full);
+  background: rgba(25, 25, 25, .86);
+  color: #f4f0e8;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--track-caps);
+  pointer-events: none;
+}
+
+.proto-fps[data-level="ok"] { color: #f0d08c; }
+.proto-fps[data-level="bad"] { color: #f0a58c; }
+
+/* ─── Refraction on the other surfaces ────────────────────────────────────────
+   Applied only where it earns the per-frame cost: small floating chrome with
+   content genuinely moving underneath. See useGlassSurface for the rule. */
+
+/* "How do I look?" — the secondary CTA. Backing drops to a tint so the blur
+   behind it is what you see, rather than the fill. */
+.proto-actionbar__btn--secondary[data-refracted="true"] {
+  background: rgba(30, 26, 22, .34);
+  border-color: rgba(255, 255, 255, .22);
+}
+
+/* The compact title bar's material is an inner layer, so it can carry the
+   backdrop-filter while the parent animates opacity and scale per frame. */
+.proto-compactbar__material {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.proto-compactbar[data-refracted="true"]::before {
+  background: rgba(250, 245, 237, .42);
+  border-color: var(--glass-border);
+}
+
+.proto-compactbar__title { position: relative; z-index: 1; }

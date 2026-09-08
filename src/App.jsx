@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Gear, Lightbulb } from "@phosphor-icons/react";
 import { WardrobeImportFlow } from "./import-flow.jsx";
 import { api } from "./api.js";
@@ -12,9 +12,18 @@ import { WARDROBE_TYPES as TYPES, TYPE_MAP } from "./categories.js";
 import { PageShell } from "./components/PageShell.jsx";
 import { PageStatus } from "./components/PageStatus.jsx";
 import { useTypeFilteredItems } from "./hooks/useTypeFilteredItems.js";
+import { BottomNav } from "./components/BottomNav.jsx";
+import { MobileCompactBar, MobileHeadRow, useMobileHeaderScroll } from "./components/MobileHeader.jsx";
+import { useChromeScroll } from "./hooks/useChromeScroll.js";
+import "./components/mobile-chrome.css";
 import { DISMISS_KEY as ONBOARDING_DISMISS_KEY, Onboarding, RESUME_KEY as ONBOARDING_RESUME_KEY } from "./onboarding.jsx";
 
 const EMPTY_OUTFIT_INDEX = { outfits: {}, byItem: {} };
+const VIEW_TITLES = {
+  wardrobe: "Wardrobe",
+  outfits: "Outfits",
+  inspo: "Inspo",
+};
 
 const STORAGE_KEY = "open-wardrobe-edits-v1";
 const DELETED_STORAGE_KEY = "open-wardrobe-deleted-v1";
@@ -80,6 +89,13 @@ function AiModeBadge({ setup }) {
 
 export function App() {
   const [view, setView] = useState("wardrobe");
+  const { barRef, largeRef } = useMobileHeaderScroll(VIEW_TITLES[view] || "Wardrobe");
+  // Mobile chrome: the bottom nav contracts and the relocated action row hides
+  // as you scroll. Both are no-ops above 860px, where CSS leaves the desktop
+  // top bar alone and the nav is not rendered at all.
+  const bottomNavRef = useRef(null);
+  const topActionsRef = useRef(null);
+  useChromeScroll(bottomNavRef, topActionsRef);
   const [items, setItems] = useState([]);
   const [activeType, setActiveType] = useState("all");
   const [selectedId, setSelectedId] = useState(null);
@@ -282,6 +298,10 @@ export function App() {
 
   return (
     <div className={`app-shell${selectedItem ? " has-selection" : ""}`}>
+      <MobileCompactBar
+        title={VIEW_TITLES[view] || "Wardrobe"}
+        barRef={barRef}
+      />
       <div className="app-top-bar">
         <nav className="app-view-switch" aria-label="Switch between wardrobe, outfits, and inspo">
           <button type="button" className={view === "wardrobe" ? "active" : ""} onClick={() => setView("wardrobe")} aria-pressed={view === "wardrobe"}>Wardrobe</button>
@@ -296,7 +316,7 @@ export function App() {
               the second slot swaps between Mirror (Wardrobe/Inspo) and
               Suggest outfit (Outfits) entirely, since those aren't the same
               action wearing a different label. */}
-          <div className="top-actions">
+          <div className="top-actions" ref={topActionsRef} data-hidden="false">
             <WardrobeImportFlow
               onGarmentApproved={addImportedItem}
               externalSetup={aiSetup}
@@ -334,7 +354,15 @@ export function App() {
         </div>
       </div>
 
-      {view === "inspo" ? (
+      <div className="app-shell__page">
+        <MobileHeadRow
+          title={VIEW_TITLES[view] || "Wardrobe"}
+          onSettings={() => setShowOnboarding(true)}
+          badge={<AiModeBadge setup={aiSetup} />}
+          largeRef={largeRef}
+        />
+
+        {view === "inspo" ? (
         <Inspo showImporter={showInspoImporter} onImporterClose={() => setShowInspoImporter(false)} />
       ) : view === "outfits" ? (
         <Outfits
@@ -423,6 +451,9 @@ export function App() {
           )}
         </PageShell>
       )}
+      </div>
+
+      <BottomNav view={view} onSelect={setView} navRef={bottomNavRef} />
 
       {selectedItem && <ItemViewer item={selectedItem} openedFrom={openedFrom} onClose={() => setSelectedId(null)} onSave={saveItem} onDelete={deleteItem} onGenerateModeled={generateModeledPhoto} premiumAllowed={premiumAllowed} outfits={selectedItemOutfits} onOpenOutfit={openOutfit} />}
       {showColorQuiz && (
