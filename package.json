@@ -12,6 +12,7 @@
     "check": "npm run build",
     "test": "node --test test/*.test.mjs",
     "bulk-import": "node --env-file=.env scripts/bulk-import.mjs",
+    "regenerate-outfits": "node --env-file=.env scripts/regenerate-outfits.mjs",
     "bench": "node scripts/mirror-bench.mjs"
   },
   "dependencies": {

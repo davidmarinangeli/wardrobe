@@ -5,6 +5,7 @@ import { useDismiss } from "../hooks/useDismiss.js";
 import { useExpandOrigin } from "../hooks/useExpandOrigin.js";
 import { useSheetGesture } from "../hooks/useSheetGesture.js";
 import { useIsPhone } from "../hooks/useIsPhone.js";
+import { useViewerOpenClass } from "../hooks/useViewerOpenClass.js";
 
 /**
  * Standard slide-in panel shell used by every modal/drawer in the app.
@@ -44,6 +45,11 @@ export function ViewerPanel({
   openedFrom,
   children,
 }) {
+  // Every panel is a panel: the body class that locks scroll and scales the page
+  // behind a sheet belongs to this component, not to whether a caller remembered
+  // to also ask for Escape handling.
+  useViewerOpenClass();
+
   const { closing, dismiss } = useDismiss(onClose);
   const entryRef = useRef(null);
   const sheetRef = useRef(null);

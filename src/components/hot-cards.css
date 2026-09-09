@@ -1,0 +1,191 @@
+/* A strip of doors between a page header and its grid.
+   Same material as .nudge-banner — glass card, warm border, lit top edge — so
+   the two never read as two different kinds of object stacked on one page. */
+
+.hot-cards {
+  /* Clear of the category pills above and hard against the grid below, which
+     opens with its own 40px of padding. The offsets absorb the rail's shadow
+     gutter (below) so the visible gaps stay 24px and 40px. */
+  margin: calc(var(--s-5) - 8px) 0 -30px;
+}
+
+/* Scrolls inside itself so the page never scrolls sideways. The gutter lives on
+   the rail rather than the wrapper so a card can bleed to the screen edge on a
+   phone, which is what tells you there is another one to the right.
+
+   The vertical padding is the same fix .category-nav needed: overflow-x makes
+   this a clipping box, and a card's shadow — --shadow-md on hover, a 32px blur
+   pushed 14px down — was being cut off flat at the card's own edge. 30px below
+   covers that plus the 1px hover lift; 8px above covers the lift and the top
+   half of the blur. .hot-cards gives the space back to the layout. */
+.hot-cards__rail {
+  display: flex;
+  gap: var(--s-3);
+  padding: 8px var(--page-x) 30px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  /* Snapping aligns a card to the SCROLLPORT edge, which ignores padding unless
+     scroll-padding says otherwise. Without this the rail silently scrolled
+     itself by exactly --page-x on load, parking the first card at x=0 while
+     every other element on the page sat on the gutter. */
+  scroll-padding-inline: var(--page-x);
+  scrollbar-width: none;
+}
+
+.hot-cards__rail::-webkit-scrollbar { display: none; }
+
+.hot-card {
+  --hot-card-accent: var(--accent-warm);
+  position: relative;
+  flex: 0 0 auto;
+  inline-size: min(340px, 82vw);
+  scroll-snap-align: start;
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  grid-template-areas: "icon body";
+  align-items: start;
+  gap: var(--s-1) var(--s-3);
+  padding: var(--s-3) var(--s-5) var(--s-3) var(--s-4);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  background: var(--glass-card);
+  box-shadow: var(--glass-edge), var(--shadow-sm);
+  color: var(--ink-soft);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--dur-pop) var(--ease-out),
+    border-color var(--dur-pop) var(--ease-out),
+    box-shadow var(--dur-pop) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
+}
+
+.hot-card:hover {
+  transform: translateY(-1px);
+  border-color: var(--glass-border-hover);
+  background: var(--glass-card-hover);
+  box-shadow: var(--glass-edge), var(--shadow-md);
+}
+
+.hot-card:active { transform: translateY(0); }
+
+.hot-card:focus-visible {
+  outline: 2px solid var(--hot-card-accent);
+  outline-offset: 2px;
+}
+
+/* The card's one piece of colour, in the same accent-on-wash treatment the
+   nudge banner uses for its icon. */
+.hot-card__icon {
+  grid-area: icon;
+  display: grid;
+  place-items: center;
+  inline-size: 30px;
+  block-size: 30px;
+  border-radius: 50%;
+  color: var(--hot-card-accent);
+  background: color-mix(in srgb, var(--hot-card-accent) 12%, transparent);
+}
+
+.hot-card__body {
+  grid-area: body;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-inline-size: 0;
+}
+
+.hot-card__eyebrow {
+  color: var(--hot-card-accent);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+}
+
+.hot-card__title {
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: var(--track-tight);
+  color: var(--ink);
+}
+
+.hot-card__desc {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+/* The palette itself, not a description of it: the season card's whole job is
+   to show you the colours, so it shows them. */
+.hot-card__swatches {
+  display: flex;
+  gap: 3px;
+  margin-block-start: var(--s-2);
+}
+
+.hot-card__swatch {
+  inline-size: 15px;
+  block-size: 15px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 8%);
+}
+
+.hot-card__progress {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin-block-start: var(--s-2);
+}
+
+.hot-card__track {
+  flex: 1;
+  block-size: 4px;
+  border-radius: var(--r-full);
+  background: var(--wash-2);
+  overflow: hidden;
+}
+
+.hot-card__fill {
+  display: block;
+  block-size: 100%;
+  border-radius: var(--r-full);
+  background: var(--hot-card-accent);
+  transition: inline-size var(--dur-panel) var(--ease-out);
+}
+
+.hot-card__progress-label {
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.hot-card__go {
+  position: absolute;
+  top: 50%;
+  right: var(--s-3);
+  transform: translateY(-50%);
+  color: var(--muted);
+  transition: color var(--dur-pop) var(--ease-out), transform var(--dur-pop) var(--ease-out);
+}
+
+.hot-card:hover .hot-card__go {
+  color: var(--hot-card-accent);
+  transform: translateY(-50%) translateX(2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hot-card,
+  .hot-card__fill,
+  .hot-card__go { transition: none; }
+  .hot-card:hover { transform: none; }
+}
+
+/* The card is chrome-adjacent on a phone: it sits under the large title with
+   the grid scrolling past it, so it takes the same reduced-transparency
+   fallback the rest of the glass does rather than staying translucent alone. */
+@media (prefers-reduced-transparency: reduce) {
+  .hot-card { background: var(--paper-raised); }
+  .hot-card:hover { background: var(--paper-raised); }
+}

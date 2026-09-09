@@ -87,6 +87,51 @@ Saved looks, each previewed as a flat lay that scatters into an editorial layout
 
 A guided seasonal color analysis. Side-by-side comparisons narrow you down — warm against cool, then depth and contrast — until you land on one of the twelve seasons, and you can refine it further by extracting colors from your own photos. Matching wardrobe items pick up a badge, and the palette feeds straight into outfit suggestions.
 
+## Deep dive: it gets better as you use it
+
+Suggestions aren't generated from a blank slate every time. The app keeps a
+private log of things you actually did, and rebuilds a picture of your taste
+from it on every run. Nothing here leaves your machine — it all lives in
+`data/preferences.json`.
+
+**How it learns**
+
+Only from actions you took. Saving an outfit counts most (you're saying you'll
+wear it), hearting a suggestion counts a little less, and passing on one is the
+only negative recorded. Adding to the wishlist or pinning inspiration counts
+too, more softly. There is deliberately no "you ignored this" signal: without
+tracking what you looked at, that would be a guess, not a fact.
+
+Two details matter. Recent actions count for more — a signal is worth half as
+much once it's 90 days old, so last spring's phase fades instead of following
+you around. And a pass is only written once you can no longer undo it, so a
+mis-tap you corrected never counts against a look.
+
+**What improves**
+
+Every run, the log is rolled up into a short description of you that goes into
+the prompt alongside the weather, the occasion and your wardrobe:
+
+- **Colors you keep choosing** — and colors that show up in looks you turned down.
+- **Combinations you keep choosing** — the pairings are the real fingerprint;
+  two people can own the same colors and put them together nothing alike.
+- **Details that recur** — the textures, cuts and tags common to your picks.
+- **Core pieces** — the items showing up across several saved outfits, so
+  suggestions get built around your actual staples.
+- **Pieces you've never worn** — owned a while, never in an outfit. The stylist
+  is asked to find a way to make one work, as an opportunity, never a nudge to
+  buy or a comment on you.
+
+Alongside that, two profiles you build directly: your **Inspo** board is read
+once (three pins minimum) into a short description of the aesthetic it points
+at, shown back to you in the suggestion panel so you can see what your board is
+saying; and your **My Colors** season palette steers which of your pieces get
+picked.
+
+Finally, whatever comes back is checked before you see it: outfits that don't
+actually dress you, or that break the color rules the Mirror uses, are dropped
+rather than shown.
+
 ## Quick start
 
 ```bash

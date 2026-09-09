@@ -433,9 +433,35 @@
   .photo-guide-content { animation: none !important; }
 }
 
-@media (max-width: 640px) {
+/* On a phone this stops being a centered dialog and becomes a sheet like every
+   other panel — so it defers to the shared sheet vocabulary in styles.css
+   instead of restating it slightly differently. It previously broke at 640px
+   (everything else breaks at 860), kept --r-lg corners where sheets use --r-xl,
+   sat on --paper instead of --paper-warm, slid in with viewer-in rather than
+   sheet-in, and reserved nothing for the home indicator. Only the properties
+   that undo the desktop dialog belong here now. */
+@media (max-width: 860px) {
   .viewer-overlay.onboarding-overlay { padding: 0; align-items: flex-end; }
-  .viewer-entry.onboarding-entry { width: 100%; max-height: 92dvh; }
-  .viewer.onboarding { border-radius: var(--r-lg) var(--r-lg) 0 0; padding: 28px 20px 24px; max-height: 92dvh; }
+
+  .viewer-entry.onboarding-entry {
+    width: 100%;
+    max-height: 92dvh;
+    animation: sheet-in var(--dur-panel) var(--ease-drawer) both;
+  }
+
+  .viewer-overlay[data-closing="true"] .viewer-entry.onboarding-entry {
+    animation: sheet-out 160ms var(--ease-out) both;
+  }
+
+  .viewer.onboarding {
+    max-height: 92dvh;
+    border: 0;
+    border-radius: var(--r-xl) var(--r-xl) 0 0;
+    padding: 24px 22px calc(24px + env(safe-area-inset-bottom));
+    background: var(--paper-warm);
+  }
+}
+
+@media (max-width: 640px) {
   .photo-guide-content { grid-template-columns: 1fr; }
 }

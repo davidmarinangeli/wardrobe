@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Gear, Lightbulb } from "@phosphor-icons/react";
+import { Broom, Gear, Lightbulb, Palette } from "@phosphor-icons/react";
 import { WardrobeImportFlow } from "./import-flow.jsx";
 import { api } from "./api.js";
 import { buildOutfitIndex } from "../shared/outfit-index.mjs";
@@ -10,6 +10,9 @@ import { Inspo } from "./inspo.jsx";
 import { GalleryItem, ItemViewer } from "./item-editor.jsx";
 import { WARDROBE_TYPES as TYPES, TYPE_MAP } from "./categories.js";
 import { PageShell } from "./components/PageShell.jsx";
+import { HotCards } from "./components/HotCards.jsx";
+import { DeclutterPanel } from "./declutter.jsx";
+import "./components/hot-cards.css";
 import { PageStatus } from "./components/PageStatus.jsx";
 import { useTypeFilteredItems } from "./hooks/useTypeFilteredItems.js";
 import { BottomNav } from "./components/BottomNav.jsx";
@@ -120,6 +123,12 @@ export function App() {
   // the meantime is reflected.
   const [outfitIndex, setOutfitIndex] = useState(EMPTY_OUTFIT_INDEX);
   const [openOutfitId, setOpenOutfitId] = useState(null);
+  // Pieces triaged out of the wardrobe. Held apart from `items` so that every
+  // existing consumer of `items` keeps meaning "the wardrobe you dress from"
+  // without a single call site having to learn about status.
+  const [retiredItems, setRetiredItems] = useState([]);
+  const [wear, setWear] = useState(null);
+  const [showDeclutter, setShowDeclutter] = useState(false);
 
   useEffect(() => {
     if (view !== "wardrobe") return undefined;
@@ -132,6 +141,20 @@ export function App() {
       .catch(() => {});
     return () => { cancelled = true; };
   }, [view]);
+
+  // Refetched whenever it is missing — on mount, on returning to the wardrobe,
+  // and after a triage decision nulls it. Silent on failure: the hot card simply
+  // does not appear, which is the same thing the user sees when there is nothing
+  // to say, and neither is an error worth interrupting them for.
+  const refreshWear = useCallback(() => api("/api/preferences/wear")
+    .then(setWear)
+    .catch(() => {}), []);
+
+  useEffect(() => {
+    if (wear || view !== "wardrobe") return undefined;
+    refreshWear();
+    return undefined;
+  }, [wear, view, refreshWear]);
 
   useEffect(() => {
     fetch("/api/import/config", { cache: "no-store" })
@@ -168,8 +191,13 @@ export function App() {
       .then((loadedItems) => {
         const edits = readEdits();
         const deleted = readDeletedItems();
-        const visibleItems = loadedItems.filter((item) => !deleted.has(item.id));
-        setItems(visibleItems.map((item) => ({ ...item, ...(edits[item.id] || {}) })));
+        const visibleItems = loadedItems
+          .filter((item) => !deleted.has(item.id))
+          .map((item) => ({ ...item, ...(edits[item.id] || {}) }));
+        // No status at all is the same fact as "active": an item that was never
+        // triaged and one triaged back are indistinguishable, by design.
+        setItems(visibleItems.filter((item) => !item.status || item.status === "active"));
+        setRetiredItems(visibleItems.filter((item) => item.status && item.status !== "active"));
       })
       .catch((requestError) => setError(requestError.message))
       .finally(() => setLoading(false));
@@ -200,6 +228,12 @@ export function App() {
   const selectedItem = items.find((item) => item.id === selectedId) || null;
 
   const itemsById = useMemo(() => Object.fromEntries(items.map((item) => [item.id, item])), [items]);
+  // Declutter is the one surface that has to see both: a candidate still in the
+  // wardrobe, and a piece already moved to a pile whose photo it still renders.
+  const declutterItemsById = useMemo(
+    () => Object.fromEntries([...items, ...retiredItems].map((item) => [item.id, item])),
+    [items, retiredItems],
+  );
 
   // Resolved here (not in the viewer) because the piece images the thumbnails
   // are built from are already in this component's state — the index only
@@ -217,6 +251,79 @@ export function App() {
     setOpenOutfitId(outfitId);
     setView("outfits");
   }, []);
+
+  // Your palette, as a card that actually shows the palette. It used to be a
+  // pill in the header reading "DEEP AUTUMN", which named a season to someone
+  // who had already taken the quiz and meant nothing to anyone who hadn't. The
+  // strip has room to show the colours themselves.
+  const colorCard = useMemo(() => {
+    const season = colorProfile && (SEASONS[colorProfile.season] || SEASONS[colorProfile.parentSeason]);
+
+    if (!season) {
+      return {
+        id: "colors",
+        icon: <Palette size={15} weight="regular" />,
+        eyebrow: "My colours",
+        title: "Find your colours",
+        body: "Match every suggestion to your skin tone.",
+        onOpen: () => setShowColorQuiz(true),
+      };
+    }
+
+    return {
+      id: "colors",
+      icon: <Palette size={15} weight="regular" />,
+      accent: season.accent,
+      eyebrow: "My colours",
+      title: season.label,
+      swatches: colorProfile.palette?.length ? colorProfile.palette : season.palette,
+      onOpen: () => setShowColorQuiz(true),
+    };
+  }, [colorProfile]);
+
+  // The declutter card ships in both states. Locked, it is the reveal path: it
+  // says plainly that the app cannot answer yet and shows how far off it is.
+  // Unlocked, it is the way into the deck. It is never a countdown to something
+  // that will not arrive — with nothing to review, it does not render at all.
+  const declutterCard = useMemo(() => {
+    if (!wear) return null;
+    const retired = retiredItems.length;
+
+    if (wear.unlocked) {
+      if (!wear.candidates.length) {
+        return retired ? {
+          id: "declutter",
+          icon: <Broom size={15} weight="regular" />,
+          eyebrow: "Declutter",
+          title: `${retired} ${retired === 1 ? "piece" : "pieces"} set aside`,
+          body: "Nothing else is going unworn right now.",
+          onOpen: () => setShowDeclutter(true),
+        } : null;
+      }
+      return {
+        id: "declutter",
+        icon: <Broom size={15} weight="regular" />,
+        eyebrow: "Declutter",
+        title: `${wear.candidates.length} ${wear.candidates.length === 1 ? "piece you haven't" : "pieces you haven't"} worn`,
+        body: "Decide what to keep, sell, or give away.",
+        onOpen: () => setShowDeclutter(true),
+      };
+    }
+
+    // Nothing to learn from yet and nothing to preview: an empty wardrobe does
+    // not need to be told it is not being worn.
+    if (!wear.provisional.length && !wear.loggedDays) return null;
+
+    return {
+      id: "declutter",
+      icon: <Broom size={15} weight="regular" />,
+      eyebrow: "Declutter",
+      title: "Learning what you actually wear",
+      body: "Log what you wear and I can tell you what's worth letting go.",
+      progress: { value: wear.loggedDays, total: wear.daysNeeded },
+      onOpen: () => setShowDeclutter(true),
+    };
+  }, [wear, retiredItems.length]);
 
   const paletteFilter = useCallback(
     (item) => itemMatchesPalette(item, colorProfile),
@@ -259,6 +366,48 @@ export function App() {
     persistDeletedItem(id);
     setSelectedId(null);
   };
+
+  /**
+   * Move a piece between the wardrobe and a pile. Never deletes: the photos stay
+   * on disk and every outfit the piece appears in is left exactly as it was,
+   * because those outfits are history and history does not change when you sell
+   * a jacket. Reversible in one tap from the piles.
+   */
+  const setItemStatus = useCallback(async (id, status) => {
+    let updated;
+    try {
+      updated = await api(`/api/import/wardrobe/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      });
+    } catch (requestError) {
+      setError(requestError.message);
+      return;
+    }
+
+    const active = !updated.status || updated.status === "active";
+    // Local edits are an overlay the server knows nothing about, so they have to
+    // be re-applied here or a rename would silently revert on the way to a pile.
+    const merged = { ...updated, ...(readEdits()[id] || {}) };
+
+    setItems((current) => {
+      const without = current.filter((item) => item.id !== id);
+      return active ? [...without, merged] : without;
+    });
+    setRetiredItems((current) => {
+      const without = current.filter((item) => item.id !== id);
+      return active ? without : [...without, merged];
+    });
+    // Advance the deck now rather than after a round trip, then reconcile. The
+    // previous version nulled `wear` to force a refetch, which pulled the state
+    // out from under the panel still rendering it.
+    setWear((current) => (current ? {
+      ...current,
+      candidates: current.candidates.filter((entry) => entry.id !== id),
+      provisional: current.provisional.filter((entry) => entry.id !== id),
+    } : current));
+    refreshWear();
+  }, [refreshWear]);
 
   const addImportedItem = useCallback((newItem) => {
     setItems((current) => current.some((item) => item.id === newItem.id) ? current : [...current, newItem]);
@@ -368,6 +517,7 @@ export function App() {
         <Outfits
           items={items}
           premiumAllowed={premiumAllowed}
+          provider={aiSetup?.provider ?? null}
           colorProfile={colorProfile}
           onOpenColorQuiz={() => setShowColorQuiz(true)}
           showBuilder={showOutfitBuilder}
@@ -382,24 +532,6 @@ export function App() {
         <PageShell
           count={onlyMatches ? visibleItems.length : items.length}
           noun={onlyMatches && colorProfile ? `${(SEASONS[colorProfile.season] || SEASONS[colorProfile.parentSeason])?.label || "palette"} match` : "piece"}
-          actions={(
-            // A profile setting ("what's my season?"), not a filter — it belongs
-            // up here with the page-level actions, not among the category-nav
-            // pills below. "Matches my colors" stays there since it IS a filter.
-            <button type="button" className="header-action-btn" onClick={() => setShowColorQuiz(true)}>
-              {colorProfile && (SEASONS[colorProfile.season] || SEASONS[colorProfile.parentSeason]) ? (
-                <>
-                  <span
-                    className="season-dot"
-                    style={{ backgroundColor: (SEASONS[colorProfile.season] || SEASONS[colorProfile.parentSeason]).accent }}
-                  />
-                  {(SEASONS[colorProfile.season] || SEASONS[colorProfile.parentSeason]).label}
-                </>
-              ) : (
-                "My Colors"
-              )}
-            </button>
-          )}
           categories={availableTypes}
           activeCategory={activeType}
           onCategory={chooseType}
@@ -420,6 +552,7 @@ export function App() {
               Matches my colors
             </button>
           )}
+          beforeContent={<HotCards cards={[colorCard, declutterCard].filter(Boolean)} label="Wardrobe shortcuts" />}
         >
           <PageStatus
             loading={loading}
@@ -455,7 +588,7 @@ export function App() {
 
       <BottomNav view={view} onSelect={setView} navRef={bottomNavRef} />
 
-      {selectedItem && <ItemViewer item={selectedItem} openedFrom={openedFrom} onClose={() => setSelectedId(null)} onSave={saveItem} onDelete={deleteItem} onGenerateModeled={generateModeledPhoto} premiumAllowed={premiumAllowed} outfits={selectedItemOutfits} onOpenOutfit={openOutfit} />}
+      {selectedItem && <ItemViewer item={selectedItem} openedFrom={openedFrom} onClose={() => setSelectedId(null)} onSave={saveItem} onDelete={deleteItem} onGenerateModeled={generateModeledPhoto} premiumAllowed={premiumAllowed} provider={aiSetup?.provider ?? null} outfits={selectedItemOutfits} onOpenOutfit={openOutfit} />}
       {showColorQuiz && (
         <ColorProfileModal
           initialProfile={colorProfile}
@@ -463,6 +596,17 @@ export function App() {
           onSave={(profile) => { setColorProfile(profile); setShowColorQuiz(false); }}
         />
       )}
+      {showDeclutter && (
+        <DeclutterPanel
+          wear={wear}
+          itemsById={declutterItemsById}
+          retiredItems={retiredItems}
+          onSetStatus={setItemStatus}
+          onClose={() => setShowDeclutter(false)}
+          onGoToOutfits={() => { setShowDeclutter(false); setView("outfits"); }}
+        />
+      )}
+
       {showOnboarding && (
         <Onboarding
           setup={aiSetup}

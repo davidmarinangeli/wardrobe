@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { atomicJson, buildModeledPrompt, checkSetup, computeIdentityProfile, geminiAnalyzeOutfitStyle, geminiEdit, isLikelyBottom, isLikelyCroppedOrShortBottom, isLikelySocks, isPremiumAllowed, loadFaceReference, miniMaxEdit, openAIAnalyzeOutfitStyle, openAIEdit, openRouterEdit, readAiMode, resolveApiKey, resolveModeledModel, resolveOpenAICompatibleBaseUrl, resolveProvider } from "./import-job-api.mjs";
+import { atomicJson, buildModeledPrompt, checkSetup, computeIdentityProfile, geminiAnalyzeOutfitStyle, geminiEdit, isLikelyBottom, isLikelyCroppedOrShortBottom, isLikelySocks, isPremiumAllowed, loadFaceReference, miniMaxEdit, openAIAnalyzeOutfitStyle, openAIImage, openAIImageOptions, openRouterEdit, readAiMode, resolveApiKey, resolveModeledModel, resolveOpenAICompatibleBaseUrl, resolveProvider } from "./import-job-api.mjs";
 
 import { recordSignal } from "./preferences-api.mjs";
 import { summarizeOutfits } from "../shared/outfit-index.mjs";
@@ -143,7 +143,7 @@ export function outfitsApi(options = {}) {
         } else if (provider === "openrouter") {
           bytes = await openRouterEdit({ key, baseUrl: apiBaseUrl(provider), model: resolved.model, quality: resolved.quality, size: "1536x1024", images: [...referenceImages, ...garments], prompt: modeledPrompt });
         } else {
-          bytes = await openAIEdit({ key, baseUrl: apiBaseUrl(provider), model: resolved.model, quality: resolved.quality, size: "1536x1024", images: [...referenceImages, ...garments], prompt: modeledPrompt });
+          bytes = await openAIImage({ ...openAIImageOptions(setting), key, baseUrl: apiBaseUrl(provider), model: resolved.model, quality: resolved.quality, size: "1536x1024", images: [...referenceImages, ...garments], prompt: modeledPrompt });
         }
         const modeledName = `${id}-modeled.png`;
         await mkdir(outfitAssetDir, { recursive: true });

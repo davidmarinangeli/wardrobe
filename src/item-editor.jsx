@@ -303,13 +303,43 @@ export function ItemEditor({ draft, setDraft, palette, sampling, setSampling, sa
   );
 }
 
-const MODEL_TIERS = [
-  { id: "standard", label: "Standard", detail: "Gemini 2.5 Flash — fast, ~$0.04/image" },
-  { id: "premium", label: "Premium", detail: "Nano Banana 2 — sharper detail, ~$0.07/image" },
+// What the two tiers actually resolve to depends on AI_PROVIDER, so the copy has to follow it —
+// these cards read as a promise about what you're paying for. Prices are per modeled photo at
+// 1536x1024 and approximate: OpenAI publishes token rates but no per-image token counts, so the
+// server logs the measured cost of each call ([image] lines) and that is the number to trust.
+const MODEL_TIERS_BY_PROVIDER = {
+  gemini: [
+    { id: "standard", label: "Standard", detail: "Gemini 2.5 Flash — fast, free tier" },
+    { id: "premium", label: "Premium", detail: "Nano Banana 2 — sharper detail, ~$0.07/image" },
+  ],
+  openai: [
+    { id: "standard", label: "Standard", detail: "gpt-image medium — fast, ~$0.11/image" },
+    { id: "premium", label: "Premium", detail: "gpt-image high — sharper detail, ~$0.26/image" },
+  ],
+  openrouter: [
+    { id: "standard", label: "Standard", detail: "gpt-image medium — fast, ~$0.11/image" },
+    { id: "premium", label: "Premium", detail: "gpt-image high — sharper detail, ~$0.26/image" },
+  ],
+  minimax: [
+    { id: "standard", label: "Standard", detail: "MiniMax image-01 — fast" },
+    { id: "premium", label: "Premium", detail: "MiniMax image-01 — sharper detail" },
+  ],
+};
+
+// An unknown or not-yet-loaded provider gets the tier names with no model or price attached,
+// which is better than naming the wrong model.
+const MODEL_TIERS_FALLBACK = [
+  { id: "standard", label: "Standard", detail: "Faster, cheaper" },
+  { id: "premium", label: "Premium", detail: "Sharper detail" },
 ];
 
-export function ModeledPhotoPrompt({ status, error, busy, onGenerate, premiumAllowed = true, hasImage = false, initialTier = "standard", note, onNoteChange }) {
+export function modelTiers(provider) {
+  return MODEL_TIERS_BY_PROVIDER[provider] || MODEL_TIERS_FALLBACK;
+}
+
+export function ModeledPhotoPrompt({ status, error, busy, onGenerate, premiumAllowed = true, provider = null, hasImage = false, initialTier = "standard", note, onNoteChange }) {
   const [tier, setTier] = useState(initialTier);
+  const tiers = modelTiers(provider);
   useEffect(() => { if (tier === "premium" && !premiumAllowed) setTier("standard"); }, [premiumAllowed, tier]);
   if (status === "processing") {
     return (
@@ -329,7 +359,7 @@ export function ModeledPhotoPrompt({ status, error, busy, onGenerate, premiumAll
       )}
       {status === "error" && <p className="modeled-photo-prompt__error">{error || "That attempt failed."}</p>}
       <div className="modeled-tier-picker" role="radiogroup" aria-label="Model photo quality">
-        {MODEL_TIERS.map((option) => {
+        {tiers.map((option) => {
           const disabled = option.id === "premium" && !premiumAllowed;
           return (
             <button
@@ -405,7 +435,7 @@ function OutfitsWithItem({ outfits, onOpen }) {
   );
 }
 
-export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled, premiumAllowed, showModeledPhoto = true, openedFrom = null, outfits = [], onOpenOutfit }) {
+export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled, premiumAllowed, provider = null, showModeledPhoto = true, openedFrom = null, outfits = [], onOpenOutfit }) {
   const closeButtonRef = useRef(null);
   const entryRef = useRef(null);
   const sheetRef = useRef(null);
@@ -613,6 +643,7 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
             busy={generating}
             onGenerate={handleGenerateModeled}
             premiumAllowed={premiumAllowed}
+            provider={provider}
             hasImage={hasModeledImage}
             initialTier={item.modeledTier || "standard"}
             note={modeledNote}
