@@ -738,9 +738,14 @@ button { font: inherit; }
   align-items: center;
   flex-wrap: nowrap;
   gap: 6px;
-  margin: 28px 0 0;
+  /* overflow-x makes this a clipping box, and the active pill carries
+     --shadow-sm — a 16px blur pushed 6px down. With no vertical padding the
+     scroll container cut it off flat at the pill's edge. The padding gives the
+     shadow room to exist inside the clip; the negative margins give that room
+     back to the layout, so nothing below moves. */
+  margin: 22px 0 -18px;
   border: 0;
-  padding: 0;
+  padding: 6px 0 18px;
   overflow-x: auto;
   background: transparent;
   scrollbar-width: none;
@@ -998,6 +1003,18 @@ button { font: inherit; }
   display: flex;
   justify-content: flex-end;
   padding: 12px;
+}
+
+/* The scrim is a pseudo-element rather than the overlay's own background so it
+   can be faded on its own. Fading the overlay faded its children too, which
+   meant a sheet sliding off the bottom edge also dissolved on the way down —
+   two exits happening at once, and the panel reading as insubstantial. Now the
+   scrim fades and the panel only ever moves. */
+.viewer-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
   background: var(--scrim);
   -webkit-backdrop-filter: var(--glass-blur-scrim);
   backdrop-filter: var(--glass-blur-scrim);
@@ -1005,6 +1022,8 @@ button { font: inherit; }
 }
 
 .viewer-entry {
+  position: relative;
+  z-index: 1;
   width: clamp(390px, 34vw, 520px);
   height: 100%;
   animation: viewer-in var(--dur-panel) var(--ease-drawer) both;
@@ -1012,7 +1031,7 @@ button { font: inherit; }
 
 /* Enter and exit travel the same path — a panel that slides in from the right
    must leave to the right, or the two motions read as unrelated. */
-.viewer-overlay[data-closing="true"] { animation: overlay-out 160ms var(--ease-out) both; }
+.viewer-overlay[data-closing="true"]::before { animation: overlay-out 160ms var(--ease-out) both; }
 .viewer-overlay[data-closing="true"] .viewer-entry { animation: viewer-out 160ms var(--ease-out) both; }
 
 /* ─── Opened from a card ─────────────────────────────────────────────────────
@@ -1058,6 +1077,7 @@ button { font: inherit; }
 /* Escape is a keyboard action — repeated, and always faster than an
    animation. Closing by key skips the exit entirely. */
 .viewer-overlay[data-closing="instant"],
+.viewer-overlay[data-closing="instant"]::before,
 .viewer-overlay[data-closing="instant"] .viewer-entry { animation: none; opacity: 0; }
 
 .viewer {

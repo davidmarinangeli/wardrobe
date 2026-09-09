@@ -6,7 +6,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { atomicJson } from "./import-job-api.mjs";
-import { SIGNAL_TYPES, derivePreferences } from "./preferences.mjs";
+import { SIGNAL_TYPES, deriveDeclutter, derivePreferences, deriveWearStats } from "./preferences.mjs";
 
 const PREFERENCES_VERSION = 1;
 // Signals are cheap and small, but the log is append-only and read on every
@@ -107,6 +107,25 @@ export async function loadDerivedPreferences(dataDir) {
   }
 }
 
+/** Wear facts and the declutter view, from the same log. Never throws. */
+export async function loadWearProfile(dataDir) {
+  try {
+    const [store, library, outfits] = await Promise.all([
+      readPreferencesStore(dataDir),
+      readJsonArray(dataDir, "library.json"),
+      readJsonArray(dataDir, "outfits.json"),
+    ]);
+    // Only the wardrobe they still dress from. A piece already in the sell or
+    // give-away pile has been decided on, and offering it up for the same
+    // decision a second time is the app failing to remember what it was told.
+    const items = library.filter((item) => !item.status || item.status === "active");
+    const { byItem } = deriveWearStats(store.signals, { items, outfits });
+    return { byItem, ...deriveDeclutter(store.signals, { items, outfits }) };
+  } catch {
+    return null;
+  }
+}
+
 function json(res, status, value) {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -147,6 +166,12 @@ export function preferencesApi(options = {}) {
         const signal = await recordSignal(dataDir, input);
         if (!signal) return json(res, 400, { error: "Unknown signal type" });
         return json(res, 201, signal);
+      }
+
+      if (url.pathname === "/api/preferences/wear" && req.method === "GET") {
+        const wear = await loadWearProfile(dataDir);
+        if (!wear) return json(res, 200, { byItem: {}, unlocked: false, loggedDays: 0, daysNeeded: 0, candidates: [], provisional: [] });
+        return json(res, 200, wear);
       }
 
       // Deliberate: there is no endpoint that records "the user ignored this".

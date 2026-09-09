@@ -63,6 +63,11 @@ export function mirrorApi(options = {}) {
         try { items = JSON.parse(await readFile(libraryFile, "utf8")); }
         catch (error) { if (error.code === "ENOENT") items = []; else throw error; }
 
+        // Only what they can actually wear. The mirror's remedies name pieces from
+        // the wardrobe to swap in, and offering one they have decided to sell is
+        // advice they cannot take. No status at all means active.
+        items = items.filter((item) => !item.status || item.status === "active");
+
         // Two passes, deliberately split. The first only observes; the second only
         // decides which of a fixed catalogue of observations applies, citing the
         // garments it is relying on. Neither can invent a fact the other did not

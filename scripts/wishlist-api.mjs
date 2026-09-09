@@ -12,7 +12,8 @@ import {
   normalizeImage,
   normalizeMetadata,
   openAIAnalyze,
-  openAIEdit,
+  openAIImage,
+  openAIImageOptions,
   openRouterEdit,
   readAiMode,
   removeChromaBackground,
@@ -149,7 +150,7 @@ async function generateCutout({ cropBytes, metadata, provider, key, apiBaseUrl, 
   } else if (provider === "openrouter") {
     bytes = await openRouterEdit({ key, baseUrl: apiBaseUrl, model: setting("OPENROUTER_GARMENT_MODEL", setting("OPENROUTER_IMAGE_MODEL", "openai/gpt-image-2")), quality: setting("OPENROUTER_IMAGE_QUALITY", "high"), size: "1024x1024", images: [source], prompt });
   } else {
-    bytes = await openAIEdit({ key, baseUrl: apiBaseUrl, model: setting("OPENAI_GARMENT_MODEL", setting("OPENAI_IMAGE_MODEL", "gpt-image-2")), quality: setting("OPENAI_IMAGE_QUALITY", "high"), size: "1024x1024", images: [source], prompt });
+    bytes = await openAIImage({ ...openAIImageOptions(setting), key, baseUrl: apiBaseUrl, model: setting("OPENAI_GARMENT_MODEL", setting("OPENAI_IMAGE_MODEL", "gpt-image-2")), quality: setting("OPENAI_IMAGE_QUALITY", "high"), size: "1024x1024", images: [source], prompt });
   }
   const chromaKeyUsed = provider === "openai" ? requestedChromaKey : await detectBorderColor(bytes);
   return removeChromaBackground(bytes, chromaKeyUsed);

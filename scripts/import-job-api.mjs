@@ -11,6 +11,16 @@ const API_ROOT = "/api/import/jobs";
 const ASSET_ROOT = "/api/import/assets";
 const LIBRARY_ASSET_ROOT = "/api/import/library";
 const STAGES = new Set(["crop", "garment"]);
+
+/**
+ * Where a garment sits in its life, not what it looks like.
+ *
+ * "active" is the default and is never written: an item with no status has not
+ * been triaged, which is the same thing as being active, and storing the word
+ * would only create two ways to say one fact. The other three take an item out
+ * of the wardrobe you dress from without taking it out of your history.
+ */
+export const ITEM_STATUSES = new Set(["active", "sell", "donate", "archived"]);
 const DECISIONS = new Set(["approve", "reject"]);
 const PARTS = GARMENT_PART_ID_SET;
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
@@ -364,6 +374,8 @@ export async function computeIdentityProfile({ root, dataDir, setting, provider,
 }
 
 // "standard" = Gemini 2.5 Flash Image / OpenAI medium quality (cheap). "premium" = Nano Banana 2 (gemini-3.1-flash-image) / OpenAI high quality.
+// The OpenAI/OpenRouter qualities are defaults, not fixed: gpt-image-2.5 adds xhigh and max above
+// high, so each tier's quality is a setting rather than a literal.
 // MiniMax has no documented quality tiers, so both fall back to the same model unless a premium override is set.
 export function resolveModeledModel(provider, tier, setting) {
   const premium = tier === "premium";
@@ -387,12 +399,18 @@ export function resolveModeledModel(provider, tier, setting) {
       model: premium
         ? setting("OPENROUTER_MODELED_PREMIUM_MODEL", setting("OPENROUTER_IMAGE_MODEL", "openai/gpt-image-2"))
         : setting("OPENROUTER_MODELED_MODEL", setting("OPENROUTER_IMAGE_MODEL", "openai/gpt-image-2")),
-      quality: premium ? "high" : "medium",
+      quality: premium
+        ? setting("OPENROUTER_MODELED_PREMIUM_QUALITY", "high")
+        : setting("OPENROUTER_MODELED_QUALITY", "medium"),
     };
   }
   return {
-    model: setting("OPENAI_MODELED_MODEL", setting("OPENAI_IMAGE_MODEL", "gpt-image-2")),
-    quality: premium ? "high" : "medium",
+    model: premium
+      ? setting("OPENAI_MODELED_PREMIUM_MODEL", setting("OPENAI_MODELED_MODEL", setting("OPENAI_IMAGE_MODEL", "gpt-image-2")))
+      : setting("OPENAI_MODELED_MODEL", setting("OPENAI_IMAGE_MODEL", "gpt-image-2")),
+    quality: premium
+      ? setting("OPENAI_MODELED_PREMIUM_QUALITY", "high")
+      : setting("OPENAI_MODELED_QUALITY", "medium"),
   };
 }
 
@@ -743,9 +761,105 @@ export async function openAIEdit({ key, baseUrl, model, prompt, images, size, ba
   });
   const result = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(result.error?.message || `OpenAI image request failed (${response.status})`);
+  reportImageUsage(model, result.usage);
   const encoded = result.data?.[0]?.b64_json;
   if (!encoded) throw new Error("OpenAI response did not contain image data");
   return Buffer.from(encoded, "base64");
+}
+
+// Two routes reach the same OpenAI image models. The Image API (/images/edits) is single-shot;
+// the Responses API drives the image model as a tool call on a mainline model — the route ChatGPT
+// itself uses, and the only one that carries a response id forward for multi-turn edits. Neither
+// goes through OpenRouter, whose image endpoint takes aspect_ratio/input_references rather than
+// the size/multipart shape these two share.
+export const OPENAI_IMAGE_ROUTES = new Set(["images", "responses"]);
+
+export function resolveOpenAIImageRoute(setting) {
+  const route = setting("OPENAI_IMAGE_ROUTE", "images").trim().toLowerCase();
+  if (!OPENAI_IMAGE_ROUTES.has(route)) {
+    throw new Error(`OPENAI_IMAGE_ROUTE must be one of ${[...OPENAI_IMAGE_ROUTES].join(", ")} (got "${route}")`);
+  }
+  return route;
+}
+
+// The per-call knobs both routes need, resolved from settings in one place so every call site
+// (outfits, wishlist, import jobs, bulk import) picks up the same route without repeating itself.
+export function openAIImageOptions(setting) {
+  return {
+    route: resolveOpenAIImageRoute(setting),
+    mainlineModel: setting("OPENAI_RESPONSES_MODEL", "gpt-6-astra"),
+    inputFidelity: setting("OPENAI_IMAGE_INPUT_FIDELITY") || undefined,
+  };
+}
+
+export function openAIImage({ route = "images", ...request }) {
+  return route === "responses" ? openAIResponsesEdit(request) : openAIEdit(request);
+}
+
+export async function openAIResponsesEdit({ key, baseUrl, model, mainlineModel, prompt, images, size, background, quality, inputFidelity, previousResponseId }) {
+  const content = [{ type: "input_text", text: prompt }];
+  for (const image of images) {
+    const normalized = await normalizeImage(image.data);
+    content.push({ type: "input_image", image_url: `data:image/png;base64,${normalized.toString("base64")}` });
+  }
+  const response = await fetch(`${baseUrl}/responses`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: mainlineModel || "gpt-6-astra",
+      input: [{ role: "user", content }],
+      ...(previousResponseId ? { previous_response_id: previousResponseId } : {}),
+      tools: [{
+        type: "image_generation",
+        model,
+        size,
+        quality: quality || "high",
+        output_format: "png",
+        ...(background ? { background } : {}),
+        ...(inputFidelity ? { input_fidelity: inputFidelity } : {}),
+      }],
+    }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error?.message || `OpenAI image request failed (${response.status})`);
+  reportImageUsage(model, result.usage);
+  const call = (result.output || []).find((item) => item.type === "image_generation_call");
+  // The tool is offered to the mainline model, not forced — a refusal or a clarifying question
+  // comes back as plain text with no image call, and that text is the only useful error message.
+  if (!call?.result) {
+    const said = (result.output || []).flatMap((item) => item.content || []).map((part) => part.text).filter(Boolean).join(" ").trim();
+    throw new Error(said ? `OpenAI answered with text instead of an image: ${said}` : "OpenAI response did not contain image data");
+  }
+  return Buffer.from(call.result, "base64");
+}
+
+// Per-1M-token rates for the image models this app defaults to. An unknown model logs raw token
+// counts and no price — a confidently wrong number is worse than no number.
+const IMAGE_TOKEN_RATES = {
+  "gpt-image-2.5-sunburst": { text: 5, image: 8, output: 30 },
+  "gpt-image-2.5-flare": { text: 5, image: 8, output: 30 },
+  "gpt-image-2": { text: 5, image: 8, output: 30 },
+};
+
+export function describeImageUsage(model, usage) {
+  if (!usage) return null;
+  const details = usage.input_tokens_details || {};
+  const textTokens = details.text_tokens ?? usage.input_tokens ?? 0;
+  const imageTokens = details.image_tokens ?? 0;
+  const outputTokens = usage.output_tokens ?? 0;
+  const base = String(model || "").replace(/^openai\//, "").replace(/-\d{4}-\d{2}-\d{2}$/, "");
+  const rate = IMAGE_TOKEN_RATES[base];
+  const cost = rate ? (textTokens * rate.text + imageTokens * rate.image + outputTokens * rate.output) / 1e6 : null;
+  return { model: base, textTokens, imageTokens, outputTokens, cost };
+}
+
+// OpenAI publishes token rates for the 2.5 snapshots but no per-image token counts, so the only
+// honest way to know what a bulk run costs is to read what each call actually reported.
+function reportImageUsage(model, usage) {
+  const summary = describeImageUsage(model, usage);
+  if (!summary) return;
+  const price = summary.cost === null ? "" : ` — $${summary.cost.toFixed(4)}`;
+  console.log(`[image] ${summary.model}: ${summary.textTokens} text + ${summary.imageTokens} image in, ${summary.outputTokens} out${price}`);
 }
 
 export async function openRouterEdit({ key, baseUrl, model, prompt, images, size, background, quality }) {
@@ -1295,7 +1409,7 @@ export function wardrobeImportApi(options = {}) {
         } else if (provider === "openrouter") {
           bytes = await openRouterEdit({ key, baseUrl: apiBaseUrl(provider), model: resolved.model, quality: resolved.quality, size: "1536x1024", images: [...referenceImages, garment], prompt: modeledPrompt });
         } else {
-          bytes = await openAIEdit({ key, baseUrl: apiBaseUrl(provider), model: resolved.model, quality: resolved.quality, size: "1536x1024", images: [...referenceImages, garment], prompt: modeledPrompt });
+          bytes = await openAIImage({ ...openAIImageOptions(setting), key, baseUrl: apiBaseUrl(provider), model: resolved.model, quality: resolved.quality, size: "1536x1024", images: [...referenceImages, garment], prompt: modeledPrompt });
         }
         const modeledName = `${id}-modeled.png`;
         await writeFile(path.join(libraryAssetDir, modeledName), bytes);
@@ -1360,7 +1474,7 @@ export function wardrobeImportApi(options = {}) {
           } else if (provider === "openrouter") {
             rawBytes = await openRouterEdit({ key, baseUrl: apiBaseUrl(provider), model: setting("OPENROUTER_GARMENT_MODEL", setting("OPENROUTER_IMAGE_MODEL", "openai/gpt-image-2")), quality: setting("OPENROUTER_IMAGE_QUALITY", "high"), size: "1024x1024", images: [original], prompt: garmentPrompt });
           } else {
-            rawBytes = await openAIEdit({ key, baseUrl: apiBaseUrl(provider), model: setting("OPENAI_GARMENT_MODEL", setting("OPENAI_IMAGE_MODEL", "gpt-image-2")), quality: setting("OPENAI_IMAGE_QUALITY", "high"), size: "1024x1024", images: [original], prompt: garmentPrompt });
+            rawBytes = await openAIImage({ ...openAIImageOptions(setting), key, baseUrl: apiBaseUrl(provider), model: setting("OPENAI_GARMENT_MODEL", setting("OPENAI_IMAGE_MODEL", "gpt-image-2")), quality: setting("OPENAI_IMAGE_QUALITY", "high"), size: "1024x1024", images: [original], prompt: garmentPrompt });
           }
           // Gemini and MiniMax don't reliably render the exact requested chroma color, so detect whatever solid backdrop they actually used instead of trusting the request.
           chromaKeyUsed = provider === "openai" ? requestedChromaKey : await detectBorderColor(rawBytes);
@@ -1409,6 +1523,36 @@ export function wardrobeImportApi(options = {}) {
         const mode = await writeAiMode(dataDir, input.mode);
         return json(res, 200, { mode });
       }
+      // Lifecycle, not deletion. A piece being sold or given away is still part
+      // of this person's history: the outfits it appears in stay intact and the
+      // photos stay on disk, it simply stops counting as something they own and
+      // can wear. Reversible by design — "archived" is a decision, and people
+      // change their minds about clothes more than about almost anything else.
+      const wardrobeStatusMatch = url.pathname.match(/^\/api\/import\/wardrobe\/(import-[a-f0-9-]{36})$/i);
+      if (wardrobeStatusMatch && (req.method === "PATCH" || req.method === "PUT")) {
+        const id = wardrobeStatusMatch[1];
+        const input = await body(req);
+        if (!ITEM_STATUSES.has(input.status)) {
+          return json(res, 400, { error: `status must be one of: ${[...ITEM_STATUSES].join(", ")}` });
+        }
+        const records = await loadImported();
+        const index = records.findIndex((record) => record.id === id);
+        if (index < 0) return json(res, 404, { error: "Imported wardrobe item not found" });
+
+        // "active" is the absence of a decision, so it clears the fields rather
+        // than storing the string — an item that was never triaged and one that
+        // was triaged back to active are the same item.
+        const { status: _drop, statusAt: _dropAt, ...rest } = records[index];
+        const updated = input.status === "active"
+          ? rest
+          : { ...rest, status: input.status, statusAt: new Date().toISOString() };
+
+        const next = [...records];
+        next[index] = updated;
+        await atomicJson(importedFile, next);
+        return json(res, 200, updated);
+      }
+
       const wardrobeDeleteMatch = url.pathname.match(/^\/api\/import\/wardrobe\/(import-[a-f0-9-]{36})$/i);
       if (wardrobeDeleteMatch && req.method === "DELETE") {
         const id = wardrobeDeleteMatch[1];

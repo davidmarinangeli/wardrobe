@@ -27,6 +27,11 @@ import { Fragment } from "react";
  * navLabel        string – aria-label on the <nav>. Defaults to "Filter by category".
  * navExtra        node   – Extra content appended after the category pills (e.g. a standalone toggle
  *                           that doesn't fit the single-select activeCategory/onCategory contract).
+ * beforeContent   node   – Rendered between the header and the grid. This is where a page puts a
+ *                           strip of cards leading somewhere else (see HotCards). Secondary
+ *                           features belong here rather than in the nav: BottomNav is three
+ *                           destinations by decision, and a feature used a few times a year should
+ *                           not hold permanent nav weight.
  * children        node   – The grid or content area below the header.
  */
 export function PageShell({
@@ -40,6 +45,7 @@ export function PageShell({
   renderCategory,
   navLabel = "Filter by category",
   navExtra,
+  beforeContent,
   children,
 }) {
   const plural = nounPlural ?? `${noun}s`;
@@ -79,6 +85,8 @@ export function PageShell({
           </nav>
         )}
       </header>
+
+      {beforeContent}
 
       {children}
     </main>

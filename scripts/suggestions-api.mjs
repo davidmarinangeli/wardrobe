@@ -520,6 +520,12 @@ export function suggestionsApi(options = {}) {
         try { items = JSON.parse(await readFile(libraryFile, "utf8")); }
         catch (error) { if (error.code === "ENOENT") items = []; else throw error; }
 
+        // Only what they can actually wear. A piece in the sell or give-away pile
+        // is still on disk and still in the outfits it was part of, but proposing
+        // it in something new would be suggesting clothes they have decided to
+        // part with. No status at all means active.
+        items = items.filter((item) => !item.status || item.status === "active");
+
         if (items.length < 5) {
           return json(res, 400, { error: "Add at least 5 wardrobe items before generating suggestions." });
         }

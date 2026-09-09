@@ -15,11 +15,16 @@ import {
   normalizeImage,
   normalizeMetadata,
   openAIAnalyze,
-  openAIEdit,
+  openAIImage,
+  openAIImageOptions,
   openRouterEdit,
   removeChromaBackground,
   removeUnwornGarmentBackground,
 } from "./import-job-api.mjs";
+
+// This script reads configuration straight from process.env rather than the app's settings
+// store, so shape it like the setting() lookups the shared helpers expect.
+const envSetting = (name, fallback = "") => process.env[name] || fallback;
 
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff", ".gif", ".avif"]);
 const SKIPPED_EXTENSIONS = new Set([".heic", ".heif"]);
@@ -188,7 +193,7 @@ async function generateGarmentCutout({ provider, key, baseUrl, item }) {
   } else if (provider === "openrouter") {
     rawBytes = await openRouterEdit({ key, baseUrl, model: process.env.OPENROUTER_GARMENT_MODEL || process.env.OPENROUTER_IMAGE_MODEL || "openai/gpt-image-2", quality: process.env.OPENROUTER_IMAGE_QUALITY || "high", size: "1024x1024", images: [source], prompt });
   } else {
-    rawBytes = await openAIEdit({ key, baseUrl, model: process.env.OPENAI_GARMENT_MODEL || process.env.OPENAI_IMAGE_MODEL || "gpt-image-2", quality: process.env.OPENAI_IMAGE_QUALITY || "high", size: "1024x1024", images: [source], prompt });
+    rawBytes = await openAIImage({ ...openAIImageOptions(envSetting), key, baseUrl, model: process.env.OPENAI_GARMENT_MODEL || process.env.OPENAI_IMAGE_MODEL || "gpt-image-2", quality: process.env.OPENAI_IMAGE_QUALITY || "high", size: "1024x1024", images: [source], prompt });
   }
   const actualChromaKey = provider === "openai" ? requestedChromaKey : await detectBorderColor(rawBytes);
   return removeChromaBackground(rawBytes, actualChromaKey);
@@ -206,7 +211,7 @@ async function generateModeledPhoto({ provider, key, baseUrl, garmentBuffer, mod
   if (provider === "openrouter") {
     return openRouterEdit({ key, baseUrl, model: process.env.OPENROUTER_MODELED_MODEL || process.env.OPENROUTER_IMAGE_MODEL || "openai/gpt-image-2", quality: process.env.OPENROUTER_IMAGE_QUALITY || "high", size: "1536x1024", images: [...referenceImages, garment], prompt });
   }
-  return openAIEdit({ key, baseUrl, model: process.env.OPENAI_MODELED_MODEL || process.env.OPENAI_IMAGE_MODEL || "gpt-image-2", quality: process.env.OPENAI_IMAGE_QUALITY || "high", size: "1536x1024", images: [...referenceImages, garment], prompt });
+  return openAIImage({ ...openAIImageOptions(envSetting), key, baseUrl, model: process.env.OPENAI_MODELED_MODEL || process.env.OPENAI_IMAGE_MODEL || "gpt-image-2", quality: process.env.OPENAI_IMAGE_QUALITY || "high", size: "1536x1024", images: [...referenceImages, garment], prompt });
 }
 
 async function writeLibraryItem({ libraryAssetDir, id, metadata, garmentBuffer, modeledBuffer }) {

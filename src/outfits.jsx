@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, Palette, PencilSimple, Sparkle, SpinnerGap, X } from "@phosphor-icons/react";
+import { CheckCircle } from "@phosphor-icons/react";
 import { OptimizedImage } from "./OptimizedImage.jsx";
 import { api } from "./api.js";
 import { OUTFIT_CATEGORIES as CATEGORIES } from "./categories.js";
@@ -17,6 +18,7 @@ import { EditableTitle } from "./components/EditableTitle.jsx";
 import { PageShell } from "./components/PageShell.jsx";
 import { PageStatus } from "./components/PageStatus.jsx";
 import { useViewerKeyboard } from "./hooks/useViewerKeyboard.js";
+import { useWornToday } from "./hooks/useWornToday.js";
 import "./outfits.css";
 import "./suggestions.css";
 
@@ -297,12 +299,16 @@ function OutfitBuilder({ items, initialOutfit, onCancel, onSave }) {
   return typeof document !== "undefined" ? createPortal(content, document.body) : content;
 }
 
-function OutfitCard({ outfit, itemMap, onOpen }) {
+function OutfitCard({ outfit, itemMap, onOpen, wornToday, onWear }) {
   const pieces = outfit.itemIds.map((id) => itemMap[id]).filter(Boolean);
   const hasModeledImage = Boolean(outfit.modeledImage);
   const processing = outfit.modeledStatus === "processing";
 
+  // The card is one big button, so the wear control cannot live inside it —
+  // nested buttons are invalid and the inner one would never receive a click.
+  // It sits alongside as a real button and is positioned over the art by CSS.
   return (
+    <div className="outfit-card-wrap">
     <button type="button" className="outfit-card" onClick={(event) => onOpen(outfit.id, event.currentTarget)} aria-label={`View ${outfit.name}`}>
       <div className="outfit-card-art">
         {hasModeledImage ? (
@@ -325,10 +331,22 @@ function OutfitCard({ outfit, itemMap, onOpen }) {
       </div>
       <p className="outfit-card-name">{outfit.name}</p>
     </button>
+    <button
+      type="button"
+      className={`outfit-worn-btn${wornToday ? " is-worn" : ""}`}
+      onClick={() => !wornToday && onWear(outfit)}
+      aria-pressed={wornToday}
+      aria-label={wornToday ? `${outfit.name}: logged as worn today` : `Log ${outfit.name} as worn today`}
+      title={wornToday ? "Worn today" : "I wore this today"}
+    >
+      <CheckCircle size={16} weight={wornToday ? "fill" : "regular"} aria-hidden="true" />
+      <span className="outfit-worn-btn__label">{wornToday ? "Worn" : "Wore it"}</span>
+    </button>
+    </div>
   );
 }
 
-function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateModeled, onRename, premiumAllowed, openedFrom }) {
+function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateModeled, onRename, premiumAllowed, provider, openedFrom, wornToday, onWear }) {
   const closeButtonRef = useRef(null);
   const pieces = outfit.itemIds.map((id) => itemMap[id]).filter(Boolean);
   const [note, setNote] = useState("");
@@ -405,6 +423,7 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
             busy={busy}
             onGenerate={generate}
             premiumAllowed={premiumAllowed}
+            provider={provider}
             hasImage={hasModeledImage}
             initialTier={outfit.modeledTier || "standard"}
             note={note}
@@ -416,6 +435,10 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
           onDelete={() => onDelete(outfit.id)}
           onCancel={() => onEdit(outfit)}
           cancelLabel={<><PencilSimple size={15} weight="regular" aria-hidden="true" /> Edit</>}
+          onConfirm={() => !wornToday && onWear(outfit)}
+          confirmDisabled={wornToday}
+          confirmIcon={<CheckCircle size={15} weight={wornToday ? "fill" : "regular"} aria-hidden="true" />}
+          confirmLabel={wornToday ? "Worn today" : "Wore it today"}
         />
       </div>
     </ViewerPanel>
@@ -504,11 +527,12 @@ function SuggestionNudges({ items, colorProfile, onOpenColorQuiz }) {
 // there's exactly one "add" and one "AI action" button per view, not a
 // second pair duplicated on the page itself. builderOutfit (which outfit,
 // if any, is being edited) stays local — the topbar doesn't need to know.
-export function Outfits({ items, premiumAllowed = true, colorProfile, onOpenColorQuiz, showBuilder, onOpenBuilder, onCloseBuilder, showSuggestions, onCloseSuggestions, openOutfitId, onOutfitOpened }) {
+export function Outfits({ items, premiumAllowed = true, provider = null, colorProfile, onOpenColorQuiz, showBuilder, onOpenBuilder, onCloseBuilder, showSuggestions, onCloseSuggestions, openOutfitId, onOutfitOpened }) {
   const [outfits, setOutfits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [builderOutfit, setBuilderOutfit] = useState(null);
+  const { isWornToday, logWear } = useWornToday();
   const [viewingOutfitId, setViewingOutfitId] = useState(null);
   const [openedFrom, setOpenedFrom] = useState(null);
 
@@ -623,7 +647,14 @@ export function Outfits({ items, premiumAllowed = true, colorProfile, onOpenColo
       {!!outfits.length && (
         <section className="outfits-grid">
           {outfits.map((outfit) => (
-            <OutfitCard key={outfit.id} outfit={outfit} itemMap={itemMap} onOpen={(id, element) => { setOpenedFrom(element); setViewingOutfitId(id); }} />
+            <OutfitCard
+              key={outfit.id}
+              outfit={outfit}
+              itemMap={itemMap}
+              onOpen={(id, element) => { setOpenedFrom(element); setViewingOutfitId(id); }}
+              wornToday={isWornToday(outfit.id)}
+              onWear={logWear}
+            />
           ))}
         </section>
       )}
@@ -639,6 +670,9 @@ export function Outfits({ items, premiumAllowed = true, colorProfile, onOpenColo
           onGenerateModeled={generateOutfitModeled}
           onRename={renameOutfit}
           premiumAllowed={premiumAllowed}
+          provider={provider}
+          wornToday={isWornToday(viewingOutfit.id)}
+          onWear={logWear}
         />
       )}
 

@@ -44,11 +44,20 @@ The setup wizard covers the essentials (`AI_PROVIDER` and the matching key, plus
 | `OPENROUTER_VISION_MODEL` | `openai/gpt-5.4-mini` |
 | `OPENROUTER_IMAGE_MODEL` | `openai/gpt-image-2` |
 | `OPENROUTER_IMAGE_QUALITY` | `high` |
+| `OPENROUTER_MODELED_QUALITY` | `medium` (standard tier) |
+| `OPENROUTER_MODELED_PREMIUM_QUALITY` | `high` (premium tier) |
 | `OPENROUTER_SUGGESTIONS_MODEL` | Falls back to `OPENROUTER_VISION_MODEL` |
 | `OPENAI_API_KEY` | Required if `AI_PROVIDER=openai` |
 | `OPENAI_VISION_MODEL` | `gpt-5.4-mini` |
 | `OPENAI_IMAGE_MODEL` | `gpt-image-2` |
-| `OPENAI_IMAGE_QUALITY` | `high` |
+| `OPENAI_IMAGE_QUALITY` | `high` (`gpt-image-2.5` also accepts `xhigh` and `max`) |
+| `OPENAI_IMAGE_ROUTE` | `images` (or `responses`) |
+| `OPENAI_RESPONSES_MODEL` | `gpt-6-astra` — the mainline model for the `responses` route |
+| `OPENAI_IMAGE_INPUT_FIDELITY` | Unset; `high` holds closer to the reference images |
+| `OPENAI_MODELED_MODEL` | Falls back to `OPENAI_IMAGE_MODEL` |
+| `OPENAI_MODELED_PREMIUM_MODEL` | Falls back to `OPENAI_MODELED_MODEL` |
+| `OPENAI_MODELED_QUALITY` | `medium` (standard tier) |
+| `OPENAI_MODELED_PREMIUM_QUALITY` | `high` (premium tier) |
 | `GEMINI_API_KEY_TEST` | Required for TEST mode if `AI_PROVIDER=gemini` |
 | `GEMINI_API_KEY_PROD` | Required for PROD mode if `AI_PROVIDER=gemini` (falls back to `GEMINI_API_KEY`) |
 | `GEMINI_API_KEY` | Legacy alias for `GEMINI_API_KEY_PROD` |
@@ -65,6 +74,10 @@ The setup wizard covers the essentials (`AI_PROVIDER` and the matching key, plus
 | `WARDROBE_MODEL_REFERENCE` | `data/model-reference.png` |
 | `WARDROBE_FACE_REFERENCE` | `data/model-reference-face.png` (optional) |
 | `WARDROBE_DATA_DIR` | `data` |
+
+OpenAI is reachable two ways, chosen with `OPENAI_IMAGE_ROUTE`. The default `images` route posts to `/v1/images/edits`. The `responses` route posts to `/v1/responses` and drives the same image model as an `image_generation` tool call on `OPENAI_RESPONSES_MODEL` — the way ChatGPT itself generates images, and the route that carries a response id for multi-turn edits. Both accept the same model ids and qualities, so switching to `gpt-image-2.5-sunburst` (or the faster, cheaper `gpt-image-2.5-flare`) is `OPENAI_IMAGE_MODEL`, and its two new quality steps above `high` are `xhigh` and `max`. On the `responses` route the image tool is offered rather than forced, so a call that comes back as text instead of an image raises that text as the error. Neither route goes through OpenRouter, whose image endpoint takes `aspect_ratio`/`input_references` rather than the `size` shape these two share.
+
+Every OpenAI image call logs an `[image]` line with the token counts the API reported and, for the models with known rates, the dollar cost of that call. OpenAI publishes token *rates* for the 2.5 snapshots but no per-image token counts, so this log is the only reliable way to know what a bulk run costs — generate one image and read the line before starting a large job.
 
 Set `AI_PROVIDER=gemini` to run the import pipeline on Gemini instead of OpenAI. `gemini-2.5-flash-image` ("Nano Banana") has a free tier (up to 500 images/day via a [Google AI Studio](https://aistudio.google.com/apikey) key, no credit card). For higher-quality output at a small per-image cost, set `GEMINI_IMAGE_MODEL` to `gemini-3.1-flash-image` or `gemini-3-pro-image` ("Nano Banana 2" / "Nano Banana 2 Pro").
 

@@ -1,0 +1,322 @@
+/* The declutter session. Lives inside .viewer, which already owns the panel's
+   padding and radius — nothing here re-declares either. */
+
+.declutter-entry { width: min(520px, 100%); }
+
+.declutter-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+}
+
+.declutter-tabs {
+  align-self: flex-start;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--r-full);
+  background: var(--wash-1);
+}
+
+.declutter-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  border: 0;
+  border-radius: var(--r-full);
+  padding: 6px 14px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--dur-pop) var(--ease-out), color var(--dur-pop) var(--ease-out);
+}
+
+.declutter-tabs button.active {
+  background: var(--paper-raised);
+  color: var(--ink);
+  box-shadow: var(--shadow-xs);
+}
+
+.declutter-tabs button:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
+
+/* ─── Locked ─────────────────────────────────────────────────────────────── */
+
+.declutter-locked {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+}
+
+.declutter-lede {
+  margin: 0;
+  color: var(--ink);
+  font-size: 22px;
+  line-height: 1.25;
+  letter-spacing: var(--track-display);
+}
+
+.declutter-lede em { font-style: italic; }
+
+.declutter-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.declutter-progress__track {
+  flex: 1;
+  block-size: 4px;
+  border-radius: var(--r-full);
+  background: var(--wash-2);
+  overflow: hidden;
+}
+
+.declutter-progress__fill {
+  display: block;
+  block-size: 100%;
+  border-radius: var(--r-full);
+  background: var(--accent-warm);
+  transition: inline-size var(--dur-panel) var(--ease-out);
+}
+
+.declutter-progress__label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.declutter-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.declutter-hint strong { color: var(--ink-soft); font-weight: 500; }
+
+.declutter-cta { align-self: flex-start; }
+
+/* The weak evidence: muted and inert on purpose. It is shown so the wait has
+   something concrete in it, never so it can be acted on. */
+.declutter-provisional {
+  border-top: 1px solid var(--line);
+  padding-block-start: var(--s-5);
+}
+
+.declutter-provisional__heading {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: var(--track-body);
+}
+
+.declutter-provisional__caveat {
+  margin: 2px 0 var(--s-3);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.declutter-provisional__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+/* Chips rather than rows: eight names in a column reads as a to-do list, which
+   is exactly the wrong weight for something there is nothing to do about. */
+.declutter-provisional__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 13px 4px 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-full);
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+/* Small enough that several chips share a row. At the pile's 40px the names
+   forced one chip per line, which rebuilt the very list this replaced. */
+.declutter-provisional__item .declutter-thumb {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+}
+
+.declutter-provisional__name { white-space: nowrap; }
+
+/* ─── Deck ───────────────────────────────────────────────────────────────── */
+
+.declutter-deck {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+}
+
+.declutter-deck__count {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 450;
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+}
+
+.declutter-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-1);
+  text-align: center;
+}
+
+.declutter-card__art {
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  margin-block-end: var(--s-3);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--surface-stage);
+}
+
+.declutter-card__art img { width: 100%; height: 100%; object-fit: contain; }
+
+.declutter-card__name {
+  margin: 0;
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: var(--track-tight);
+}
+
+.declutter-card__reason { margin: 0; color: var(--muted); font-size: 13px; }
+
+.declutter-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s-2);
+}
+
+.declutter-empty {
+  padding: var(--s-6) 0;
+  color: var(--muted);
+  text-align: center;
+}
+
+.declutter-empty p { margin: 0; font-size: 13px; }
+
+/* Quiet one-liners: an empty pile, a profile still loading. */
+.declutter-note { margin: 0; color: var(--muted); font-size: 12.5px; }
+
+/* ─── Piles ──────────────────────────────────────────────────────────────── */
+
+.declutter-piles { display: flex; flex-direction: column; gap: var(--s-5); }
+
+.declutter-pile__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-block-end: var(--s-3);
+}
+
+.declutter-pile h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 450;
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+}
+
+.declutter-pile__count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  padding: 1px 6px;
+  border-radius: var(--r-full);
+  background: var(--wash-2);
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.declutter-pile__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.declutter-pile__item {
+  display: grid;
+  grid-template-columns: 40px 1fr auto auto;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.declutter-pile__text { display: flex; flex-direction: column; min-width: 0; }
+.declutter-pile__name { color: var(--ink-soft); font-size: 13px; }
+.declutter-pile__meta { color: var(--muted); font-size: 11px; }
+
+.declutter-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-xs);
+  overflow: hidden;
+  background: var(--surface-stage);
+}
+
+.declutter-thumb img { width: 100%; height: 100%; object-fit: contain; }
+
+.declutter-icon-btn {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--paper-raised);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color var(--dur-pop) var(--ease-out), border-color var(--dur-pop) var(--ease-out);
+}
+
+.declutter-icon-btn:hover { color: var(--accent-warm); border-color: var(--accent-warm); }
+.declutter-icon-btn:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
+
+@media (max-width: 860px) {
+  /* One decision per row on a sheet: three pill buttons across a 375px screen
+     leaves each one too narrow to read and too small to hit. */
+  .declutter-actions { grid-template-columns: 1fr; }
+  .declutter-card__art { aspect-ratio: 1 / 1; }
+  /* A sheet is read further from the eye and with a thumb in the way, so it
+     gets the larger step of the type scale and a little more air. */
+  .declutter-lede { font-size: 24px; }
+  .declutter-hint,
+  .declutter-provisional__caveat { font-size: 14px; }
+  .declutter-provisional__item { font-size: 13.5px; padding: 5px 14px 5px 5px; }
+  .declutter-provisional__item .declutter-thumb { width: 28px; height: 28px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .declutter-progress__fill,
+  .declutter-tabs button,
+  .declutter-icon-btn { transition: none; }
+}

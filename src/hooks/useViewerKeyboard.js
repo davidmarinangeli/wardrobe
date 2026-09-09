@@ -1,12 +1,15 @@
 import { useEffect } from "react";
+import { useViewerOpenClass } from "./useViewerOpenClass.js";
 
 /**
  * Wires up keyboard / body-scroll behaviour for a slide-in viewer panel.
  *
  * - Pressing Escape calls `onClose({ instant: true })` — keyboard-initiated
  *   closes skip the exit animation (see useDismiss).
- * - Adds `viewer-open` to `document.body` (prevents background scroll) for the
- *   lifetime of the panel.
+ * - Holds `viewer-open` on `document.body` for the lifetime of the panel, via
+ *   useViewerOpenClass. Kept here for the popovers that use this hook WITHOUT
+ *   ViewerPanel (Mirror, the import tray); every real panel now gets it from
+ *   ViewerPanel itself, and the shared counter makes the overlap safe.
  * - Auto-focuses `closeRef` when the panel mounts.
  *
  * @param {function} onClose  - Called when Escape is pressed.
@@ -20,15 +23,13 @@ import { useEffect } from "react";
  *   matches every conditionally-rendered caller's existing behaviour.
  */
 export function useViewerKeyboard(onClose, closeRef, enabled = true) {
+  useViewerOpenClass(enabled);
+
   useEffect(() => {
     if (!enabled) return undefined;
     const onKeyDown = (event) => { if (event.key === "Escape") onClose({ instant: true }); };
     document.addEventListener("keydown", onKeyDown);
-    document.body.classList.add("viewer-open");
     closeRef?.current?.focus({ preventScroll: true });
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.body.classList.remove("viewer-open");
-    };
+    return () => document.removeEventListener("keydown", onKeyDown);
   }, [onClose, closeRef, enabled]);
 }

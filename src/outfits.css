@@ -5,6 +5,74 @@
   padding: 40px var(--page-x) 80px;
 }
 
+/* Wraps the card button so the wear control can be a sibling rather than a
+   nested button, which is invalid and would never receive its own click. */
+.outfit-card-wrap {
+  position: relative;
+}
+
+/* Sits over the art, not the name, and stays out of the way until the card is
+   hovered — on a grid of outfits a permanently visible row of buttons competes
+   with the clothes, which are the reason anyone is looking at this page.
+   Touch has no hover, so there it is simply always visible (see below). */
+.outfit-worn-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px 6px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--paper) 82%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 12%);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity .18s ease, transform .18s ease, background .18s ease;
+}
+
+.outfit-card-wrap:hover .outfit-worn-btn,
+.outfit-worn-btn:focus-visible,
+.outfit-worn-btn.is-worn {
+  opacity: 1;
+  transform: none;
+}
+
+.outfit-worn-btn:focus-visible {
+  outline: 1px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.outfit-worn-btn:hover { background: var(--paper); }
+
+/* Logged. It stops being a button in every way that matters — no pointer, no
+   hover response — because tapping it again does nothing: the derivation
+   collapses repeat wears of the same outfit on the same day. */
+.outfit-worn-btn.is-worn {
+  background: color-mix(in srgb, var(--ink) 88%, transparent);
+  color: var(--paper);
+  cursor: default;
+}
+
+.outfit-worn-btn.is-worn:hover { background: color-mix(in srgb, var(--ink) 88%, transparent); }
+
+@media (hover: none) {
+  .outfit-worn-btn { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .outfit-worn-btn { transition: none; }
+}
+
 .outfit-card {
   display: block;
   width: 100%;
