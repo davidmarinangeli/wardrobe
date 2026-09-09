@@ -25,9 +25,11 @@ const prefersReducedMotion = () =>
  *
  * Everything writes to the DOM node directly, for the reason spelled out in
  * useDeckGesture: routing a drag through React state re-renders the panel on
- * every pointermove, and the standards name that explicitly. The scrim is set
- * on the overlay element itself rather than published as a custom property for
- * children to inherit, same rule.
+ * every pointermove, and the standards name that explicitly. The scrim opacity
+ * is written as a custom property (--scrim-opacity) rather than straight to
+ * overlay.style.opacity, because the overlay element wraps the sheet — opacity
+ * on it would fade the sheet along with the scrim while dragging. The property
+ * is read only by the overlay's ::before, which is the actual scrim.
  *
  * The hard part here is not the physics, it's deciding whether the gesture
  * belongs to this hook at all. A sheet contains a scroller, and a downward drag
@@ -118,7 +120,11 @@ export function useSheetGesture({ sheetRef, overlayRef, scrollRef, enabled = tru
     sheet.style.animation = "none";
     sheet.style.transform = `translate3d(0, ${offset.toFixed(2)}px, 0)`;
 
-    if (overlay) overlay.style.opacity = scrimFor(offset, height).toFixed(3);
+    // A custom property, not overlay.style.opacity directly: the overlay itself
+    // is transparent (styles.css) and only its ::before scrim paints — setting
+    // opacity on the overlay element fades that whole subtree, sheet included,
+    // which is exactly the "sheet fades while you drag it" bug this replaced.
+    if (overlay) overlay.style.setProperty("--scrim-opacity", scrimFor(offset, height).toFixed(3));
   }, []);
 
   const paint = useCallback(
@@ -137,7 +143,7 @@ export function useSheetGesture({ sheetRef, overlayRef, scrollRef, enabled = tru
         entry.style.transform = "none";
       }
     }
-    if (overlayRef.current) overlayRef.current.style.opacity = "";
+    if (overlayRef.current) overlayRef.current.style.removeProperty("--scrim-opacity");
   }, [sheetRef, overlayRef]);
 
   /**

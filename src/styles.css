@@ -1019,6 +1019,12 @@ button { font: inherit; }
   -webkit-backdrop-filter: var(--glass-blur-scrim);
   backdrop-filter: var(--glass-blur-scrim);
   animation: overlay-in var(--dur-panel) var(--ease-out) both;
+  /* useSheetGesture dims the scrim as the sheet is dragged, proportional to how
+     far it's moved — the sheet itself only ever translates. A pseudo-element
+     can't take an inline style, so the drag writes this custom property on
+     .viewer-overlay instead of opacity directly; the 1 fallback is what's in
+     effect whenever nothing is dragging. */
+  opacity: var(--scrim-opacity, 1);
 }
 
 .viewer-entry {
