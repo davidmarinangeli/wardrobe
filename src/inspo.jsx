@@ -333,6 +333,8 @@ export function Inspo({ showImporter, onImporterClose }) {
   const [selectedPinId, setSelectedPinId] = useState(null);
   const [selectedItemId, setSelectedItemId] = useState(null);
   const [openedFrom, setOpenedFrom] = useState(null);
+  // Stable, so memo(GalleryItem) can skip every card whose `selected` did not change.
+  const openItem = useCallback((id, element) => { setOpenedFrom(element); setSelectedItemId(id); }, []);
   const [retryingId, setRetryingId] = useState(null);
 
   useEffect(() => {
@@ -478,7 +480,7 @@ export function Inspo({ showImporter, onImporterClose }) {
           ))}
           {visibleItems.map((item, index) => (
             <div className="wishlist-grid-item" key={item.id}>
-              <GalleryItem item={item} index={visiblePins.length + index} selected={selectedItemId === item.id} onOpen={(id, element) => { setOpenedFrom(element); setSelectedItemId(id); }} />
+              <GalleryItem item={item} index={visiblePins.length + index} selected={selectedItemId === item.id} onOpen={openItem} />
               {item.generateStatus === "error" && (
                 <button
                   type="button"

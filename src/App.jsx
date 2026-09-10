@@ -106,6 +106,8 @@ export function App() {
   // coordinates — opening the viewer reflows the page behind it, so the rect is
   // read later, once that has settled. See useExpandOrigin.
   const [openedFrom, setOpenedFrom] = useState(null);
+  // Stable, so memo(GalleryItem) can skip every card whose `selected` did not change.
+  const openItem = useCallback((id, element) => { setOpenedFrom(element); setSelectedId(id); }, []);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [colorProfile, setColorProfile] = useState(() => readColorProfile());
@@ -576,7 +578,7 @@ export function App() {
                     index={index}
                     selected={selectedId === item.id}
                     outfitCount={outfitIndex.byItem[item.id]?.length || 0}
-                    onOpen={(id, element) => { setOpenedFrom(element); setSelectedId(id); }}
+                    onOpen={openItem}
                   />
                 ))}
               </section>

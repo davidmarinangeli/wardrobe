@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowCounterClockwise, Check, Plus, Sparkle, SpinnerGap, X } from "@phosphor-icons/react";
 import { OptimizedImage } from "./OptimizedImage.jsx";
@@ -104,7 +104,11 @@ function sampleImageColor(image, canvas, event) {
   return null;
 }
 
-export function GalleryItem({ item, index, selected, onOpen, outfitCount = 0 }) {
+// Memoised. Opening or closing a sheet is an App render, and without this every
+// card in the grid re-rendered with it — ~300 of them, in the same frames the
+// sheet's exit spring and the page's scale-back were trying to animate. Both call
+// sites pass a stable onOpen, so only the cards whose `selected` flipped render.
+export const GalleryItem = memo(function GalleryItem({ item, index, selected, onOpen, outfitCount = 0 }) {
   const type = TYPE_MAP[item.part]?.singular || "wardrobe item";
   // A piece in four looks is a different piece from one in none, and the grid
   // used to render them identically. The count rides the type line rather than
@@ -143,7 +147,7 @@ export function GalleryItem({ item, index, selected, onOpen, outfitCount = 0 }) 
       </span>
     </button>
   );
-}
+});
 
 export function TagEditor({ tags, onChange }) {
   const [input, setInput] = useState("");
