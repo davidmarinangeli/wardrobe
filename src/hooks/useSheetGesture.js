@@ -20,14 +20,47 @@ const SPRING_EXIT = { type: "spring", bounce: 0.1, duration: 0.42 };
 const prefersReducedMotion = () =>
   typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
+// The scrim's opacity during a drag, as a paused animation whose time is the value.
+//
+// It used to be a custom property on the overlay that the ::before read. Custom
+// properties inherit, so every write changed the computed style of every element
+// in the sheet, and Chrome answers that by repainting the whole sheet — measured
+// 60 full repaints and re-rasters in 60 frames, on top of the drag itself. An
+// animation targets the pseudo-element alone: nothing inherits it, and setting
+// its currentTime costs no layout and no paint. One per overlay, created on the
+// first frame of a gesture and cancelled by clearPose, which hands the scrim back
+// to the stylesheet (and its entry/exit keyframes) untouched.
+const scrimAnimations = new WeakMap();
+const scrimAnimation = (overlay) => {
+  let animation = scrimAnimations.get(overlay);
+  if (!animation) {
+    animation = overlay.animate([{ opacity: 0 }, { opacity: 1 }], {
+      pseudoElement: "::before",
+      duration: 1000,
+      fill: "both",
+      easing: "linear",
+    });
+    animation.pause();
+    scrimAnimations.set(overlay, animation);
+  }
+  return animation;
+};
+const clearScrim = (overlay) => {
+  if (!overlay) return;
+  scrimAnimations.get(overlay)?.cancel();
+  scrimAnimations.delete(overlay);
+};
+
 /**
  * Pointer-driven dismissal for a bottom sheet.
  *
  * Everything writes to the DOM node directly, for the reason spelled out in
  * useDeckGesture: routing a drag through React state re-renders the panel on
- * every pointermove, and the standards name that explicitly. The scrim is set
- * on the overlay element itself rather than published as a custom property for
- * children to inherit, same rule.
+ * every pointermove, and the standards name that explicitly. The scrim is the
+ * overlay's ::before, and its opacity is driven by a paused Web Animation on
+ * that pseudo-element (see scrimAnimation) — not overlay.style.opacity, which
+ * would fade the sheet along with it, and not an inherited custom property,
+ * which makes every element in the sheet restyle and repaint on every frame.
  *
  * The hard part here is not the physics, it's deciding whether the gesture
  * belongs to this hook at all. A sheet contains a scroller, and a downward drag
@@ -111,14 +144,29 @@ export function useSheetGesture({ sheetRef, overlayRef, scrollRef, enabled = tru
     // is dropped at the end of a spring home, the browser does NOT restart sheet-in
     // from 0% (which was the cause of the re-inflating bug).
     const entry = sheet.closest?.(".viewer-entry") || sheet.parentElement;
-    if (entry) {
-      entry.style.animation = "none";
-      entry.style.transform = "none";
-    }
-    sheet.style.animation = "none";
-    sheet.style.transform = `translate3d(0, ${offset.toFixed(2)}px, 0)`;
+    //
+    // The drag moves that wrapper, not the sheet. The sheet is a scroll
+    // container, and in Chrome a change to a scroll container's own transform,
+    // when it holds a <select> (the item editor's category field), re-rasters
+    // the whole sheet on the GPU every frame. Measured over 60 frames: 789
+    // raster tasks moving .viewer, 0 moving this wrapper. Chrome still re-lays
+    // out and re-records paint for the sheet on each frame either way, but that
+    // is cheap main-thread work; the per-frame re-raster at 3x was the stutter.
+    //
+    // At rest the wrapper holds an identity translate3d (clearPose), never
+    // transform: none — dropping the transform entirely is a structural change
+    // Chrome answers with a full re-raster, and on Android it composites the
+    // sheet for a frame before those tiles exist, so you see straight through it.
+    const mover = entry || sheet;
+    // Once per gesture, not per frame: there is no reason to restyle either
+    // element again once the keyframe is retired. Checked on the animationName
+    // longhand, because the shorthand never reads back as "none": it serializes
+    // expanded ("auto ease 0s 1 normal none running none").
+    if (entry && entry.style.animationName !== "none") entry.style.animation = "none";
+    if (sheet.style.animationName !== "none") sheet.style.animation = "none";
+    mover.style.transform = `translate3d(0, ${offset.toFixed(2)}px, 0)`;
 
-    if (overlay) overlay.style.opacity = scrimFor(offset, height).toFixed(3);
+    if (overlay) scrimAnimation(overlay).currentTime = scrimFor(offset, height) * 1000;
   }, []);
 
   const paint = useCallback(
@@ -134,10 +182,10 @@ export function useSheetGesture({ sheetRef, overlayRef, scrollRef, enabled = tru
       const entry = sheet.closest?.(".viewer-entry") || sheet.parentElement;
       if (entry) {
         entry.style.animation = "none";
-        entry.style.transform = "none";
+        entry.style.transform = "translate3d(0, 0, 0)";
       }
     }
-    if (overlayRef.current) overlayRef.current.style.opacity = "";
+    clearScrim(overlayRef.current);
   }, [sheetRef, overlayRef]);
 
   /**

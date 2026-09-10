@@ -388,4 +388,17 @@
     cursor: grabbing;
     user-select: none;
   }
+
+  /* The sheet's wrapper holds its own GPU layer for as long as it is open, not
+     just while it is being dragged. useSheetGesture moves the wrapper (not
+     .viewer itself — see paintOn for why) with a transform; without a layer
+     already in place, the first frame of a drag is the frame Chrome creates one
+     and rasterizes the whole sheet — thousands of pixels tall at 3x with photos
+     in it. Android Chrome composites that layer before its tiles are ready, so
+     for a frame whole rectangles of the sheet are simply missing and the dimmed
+     page shows through them. With the layer standing, a drag only moves pixels
+     that are already on the GPU. */
+  .viewer-overlay .viewer-entry {
+    will-change: transform;
+  }
 }
