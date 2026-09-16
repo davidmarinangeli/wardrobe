@@ -13,13 +13,20 @@
 export function summarizeOutfits(outfits = []) {
   const summaries = [];
   for (const outfit of outfits) {
-    if (!outfit?.id || !Array.isArray(outfit.itemIds)) continue;
-    summaries.push({
+    if (!outfit?.id) continue;
+    const hasCanonicalPieces = Array.isArray(outfit.pieces);
+    const pieces = hasCanonicalPieces
+      ? outfit.pieces.filter((piece) => piece && typeof piece.itemId === "string" && piece.itemId).map((piece) => ({ itemId: piece.itemId, variantId: piece.variantId || null }))
+      : (Array.isArray(outfit.itemIds) ? outfit.itemIds.filter((id) => typeof id === "string" && id).map((itemId) => ({ itemId, variantId: null })) : []);
+    if (!pieces.length) continue;
+    const summary = {
       id: outfit.id,
       name: outfit.name || "",
       modeledImage: outfit.modeledImage || null,
-      itemIds: outfit.itemIds.filter((id) => typeof id === "string" && id),
-    });
+      itemIds: pieces.map((piece) => piece.itemId),
+    };
+    if (hasCanonicalPieces) summary.pieces = pieces;
+    summaries.push(summary);
   }
   return summaries;
 }
@@ -35,6 +42,8 @@ export function buildOutfitIndex(summaries = []) {
     outfits[outfit.id] = outfit;
     // A piece listed twice in the same outfit is still one outfit — otherwise a
     // duplicated id in the lineup would inflate the count on that card.
+    // summarizeOutfits always projects canonical pieces to itemIds. Keep this
+    // index deliberately small and boring: one outfit per physical item.
     for (const itemId of new Set(outfit.itemIds)) {
       if (typeof itemId !== "string" || !itemId) continue;
       (byItem[itemId] ||= []).push(outfit.id);

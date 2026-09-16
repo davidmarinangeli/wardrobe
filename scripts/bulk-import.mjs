@@ -1,8 +1,7 @@
-import { randomUUID } from "node:crypto";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdir, readdir, readFile, writeFile, copyFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import sharp from "sharp";
 import {
   atomicJson,
   buildGarmentPrompt,
@@ -21,6 +20,7 @@ import {
   removeChromaBackground,
   removeUnwornGarmentBackground,
 } from "./import-job-api.mjs";
+import { migrateLibrary, normalizeItemV2, normalizeReference, variantIdFor } from "../shared/wardrobe-model.mjs";
 
 // This script reads configuration straight from process.env rather than the app's settings
 // store, so shape it like the setting() lookups the shared helpers expect.
@@ -28,8 +28,6 @@ const envSetting = (name, fallback = "") => process.env[name] || fallback;
 
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff", ".gif", ".avif"]);
 const SKIPPED_EXTENSIONS = new Set([".heic", ".heif"]);
-const MAX_DEDUP_ITEMS = 60;
-
 function printHelp() {
   console.log(`Bulk-import clothes from a folder of photos into this Wardrobe.
 
@@ -38,7 +36,11 @@ Usage:
 
 Options:
   --input <folder>      Folder of outfit/garment photos to import (required)
-  --dry-run             Detect, deduplicate, and generate, but don't write to the wardrobe
+  --dry-run             Detect and generate, but don't write to the wardrobe
+  --prepare             Generate a reviewable v2 manifest and assets; does not touch the wardrobe
+  --apply                Apply an approved manifest prepared by an earlier run
+  --manifest <file>     Manifest path for --prepare/--apply (required for --apply)
+  --items <directory>   Prepared cutout directory for --apply (defaults beside manifest)
   --limit <n>           Only process the first n photos found (for a cheap test run)
   --concurrency <n>     Parallel API requests during detection/generation (default 3)
   --no-modeled          Skip generating modeled photos even if data/model-reference.png exists
@@ -52,13 +54,181 @@ function parseArgs(argv) {
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--input") args.input = argv[++index];
+    else if (arg === "--items") args.items = argv[++index];
     else if (arg === "--dry-run") args.dryRun = true;
+    else if (arg === "--prepare") args.prepare = true;
+    else if (arg === "--apply") args.apply = true;
+    else if (arg === "--manifest") args.manifest = argv[++index];
     else if (arg === "--limit") args.limit = Number(argv[++index]);
     else if (arg === "--concurrency") args.concurrency = Number(argv[++index]);
     else if (arg === "--no-modeled") args.noModeled = true;
     else if (arg === "-h" || arg === "--help") args.help = true;
   }
   return args;
+}
+
+function safeSlug(value) {
+  return String(value || "item").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "item").slice(0, 90);
+}
+
+const MANIFEST_ID = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
+
+// Compatibility only: manifests written before importId used the cutout hash
+// as their record identity. New manifests always take the importId branch and
+// must remain independent even when their PNG bytes are equal.
+function legacyImportUuid(bytes) {
+  const hash = createHash("sha256").update(bytes).digest("hex");
+  const raw = hash.slice(0, 32).split("");
+  raw[12] = "4";
+  raw[16] = ((Number.parseInt(raw[16], 16) & 0x3) | 0x8).toString(16);
+  const value = raw.join("");
+  return `${value.slice(0, 8)}-${value.slice(8, 12)}-${value.slice(12, 16)}-${value.slice(16, 20)}-${value.slice(20)}`;
+}
+
+function validateManifestId(id, label) {
+  if (typeof id !== "string" || !MANIFEST_ID.test(id)) {
+    throw new Error(`${label} id contains invalid characters`);
+  }
+  return id;
+}
+
+export async function applyPreparedManifest({ manifestFile, itemsDir, modeledDir, dataDir }) {
+  const manifest = JSON.parse(await readFile(manifestFile, "utf8"));
+  if (manifest.version !== 2 || !Array.isArray(manifest.items)) throw new Error("Manifest must be a v2 object with an items array");
+  const accepted = manifest.items.filter((item) => item.status === "accepted");
+  if (!accepted.length) throw new Error("Manifest contains no accepted items");
+  const importedDir = path.join(dataDir, "imported");
+  const libraryFile = path.join(dataDir, "library.json");
+  await mkdir(importedDir, { recursive: true });
+  const current = JSON.parse(await readFile(libraryFile, "utf8").catch((error) => error.code === "ENOENT" ? "[]" : Promise.reject(error)));
+  const migrated = migrateLibrary(current).items;
+  const next = [...migrated];
+  const prepared = [];
+  const imported = [];
+  const importIds = new Set();
+  for (const item of accepted) {
+    const primary = item.variants?.[0] || item;
+    const fileName = primary.file || item.file;
+    if (!fileName) throw new Error(`${item.name || "item"}: variant file is missing`);
+    const source = path.resolve(itemsDir, fileName);
+    if (path.dirname(source) !== path.resolve(itemsDir) || !(await stat(source)).isFile()) throw new Error(`${item.name || fileName}: cutout is missing`);
+    const bytes = await readFile(source);
+    const importId = item.importId === undefined
+      ? legacyImportUuid(bytes)
+      : validateManifestId(item.importId, "Import");
+    if (importIds.has(importId)) throw new Error(`Duplicate importId "${importId}"`);
+    importIds.add(importId);
+    const id = `import-${importId}`;
+    const existingIndex = next.findIndex((entry) => entry.id === id);
+    const existingRecord = existingIndex === -1 ? null : next[existingIndex];
+    const variants = (item.variants?.length ? item.variants : [{ id: `${safeSlug(item.slug || item.name || "item")}-standard`, name: "Standard", origin: "photo", file: item.file, modeledFile: item.modeledFile, tags: item.tags, sourceRefs: item.sourceRefs }]).map((variant, index) => {
+      const variantFile = variant.file || (index === 0 ? item.file : null);
+      if (!variantFile) throw new Error(`${item.name || id}: every variant needs a file`);
+      const variantId = validateManifestId(variant.id || variantIdFor(id, variant.name || `variant-${index + 1}`), "Variant");
+      return { ...variant, id: variantId, name: variant.name || "Standard", file: variantFile, modeledFile: variant.modeledFile || null };
+    });
+    const variantIds = new Set();
+    for (const variant of variants) {
+      if (variantIds.has(variant.id)) throw new Error(`Duplicate variant id "${variant.id}"`);
+      variantIds.add(variant.id);
+    }
+    if (variants.length !== 1 || variants[0].name !== "Standard") {
+      throw new Error(`${item.name || id}: import manifests must contain exactly one Standard variant`);
+    }
+    const references = (Array.isArray(item.references) ? item.references : [])
+      .map((reference, index) => normalizeReference(reference, index, id));
+    const referenceIds = new Set();
+    for (const reference of references) {
+      validateManifestId(reference.id, "Reference");
+      if (referenceIds.has(reference.id)) throw new Error(`Duplicate reference id "${reference.id}"`);
+      referenceIds.add(reference.id);
+    }
+    for (const variant of variants) {
+      const variantSource = path.resolve(itemsDir, variant.file);
+      if (path.dirname(variantSource) !== path.resolve(itemsDir) || !(await stat(variantSource)).isFile()) throw new Error(`${item.name || id}: variant ${variant.name} cutout is missing`);
+      await readFile(variantSource);
+      if (variant.modeledFile) {
+        if (!modeledDir) throw new Error(`${item.name || id}: --modeled is required for modeled variants`);
+        const modeledSource = path.resolve(modeledDir, variant.modeledFile);
+        if (path.dirname(modeledSource) !== path.resolve(modeledDir) || !(await stat(modeledSource)).isFile()) throw new Error(`${item.name || id}: modeled variant is missing`);
+        await readFile(modeledSource);
+      }
+    }
+    prepared.push({ item: { ...item, importId }, id, existingIndex, existingRecord, variants, references });
+  }
+  for (const { item, id, existingIndex, existingRecord, variants, references } of prepared) {
+    const recordVariants = [];
+    for (const variant of variants) {
+      const variantSource = path.resolve(itemsDir, variant.file);
+      const assetName = `${id}-${variant.id}-garment.png`.replace(/[^a-zA-Z0-9._-]/g, "-");
+      await copyFile(variantSource, path.join(importedDir, assetName));
+      let modeledImage = null;
+      if (variant.modeledFile) {
+        const modeledSource = path.resolve(modeledDir, variant.modeledFile);
+        const modeledName = `${id}-${variant.id}-modeled.png`.replace(/[^a-zA-Z0-9._-]/g, "-");
+        await copyFile(modeledSource, path.join(importedDir, modeledName));
+        modeledImage = `/api/import/library/${modeledName}`;
+      }
+      const asset = `/api/import/library/${assetName}`;
+      const previousVariant = existingRecord?.variants?.find((candidate) => candidate.id === variant.id);
+      recordVariants.push(normalizeItemV2({ id, part: item.part, color: item.color, secondaryColor: item.secondaryColor, tags: item.tags, name: item.name, defaultVariantId: variants[0].id, variants: [{ ...variant, createdAt: previousVariant?.createdAt, updatedAt: previousVariant?.updatedAt, image: asset, thumbnail: asset, modeledImage, cutout: { image: asset, thumbnail: asset, revision: variant.assetRevision || 1, status: "current" }, modeledPhoto: modeledImage ? { image: modeledImage, status: "approved", revision: variant.assetRevision || 1 } : null, approvalStatus: "approved" }], references }).variants[0]);
+    }
+    const record = normalizeItemV2({ id, name: item.name, part: item.part, color: item.color, secondaryColor: item.secondaryColor, defaultVariantId: recordVariants[0].id, variants: recordVariants, references, importJobId: id.replace(/^import-/, ""), createdAt: existingRecord?.createdAt, updatedAt: existingRecord?.updatedAt });
+    if (existingIndex === -1) next.push(record); else next[existingIndex] = record;
+    imported.push({ id, name: record.name, variants: record.variants.length });
+  }
+  await mkdir(dataDir, { recursive: true });
+  await atomicJson(libraryFile, next);
+  return { imported, total: next.length, library: libraryFile };
+}
+
+export async function writePreparedManifest({ generated, manifestFile }) {
+  const manifestDir = path.dirname(path.resolve(manifestFile));
+  const itemsDir = path.join(manifestDir, "items");
+  const modeledDir = path.join(manifestDir, "modeled");
+  const entries = [];
+  const usedImportIds = new Set();
+  for (const entry of generated) {
+    const importId = entry.importId === undefined ? randomUUID() : validateManifestId(entry.importId, "Import");
+    if (usedImportIds.has(importId)) throw new Error(`Duplicate importId "${importId}"`);
+    usedImportIds.add(importId);
+    entries.push({ ...entry, importId });
+  }
+  await mkdir(itemsDir, { recursive: true });
+  await mkdir(modeledDir, { recursive: true });
+  const items = [];
+  const usedSlugs = new Set();
+  for (const entry of entries) {
+    const baseSlug = safeSlug(entry.metadata.name);
+    let slug = baseSlug;
+    let suffix = 2;
+    while (usedSlugs.has(slug)) slug = `${baseSlug}-${suffix++}`;
+    usedSlugs.add(slug);
+    const { importId } = entry;
+    const file = `${slug}.png`;
+    await writeFile(path.join(itemsDir, file), entry.garmentBuffer);
+    let modeledFile = null;
+    if (entry.modeledBuffer) { modeledFile = `${slug}.png`; await writeFile(path.join(modeledDir, modeledFile), entry.modeledBuffer); }
+    items.push({
+      slug,
+      importId,
+      name: entry.metadata.name,
+      part: entry.metadata.part,
+      color: entry.metadata.color,
+      secondaryColor: entry.metadata.secondaryColor,
+      tags: entry.metadata.tags,
+      status: "accepted",
+      sourceRefs: entry.sourceFiles,
+      variants: [{ id: `${slug}-standard`, name: "Standard", description: "Source presentation", origin: "photo", file, modeledFile, tags: entry.metadata.tags, sourceRefs: entry.sourceFiles, approvalStatus: "approved", assetRevision: 1 }],
+      references: entry.sourceFiles.map((source, index) => ({ id: `${slug}-reference-${index + 1}`, original: source, role: "view", scope: "item", label: source, distinctive: false, revision: 1 })),
+    });
+  }
+  await writeFile(manifestFile, `${JSON.stringify({ version: 2, status: "prepared", createdAt: new Date().toISOString(), items }, null, 2)}\n`);
+  return { manifestFile: path.resolve(manifestFile), itemsDir, modeledDir, count: items.length };
+}
+
+export function createIndependentCandidates(items) {
+  return items.map((item) => ({ ...item, importId: randomUUID() }));
 }
 
 function createLimiter(concurrency) {
@@ -98,88 +268,6 @@ async function detectPhotoItems({ provider, key, baseUrl, filePath }) {
   return items;
 }
 
-async function makeThumbnail(buffer) {
-  const resized = await sharp(buffer).resize(220, 220, { fit: "inside", withoutEnlargement: true }).png().toBuffer();
-  return resized.toString("base64");
-}
-
-const GROUP_SCHEMA = { type: "object", properties: { groups: { type: "array", items: { type: "array", items: { type: "integer" } } } }, required: ["groups"] };
-
-async function geminiFindDuplicates({ key, prompt, thumbnails }) {
-  const parts = [{ text: prompt }, ...thumbnails.map((data) => ({ inlineData: { mimeType: "image/png", data } }))];
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${process.env.GEMINI_VISION_MODEL || "gemini-3.6-flash"}:generateContent`, {
-    method: "POST",
-    headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts }],
-      generationConfig: { responseMimeType: "application/json", responseSchema: GROUP_SCHEMA },
-    }),
-  });
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(result.error?.message || `Gemini grouping request failed (${response.status})`);
-  const outputText = result.candidates?.[0]?.content?.parts?.find((part) => typeof part.text === "string")?.text;
-  if (!outputText) throw new Error("Gemini grouping returned no structured result");
-  const parsed = JSON.parse(outputText);
-  if (!Array.isArray(parsed.groups)) throw new Error("Gemini grouping returned an invalid groups array");
-  return parsed.groups;
-}
-
-async function openAIFindDuplicates({ provider, key, baseUrl, prompt, thumbnails }) {
-  const content = [
-    { type: "input_text", text: prompt },
-    ...thumbnails.map((data) => ({ type: "input_image", image_url: `data:image/png;base64,${data}` })),
-  ];
-  const response = await fetch(`${baseUrl}/responses`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: provider === "openrouter" ? process.env.OPENROUTER_VISION_MODEL || "openai/gpt-5.4-mini" : process.env.OPENAI_VISION_MODEL || "gpt-5.4-mini",
-      input: [{ role: "user", content }],
-      text: { format: { type: "json_schema", name: "duplicate_groups", strict: true, schema: { type: "object", additionalProperties: false, properties: { groups: { type: "array", items: { type: "array", items: { type: "integer" } } } }, required: ["groups"] } } },
-    }),
-  });
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(result.error?.message || `OpenAI grouping request failed (${response.status})`);
-  const outputText = result.output_text || result.output?.flatMap((item) => item.content || []).find((item) => item.type === "output_text")?.text;
-  if (!outputText) throw new Error("OpenAI grouping returned no structured result");
-  const parsed = JSON.parse(outputText);
-  if (!Array.isArray(parsed.groups)) throw new Error("OpenAI grouping returned an invalid groups array");
-  return parsed.groups;
-}
-
-export function normalizeGroups(groups, count) {
-  const seen = new Set();
-  const result = [];
-  for (const group of groups) {
-    const cleaned = [...new Set(group)].filter((index) => Number.isInteger(index) && index >= 0 && index < count && !seen.has(index));
-    cleaned.forEach((index) => seen.add(index));
-    if (cleaned.length) result.push(cleaned);
-  }
-  for (let index = 0; index < count; index += 1) {
-    if (!seen.has(index)) result.push([index]);
-  }
-  return result;
-}
-
-async function findDuplicateGroups({ provider, key, baseUrl, items }) {
-  if (items.length <= 1) return items.map((_, index) => [index]);
-  if (items.length > MAX_DEDUP_ITEMS) {
-    console.warn(`Skipping cross-photo duplicate detection: ${items.length} items exceeds the ${MAX_DEDUP_ITEMS}-item limit for one grouping call. Every item will be imported separately.`);
-    return items.map((_, index) => [index]);
-  }
-  const thumbnails = await Promise.all(items.map((item) => makeThumbnail(item.crop)));
-  const prompt = `Each numbered image below (0 to ${items.length - 1}, in order) is a cropped clothing item automatically detected from a folder of outfit photos. Some crops may show the exact same physical garment worn on different occasions or in different lighting. Group indices that show the same physical garment together. Only group items you are confident are the same physical piece — matching construction, pattern placement, hardware, and distinctive details. When unsure, keep items in separate singleton groups; do not merge two different items just because they share a category or color. Every index from 0 to ${items.length - 1} must appear in exactly one group.`;
-  try {
-    const groups = provider === "gemini"
-      ? await geminiFindDuplicates({ key, prompt, thumbnails })
-      : await openAIFindDuplicates({ provider, key, baseUrl, prompt, thumbnails });
-    return normalizeGroups(groups, items.length);
-  } catch (error) {
-    console.warn(`Cross-photo duplicate detection failed (${error.message}); importing every detected item separately.`);
-    return items.map((_, index) => [index]);
-  }
-}
-
 async function generateGarmentCutout({ provider, key, baseUrl, item }) {
   // An unworn product photo's pixels are already correct — segment it out of whatever
   // background it's actually on instead of asking the AI edit model to repaint the garment.
@@ -214,7 +302,7 @@ async function generateModeledPhoto({ provider, key, baseUrl, garmentBuffer, mod
   return openAIImage({ ...openAIImageOptions(envSetting), key, baseUrl, model: process.env.OPENAI_MODELED_MODEL || process.env.OPENAI_IMAGE_MODEL || "gpt-image-2", quality: process.env.OPENAI_IMAGE_QUALITY || "high", size: "1536x1024", images: [...referenceImages, garment], prompt });
 }
 
-async function writeLibraryItem({ libraryAssetDir, id, metadata, garmentBuffer, modeledBuffer }) {
+async function writeLibraryItem({ libraryAssetDir, id, importId, metadata, garmentBuffer, modeledBuffer }) {
   await mkdir(libraryAssetDir, { recursive: true });
   const garmentName = `${id}-garment.png`;
   await writeFile(path.join(libraryAssetDir, garmentName), garmentBuffer);
@@ -224,7 +312,10 @@ async function writeLibraryItem({ libraryAssetDir, id, metadata, garmentBuffer, 
     await writeFile(path.join(libraryAssetDir, modeledName), modeledBuffer);
     modeledImage = `/api/import/library/${modeledName}`;
   }
-  return {
+  const image = `/api/import/library/${garmentName}`;
+  const variantId = variantIdFor(id);
+  return normalizeItemV2({
+    schemaVersion: 2,
     id,
     name: metadata.name,
     part: metadata.part,
@@ -232,11 +323,13 @@ async function writeLibraryItem({ libraryAssetDir, id, metadata, garmentBuffer, 
     secondaryColor: metadata.secondaryColor,
     palette: [metadata.color, metadata.secondaryColor].filter(Boolean),
     tags: metadata.tags,
-    image: `/api/import/library/${garmentName}`,
-    thumbnail: `/api/import/library/${garmentName}`,
+    image,
+    thumbnail: image,
     modeledImage,
-    importJobId: null,
-  };
+    importJobId: importId,
+    defaultVariantId: variantId,
+    variants: [{ id: variantId, name: "Standard", origin: "photo", image, thumbnail: image, modeledImage, tags: metadata.tags, approvalStatus: "approved", assetRevision: 1 }],
+  });
 }
 
 async function appendToLibrary(importedFile, records) {
@@ -251,13 +344,26 @@ async function appendToLibrary(importedFile, records) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  if (args.help || !args.input) {
+  if (args.help || (!args.input && !args.apply)) {
     printHelp();
     process.exit(args.help ? 0 : 1);
   }
 
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
   const dataDir = path.resolve(root, process.env.WARDROBE_DATA_DIR || "data");
+  if (args.apply) {
+    if (!args.manifest) throw new Error("--manifest is required with --apply");
+    const manifestFile = path.resolve(args.manifest);
+    const manifestRoot = path.dirname(manifestFile);
+    const result = await applyPreparedManifest({
+      manifestFile,
+      itemsDir: path.resolve(args.items || path.join(manifestRoot, "items")),
+      modeledDir: args.modeled ? path.resolve(args.modeled) : path.join(manifestRoot, "modeled"),
+      dataDir,
+    });
+    console.log(JSON.stringify({ mode: "apply", ...result }, null, 2));
+    return;
+  }
   const libraryAssetDir = path.join(dataDir, "imported");
   const importedFile = path.join(dataDir, "library.json");
   const modelReferencePath = path.resolve(root, process.env.WARDROBE_MODEL_REFERENCE || "data/model-reference.png");
@@ -297,7 +403,7 @@ async function main() {
   await Promise.all(files.map((filePath) => limit(async () => {
     try {
       const items = await detectPhotoItems({ provider, key, baseUrl, filePath });
-      allItems.push(...items);
+      allItems.push(...createIndependentCandidates(items));
       processedPhotos += 1;
       console.log(`[${processedPhotos}/${files.length}] ${path.basename(filePath)} — detected ${items.length} item(s)`);
     } catch (error) {
@@ -310,11 +416,7 @@ async function main() {
     console.error("No clothing items were detected in any photo.");
     process.exit(1);
   }
-  console.log(`\nDetected ${allItems.length} item(s) total across ${files.length} photo(s). Checking for duplicates across photos...`);
-
-  const groups = await findDuplicateGroups({ provider, key, baseUrl, items: allItems });
-  const duplicatesMerged = allItems.length - groups.length;
-  console.log(`Found ${groups.length} unique physical item(s)${duplicatesMerged ? ` (merged ${duplicatesMerged} duplicate detection${duplicatesMerged === 1 ? "" : "s"})` : ""}.`);
+  console.log(`\nDetected ${allItems.length} independent item(s) across ${files.length} photo(s).`);
 
   let modelBuffer = null;
   let faceBuffer = null;
@@ -336,31 +438,37 @@ async function main() {
 
   const generated = [];
   const failed = [];
-  let processedGroups = 0;
-  await Promise.all(groups.map((group) => limit(async () => {
-    const representative = allItems[group[0]];
-    const sourceFiles = [...new Set(group.map((index) => allItems[index].sourceFile))];
+  let processedItems = 0;
+  await Promise.all(allItems.map((item) => limit(async () => {
+    const sourceFiles = [item.sourceFile];
     try {
-      const garmentBuffer = await generateGarmentCutout({ provider, key, baseUrl, item: representative });
+      const garmentBuffer = await generateGarmentCutout({ provider, key, baseUrl, item });
       let modeledBuffer = null;
       if (modelBuffer) {
         try {
-          modeledBuffer = await generateModeledPhoto({ provider, key, baseUrl, garmentBuffer, modelBuffer, faceBuffer, metadata: representative.metadata });
+          modeledBuffer = await generateModeledPhoto({ provider, key, baseUrl, garmentBuffer, modelBuffer, faceBuffer, metadata: item.metadata });
         } catch (error) {
-          console.warn(`  Modeled photo failed for "${representative.metadata.name}": ${error.message} (keeping the cutout)`);
+          console.warn(`  Modeled photo failed for "${item.metadata.name}": ${error.message} (keeping the cutout)`);
         }
       }
-      processedGroups += 1;
-      console.log(`[${processedGroups}/${groups.length}] Generated "${representative.metadata.name}" (from ${sourceFiles.join(", ")})`);
-      generated.push({ metadata: representative.metadata, garmentBuffer, modeledBuffer, sourceFiles });
+      processedItems += 1;
+      console.log(`[${processedItems}/${allItems.length}] Generated "${item.metadata.name}" (from ${sourceFiles.join(", ")})`);
+      generated.push({ importId: item.importId, metadata: item.metadata, garmentBuffer, modeledBuffer, sourceFiles });
     } catch (error) {
-      processedGroups += 1;
-      console.warn(`[${processedGroups}/${groups.length}] Failed "${representative.metadata.name}": ${error.message}`);
-      failed.push({ metadata: representative.metadata, sourceFiles, error: error.message });
+      processedItems += 1;
+      console.warn(`[${processedItems}/${allItems.length}] Failed "${item.metadata.name}": ${error.message}`);
+      failed.push({ importId: item.importId, metadata: item.metadata, sourceFiles, error: error.message });
     }
   })));
 
   console.log(`\n${generated.length} item(s) generated, ${failed.length} failed.`);
+
+  if (args.prepare) {
+    const manifestFile = path.resolve(args.manifest || path.join(inputDir, "wardrobe-manifest-v2.json"));
+    const prepared = await writePreparedManifest({ generated, manifestFile });
+    console.log(JSON.stringify({ mode: "prepare", ...prepared, failed: failed.map((item) => ({ name: item.metadata.name, sourceFiles: item.sourceFiles, error: item.error })) }, null, 2));
+    return;
+  }
 
   if (args.dryRun) {
     console.log("\nDry run — nothing written. Would have imported:");
@@ -370,8 +478,9 @@ async function main() {
 
   const records = [];
   for (const item of generated) {
-    const id = `import-${randomUUID()}`;
-    records.push(await writeLibraryItem({ libraryAssetDir, id, metadata: item.metadata, garmentBuffer: item.garmentBuffer, modeledBuffer: item.modeledBuffer }));
+    const importId = item.importId || randomUUID();
+    const id = `import-${importId}`;
+    records.push(await writeLibraryItem({ libraryAssetDir, id, importId, metadata: item.metadata, garmentBuffer: item.garmentBuffer, modeledBuffer: item.modeledBuffer }));
   }
   await mkdir(dataDir, { recursive: true });
   await appendToLibrary(importedFile, records);

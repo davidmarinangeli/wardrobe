@@ -73,6 +73,18 @@ function bump(scores, key, amount) {
   scores[key] = (scores[key] || 0) + amount;
 }
 
+// v2 writes both fields; accepting pieces-only records keeps derivation safe
+// for callers holding an unprojected canonical record.
+function itemIdsFrom(value) {
+  if (Array.isArray(value?.itemIds)) {
+    const itemIds = value.itemIds.filter((id) => typeof id === "string" && id);
+    if (itemIds.length) return itemIds;
+  }
+  return Array.isArray(value?.pieces)
+    ? value.pieces.filter((piece) => piece && typeof piece.itemId === "string" && piece.itemId).map((piece) => piece.itemId)
+    : [];
+}
+
 /**
  * Rolls the raw signal log, the wardrobe and the saved outfits into the compact
  * profile that gets injected into prompts.
@@ -110,7 +122,7 @@ export function derivePreferences(signals = [], { items = [], outfits = [], now 
     if (!earliest || new Date(signal.at) < new Date(earliest)) earliest = signal.at;
 
     if (signal.type === "outfit_saved" || signal.type === "outfit_worn" || signal.type === "outfit_liked" || signal.type === "outfit_passed") {
-      const { garments, colors } = describeOutfit(signal.itemIds);
+      const { garments, colors } = describeOutfit(itemIdsFrom(signal));
       const target = weight > 0 ? colorScores : rejectedColors;
       const pairTarget = weight > 0 ? pairScores : rejectedPairs;
       const magnitude = Math.abs(weight);
@@ -146,7 +158,7 @@ export function derivePreferences(signals = [], { items = [], outfits = [], now 
   // this is a fact about the wardrobe, available even with an empty log.
   const outfitCounts = new Map();
   for (const outfit of outfits) {
-    for (const id of outfit.itemIds || []) outfitCounts.set(id, (outfitCounts.get(id) || 0) + 1);
+    for (const id of itemIdsFrom(outfit)) outfitCounts.set(id, (outfitCounts.get(id) || 0) + 1);
   }
 
   const coreItems = [...outfitCounts.entries()]
@@ -281,7 +293,7 @@ export function deriveWearStats(signals = [], { items = [], outfits = [] } = {})
     days.add(day);
 
     if (!ITEM_WEAR_TYPES.has(signal.type)) continue;
-    const itemIds = (signal.itemIds || []).filter(Boolean);
+    const itemIds = itemIdsFrom(signal);
     if (!itemIds.length) continue;
 
     const key = `${day}:${[...new Set(itemIds)].sort().join(",")}`;
@@ -296,7 +308,7 @@ export function deriveWearStats(signals = [], { items = [], outfits = [] } = {})
   }
 
   const styled = new Set();
-  for (const outfit of outfits) for (const id of outfit.itemIds || []) styled.add(id);
+  for (const outfit of outfits) for (const id of itemIdsFrom(outfit)) styled.add(id);
 
   const byItem = {};
   for (const item of items) {

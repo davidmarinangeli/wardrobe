@@ -1,6 +1,6 @@
 ---
 name: import-clothes
-description: Extract unique garments from outfit or model photos, reconstruct clean transparent clothing cutouts, generate identity-preserving modeled editorial photos, and import approved items directly into this Wardrobe project's local JSON database. Use when a user asks Codex to add, ingest, extract, or import clothes from a folder of photos into Wardrobe, wants modeled photos for imported pieces, or wants finished wardrobe PNGs without using the in-app OpenAI import flow.
+description: Extract every detected garment occurrence from outfit or model photos, reconstruct clean transparent clothing cutouts, generate identity-preserving modeled editorial photos, and import approved items directly into this Wardrobe project's local JSON database. Use when a user asks Codex to add, ingest, extract, or import clothes from a folder of photos into Wardrobe, wants modeled photos for imported pieces, or wants finished wardrobe PNGs without using the in-app OpenAI import flow.
 ---
 
 # Import Clothes
@@ -23,7 +23,8 @@ Default to direct database import when the user asks to add clothes to Wardrobe.
 - Remove the wearer, skin, hair, mannequin, hanger, props, other layers, and scene.
 - Preserve only source-supported color, material, silhouette, construction, pattern, and legible marks.
 - Prefer omission over invented logos, text, pockets, seams, fasteners, hardware, or trim.
-- Deduplicate only when source photographs establish that two appearances are the same physical item.
+- Treat every detected occurrence as an independent import candidate. Never compare, group, deduplicate, merge, or convert detections into variants during import, even when their images or descriptions are identical.
+- Create exactly one `Standard` variant for every imported record. Variants are a post-import user action, not an import-time representation of another detection.
 - Hold items whose defining construction cannot be recovered without substantial invention.
 - Never place temporary crops, prompts, manifests, or QA files in `data/`.
 
@@ -31,7 +32,7 @@ Default to direct database import when the user asks to add clothes to Wardrobe.
 
 Use subagents for large source folders or more than eight generated items when the current environment supports them. Give each worker a disjoint set of source files or manifest slugs and require it to return the slug, prompt, reference paths, chroma path, modeled path, and visual-review notes.
 
-Keep one main agent responsible for the global item inventory, physical-identity deduplication, manifest reconciliation, database write, and final contact-sheet QA. Never let two workers generate or write the same slug. Run batches in waves when concurrency is limited, and resume only missing or failed slugs.
+Keep one main agent responsible for the global independent-candidate inventory, manifest reconciliation, database write, and final contact-sheet QA. Never let two workers generate or write the same slug or `importId`. Run batches in waves when concurrency is limited, and resume only missing or failed slugs.
 
 ## Temporary workspace
 
@@ -54,15 +55,18 @@ Create upright RGB JPEG working copies at quality 95 or better without upscaling
 
 ### 2. Build the manifest
 
-Write `$WORK/manifest.json` using this final shape:
+Write `$WORK/manifest.json` using this final v2 shape. Every detected occurrence
+is an independent item record with one `Standard` variant. Do not combine
+records or represent another detection as a variant, even when the garment
+description or image is identical.
 
 ```json
 {
+  "version": 2,
   "items": [
     {
-      "slug": "navy-fair-isle-cardigan",
-      "file": "navy-fair-isle-cardigan.png",
-      "modeledFile": "navy-fair-isle-cardigan.png",
+      "slug": "navy-fair-isle-cardigan-1",
+      "importId": "6e0f7c91-4f24-4d72-a9fb-0f4f3a2a6be3",
       "name": "Navy Fair Isle Cardigan",
       "part": "wholebody_up",
       "color": "#172033",
@@ -70,7 +74,26 @@ Write `$WORK/manifest.json` using this final shape:
       "tags": ["knit", "fair isle", "zip"],
       "status": "accepted",
       "sourceRefs": ["IMG_1284.jpg", "IMG_1289.jpg"],
-      "unknowns": []
+      "unknowns": [],
+      "variants": [{
+        "id": "navy-fair-isle-cardigan-1-standard",
+        "name": "Standard",
+        "description": "Closed, sleeves down",
+        "origin": "photo",
+        "file": "navy-fair-isle-cardigan.png",
+        "modeledFile": "navy-fair-isle-cardigan.png",
+        "sourceRefs": ["IMG_1284.jpg"],
+        "approvalStatus": "approved",
+        "assetRevision": 1
+      }],
+      "references": [{
+        "id": "navy-fair-isle-cardigan-reference-1",
+        "original": "IMG_1284.jpg",
+        "role": "view",
+        "scope": "item",
+        "distinctive": false,
+        "revision": 1
+      }]
     }
   ]
 }
@@ -84,7 +107,7 @@ Use only these `part` values:
 - `accessories_up` — accessories
 - `shoes` — shoes
 
-Use lowercase hyphenated slugs, six-digit hex colors, at most 12 short lowercase tags, and `null` when there is no genuinely distinct secondary color. Keep working records as `status: "generate"` or `status: "hold"`; change a record to `accepted` only after final QA. The import script ignores every non-accepted record.
+Use unique lowercase hyphenated slugs, an immutable manifest `importId`, six-digit hex colors, at most 12 short lowercase tags, and `null` when there is no genuinely distinct secondary color. Every accepted record must contain exactly one `Standard` variant. Keep working records as `status: "generate"` or `status: "hold"`; change a record to `accepted` only after final QA. The import script ignores every non-accepted record.
 
 ### 3. Prepare focused references
 
@@ -166,7 +189,13 @@ node .agents/skills/import-clothes/scripts/import-to-wardrobe.mjs \
   --manifest "$WORK/manifest.json"
 ```
 
-The script validates the cutouts and modeled PNGs, copies them into `data/imported/`, and atomically updates `data/library.json`. It derives stable UUIDs from cutout content, so rerunning an identical import updates metadata and modeled photos without creating duplicates.
+The script validates the cutouts and modeled PNGs, copies them into `data/imported/`, and atomically updates `data/library.json`. It uses each manifest record's immutable `importId` for record identity, never the cutout's pixel hash. Rerunning the same manifest updates the same record and assets without creating duplicates; distinct `importId` values remain distinct even when their PNG bytes are identical. A legacy manifest that predates `importId` may use the old cutout-hash identity solely for compatibility with records already imported by that version; do not omit `importId` from new manifests.
+
+For large batches, `scripts/bulk-import.mjs --prepare --manifest ...` writes
+this v2 manifest and review assets first. Set only approved records to
+`status: "accepted"`, then use `--apply --manifest ...`; no unapproved item or
+variant is written. Each detection is present as its own manifest record,
+including when its name, crop, or pixels match another record.
 
 Restart the dev server only if the running app does not pick up the database change, then verify the new item count at `/api/import/wardrobe` and visually inspect the gallery.
 

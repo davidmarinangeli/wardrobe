@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="aef6d150-8474-477f-bd11-7f5d01210c04" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.agents/skills/import-clothes/SKILL.md" beforeDir="false" afterPath="$PROJECT_DIR$/.agents/skills/import-clothes/SKILL.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.agents/skills/import-clothes/scripts/import-to-wardrobe.mjs" beforeDir="false" afterPath="$PROJECT_DIR$/.agents/skills/import-clothes/scripts/import-to-wardrobe.mjs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/.env.example" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/AGENTS.md" beforeDir="false" afterPath="$PROJECT_DIR$/AGENTS.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/bulk-import.mjs" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/bulk-import.mjs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/import-job-api.mjs" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/import-job-api.mjs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/outfits-api.mjs" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/outfits-api.mjs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/variant-api.mjs" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/variant-api.mjs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/shared/wardrobe-model.mjs" beforeDir="false" afterPath="$PROJECT_DIR$/shared/wardrobe-model.mjs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/App.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/App.jsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/item-editor.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/item-editor.jsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/styles.css" beforeDir="false" afterPath="$PROJECT_DIR$/src/styles.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/test/openrouter.test.mjs" beforeDir="false" afterPath="$PROJECT_DIR$/test/openrouter.test.mjs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/test/variants-v2.integration.test.mjs" beforeDir="false" afterPath="$PROJECT_DIR$/test/variants-v2.integration.test.mjs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/test/wardrobe-model.test.mjs" beforeDir="false" afterPath="$PROJECT_DIR$/test/wardrobe-model.test.mjs" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;claudio-bizzotto-zupit&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;git@github.com:davidmarinangeli/wardrobe.git&quot;,
+    &quot;accountId&quot;: &quot;0b8d0e14-b3ee-43e5-b02e-4961eb6735d3&quot;
+  }
+}</component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 3,
+  &quot;fromUser&quot;: false
+}</component>
+  <component name="ProjectId" id="3J6ZrA2YdOlXbtZAO7lir3lYn4z" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "git-widget-placeholder": "feat/dress-variations",
+    "javascript.preferred.runtime.type.id": "node",
+    "last_opened_file_path": "/Users/biz/Repos-personal/wardrobe",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm"
+  }
+}]]></component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$" />
+    </key>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-js-predefined-d6986cc7102b-3bd3a6803838-JavaScript-WS-261.22158.274" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="aef6d150-8474-477f-bd11-7f5d01210c04" name="Changes" comment="" />
+      <created>1788983674255</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1788983674255</updated>
+      <workItem from="1788983675452" duration="6663000" />
+      <workItem from="1789509706891" duration="1449000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+</project>

@@ -483,6 +483,14 @@ Rules:
     return !evaluateColorHarmony(garments).issue;
   });
 
+  // AI still receives the compact itemIds vocabulary for compatibility with
+  // existing providers, but every suggestion leaving the API names the
+  // concrete usage mode that will be saved with the outfit.
+  parsed.outfits = parsed.outfits.map((outfit) => ({
+    ...outfit,
+    pieces: outfit.itemIds.map((itemId) => ({ itemId, variantId: itemById.get(itemId)?.defaultVariantId || `${itemId}-standard` })),
+  }));
+
   return parsed.outfits;
 }
 

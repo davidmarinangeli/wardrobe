@@ -19,11 +19,11 @@ If you are setting up Wardrobe for a user, ask how they want to import their clo
 
 - **Codex:** Ask for a folder or camera-roll location and a model-reference PNG, then extract, model, and import the individual pieces by following [the bundled import skill](.agents/skills/import-clothes/SKILL.md). Afterward, offer to create a requested number of modeled looks with [the outfit-generation skill](.agents/skills/generate-outfits/SKILL.md).
 - **Web UI:** Point the user at the in-dashboard setup wizard (opens automatically on a fresh clone, or from the gear icon), then let them import through the app.
-- **Any other agent (no Codex available):** Run `scripts/bulk-import.mjs` (see below) — it does the same folder-of-photos → deduplicated wardrobe workflow without depending on Codex's built-in `imagegen` tool.
+- **Any other agent (no Codex available):** Run `scripts/bulk-import.mjs` (see below) — it imports every detected garment occurrence as an independent wardrobe record without depending on Codex's built-in `imagegen` tool.
 
 ## Bulk import without Codex
 
-`scripts/bulk-import.mjs` imports a whole folder of outfit photos in one run, using the same `AI_PROVIDER`/`OPENAI_*`/`GEMINI_*` settings as the web app. It detects every garment in every photo, uses one extra AI call to spot the same physical item worn in multiple photos (so it isn't imported twice), generates cutouts (and modeled photos, if `data/model-reference.png` exists), and writes straight into `data/library.json`.
+`scripts/bulk-import.mjs` imports a whole folder of outfit photos in one run, using the same `AI_PROVIDER`/`OPENAI_*`/`GEMINI_*` settings as the web app. It detects every garment in every photo, keeps every detection as an independent candidate without comparing or grouping it with other detections, generates cutouts (and modeled photos, if `data/model-reference.png` exists), and writes v2 records to `data/library.json`. For a review-first workflow use `--prepare --manifest /tmp/wardrobe/manifest.json`, review the generated `items/` and `modeled/` folders, set records to `accepted`, then run `--apply --manifest ...`; each manifest record has an immutable `importId`, so applying the same manifest again updates the same record while candidates with identical image bytes remain separate.
 
 ```bash
 npm run bulk-import -- --input ~/Pictures/old-wardrobe-photos --dry-run

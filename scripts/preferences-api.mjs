@@ -34,9 +34,13 @@ export function normalizeSignal(input) {
   if (!input || !SIGNAL_TYPES.has(input.type)) return null;
   const signal = { type: input.type, at: new Date().toISOString() };
 
-  if (Array.isArray(input.itemIds)) {
-    signal.itemIds = input.itemIds.filter((id) => typeof id === "string").slice(0, 12);
+  const pieceIds = Array.isArray(input.pieces)
+    ? input.pieces.filter((piece) => piece && typeof piece.itemId === "string").map((piece) => piece.itemId)
+    : input.itemIds;
+  if (Array.isArray(pieceIds)) {
+    signal.itemIds = pieceIds.filter((id) => typeof id === "string").slice(0, 12);
   }
+  if (Array.isArray(input.pieces)) signal.pieces = input.pieces.filter((piece) => piece && typeof piece.itemId === "string" && typeof piece.variantId === "string").slice(0, 12).map((piece) => ({ itemId: piece.itemId, variantId: piece.variantId }));
   for (const field of ["itemId", "pinId", "part", "category", "color", "source", "name"]) {
     if (typeof input[field] === "string" && input[field]) signal[field] = input[field].slice(0, 120);
   }

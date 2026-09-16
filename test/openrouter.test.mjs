@@ -4,6 +4,7 @@ import sharp from "sharp";
 import {
   openRouterEdit,
   resolveApiKey,
+  resolveModeledModel,
   resolveOpenAICompatibleBaseUrl,
   resolveProvider,
 } from "../scripts/import-job-api.mjs";
@@ -19,6 +20,24 @@ test("resolves the OpenRouter provider, key, and default base URL", () => {
   assert.deepEqual(resolveProvider(setting), { provider: "openrouter", keyName: "OPENROUTER_API_KEY" });
   assert.deepEqual(resolveApiKey(setting, "openrouter", "prod"), { key: "sk-or-test", keyName: "OPENROUTER_API_KEY" });
   assert.equal(resolveOpenAICompatibleBaseUrl(setting, "openrouter"), "https://openrouter.ai/api/v1");
+});
+
+test("resolves distinct OpenRouter modeled-photo choices", () => {
+  const values = { OPENROUTER_IMAGE_MODEL: "meta/muse-image", OPENROUTER_IMAGE_QUALITY: "high" };
+  const setting = (name, fallback = "") => values[name] || fallback;
+
+  assert.deepEqual(resolveModeledModel("openrouter", "standard", setting), {
+    model: "openai/gpt-image-2",
+    quality: "medium",
+  });
+  assert.deepEqual(resolveModeledModel("openrouter", "premium", setting), {
+    model: "openai/gpt-image-2",
+    quality: "high",
+  });
+  assert.deepEqual(resolveModeledModel("openrouter", "openrouter", setting), {
+    model: "meta/muse-image",
+    quality: "high",
+  });
 });
 
 test("sends reference images to the OpenRouter Image API", async (t) => {

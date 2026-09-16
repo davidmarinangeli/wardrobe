@@ -6,6 +6,7 @@ import { OptimizedImage } from "./OptimizedImage.jsx";
 import { api } from "./api.js";
 import { OUTFIT_CATEGORIES as CATEGORIES } from "./categories.js";
 import { GARMENT_PART_MAP } from "../shared/garments.mjs";
+import { resolveOutfitPieces, variantImage } from "../shared/wardrobe-model.mjs";
 import { ModeledPhotoPrompt } from "./item-editor.jsx";
 import { SuggestionPanel } from "./suggestions.jsx";
 import { useSheetGesture } from "./hooks/useSheetGesture.js";
@@ -152,7 +153,9 @@ function OutfitFlatLay({ outfitId, pieces }) {
 
 function OutfitBuilder({ items, initialOutfit, onCancel, onSave }) {
   const [name, setName] = useState(initialOutfit?.name || "");
-  const [selected, setSelected] = useState(() => new Set(initialOutfit?.itemIds || []));
+  const [selected, setSelected] = useState(() => new Map(
+    (initialOutfit?.pieces || (initialOutfit?.itemIds || []).map((itemId) => ({ itemId, variantId: null }))).map((piece) => [piece.itemId, piece.variantId]),
+  ));
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -177,13 +180,24 @@ function OutfitBuilder({ items, initialOutfit, onCancel, onSave }) {
 
   const toggleItem = (itemId) => {
     setSelected((current) => {
-      const next = new Set(current);
-      if (next.has(itemId)) next.delete(itemId); else next.add(itemId);
+      const next = new Map(current);
+      if (next.has(itemId)) next.delete(itemId);
+      else {
+        const item = items.find((candidate) => candidate.id === itemId);
+        // A physical item with multiple usage variants needs an explicit choice.
+        // Single-variant items keep the one-click flow.
+        next.set(itemId, item?.variants?.length > 1 ? null : item?.defaultVariantId || item?.variants?.[0]?.id || null);
+      }
       return next;
     });
   };
 
-  const selectedItems = items.filter((item) => selected.has(item.id));
+  const selectVariant = (itemId, variantId) => setSelected((current) => new Map(current).set(itemId, variantId));
+  const selectedItems = items.filter((item) => selected.has(item.id)).map((item) => {
+    const variantId = selected.get(item.id);
+    const image = variantImage(item, variantId);
+    return { ...item, variantId, image, thumbnail: image };
+  });
 
   // A dress or jumpsuit already dresses both halves, so the halves it covers
   // stop being available — and once a top or bottom is picked, a full garment
@@ -213,9 +227,10 @@ function OutfitBuilder({ items, initialOutfit, onCancel, onSave }) {
     setError("");
     if (!name.trim()) return setError("Give this outfit a name.");
     if (!selectedItems.length) return setError("Pick at least one piece.");
+    if ([...selected.values()].some((variantId) => !variantId)) return setError("Choose how to wear every piece with multiple variants.");
     setSaving(true);
     try {
-      await onSave({ name: name.trim(), itemIds: [...selected] });
+      await onSave({ name: name.trim(), pieces: [...selected.entries()].map(([itemId, variantId]) => ({ itemId, variantId })) });
     } catch (saveError) {
       setError(saveError.message);
       setSaving(false);
@@ -261,19 +276,27 @@ function OutfitBuilder({ items, initialOutfit, onCancel, onSave }) {
                     {itemsByCategory[category.id].map((item) => {
                       const blocked = !selected.has(item.id) && isBlocked(item);
                       return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          className={`outfit-piece${selected.has(item.id) ? " active" : ""}${blocked ? " blocked" : ""}`}
-                          onClick={() => !blocked && toggleItem(item.id)}
-                          aria-pressed={selected.has(item.id)}
-                          aria-disabled={blocked}
-                          title={blocked
-                            ? `${item.name} — a full-length piece already covers this`
-                            : item.name}
-                        >
-                          <OptimizedImage src={item.thumbnail || item.image} alt="" sizes="72px" breakpoints={[72, 108]} />
-                        </button>
+                        <span className="builder-piece-option" key={item.id}>
+                          <button
+                            type="button"
+                            className={`outfit-piece${selected.has(item.id) ? " active" : ""}${blocked ? " blocked" : ""}`}
+                            onClick={() => !blocked && toggleItem(item.id)}
+                            aria-pressed={selected.has(item.id)}
+                            aria-disabled={blocked}
+                            title={blocked
+                              ? `${item.name} — a full-length piece already covers this`
+                              : item.name}
+                          >
+                            <OptimizedImage src={item.thumbnail || item.image} alt="" sizes="72px" breakpoints={[72, 108]} />
+                          </button>
+                          {selected.has(item.id) && item.variants?.length > 1 && (
+                            <div className="builder-variant-picker" role="group" aria-label={`Variant for ${item.name}`}>
+                              {item.variants.map((variant) => (
+                                <button key={variant.id} type="button" className={selected.get(item.id) === variant.id ? "active" : ""} aria-pressed={selected.get(item.id) === variant.id} onClick={() => selectVariant(item.id, variant.id)}>{variant.name}</button>
+                              ))}
+                            </div>
+                          )}
+                        </span>
                       );
                     })}
                   </div>
@@ -300,7 +323,7 @@ function OutfitBuilder({ items, initialOutfit, onCancel, onSave }) {
 }
 
 function OutfitCard({ outfit, itemMap, onOpen, wornToday, onWear }) {
-  const pieces = outfit.itemIds.map((id) => itemMap[id]).filter(Boolean);
+  const pieces = resolveOutfitPieces(outfit, itemMap);
   const hasModeledImage = Boolean(outfit.modeledImage);
   const processing = outfit.modeledStatus === "processing";
 
@@ -348,7 +371,7 @@ function OutfitCard({ outfit, itemMap, onOpen, wornToday, onWear }) {
 
 function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateModeled, onRename, premiumAllowed, provider, openedFrom, wornToday, onWear }) {
   const closeButtonRef = useRef(null);
-  const pieces = outfit.itemIds.map((id) => itemMap[id]).filter(Boolean);
+  const pieces = resolveOutfitPieces(outfit, itemMap);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const hasModeledImage = Boolean(outfit.modeledImage);

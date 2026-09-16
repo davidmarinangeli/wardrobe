@@ -34,6 +34,26 @@ test("groups outfits by the pieces they use", () => {
   assert.deepEqual(byItem.dress, ["o3"]);
 });
 
+test("summaries preserve canonical variant pieces while indexing by item", () => {
+  const canonical = summarizeOutfits([{
+    id: "o-variants",
+    name: "Rolled",
+    pieces: [
+      { itemId: "shirt", variantId: "shirt-rolled" },
+      { itemId: "shirt", variantId: "shirt-rolled" },
+      { itemId: "jeans", variantId: "jeans-standard" },
+    ],
+  }]);
+
+  assert.deepEqual(canonical[0].pieces, [
+    { itemId: "shirt", variantId: "shirt-rolled" },
+    { itemId: "shirt", variantId: "shirt-rolled" },
+    { itemId: "jeans", variantId: "jeans-standard" },
+  ]);
+  assert.deepEqual(canonical[0].itemIds, ["shirt", "shirt", "jeans"]);
+  assert.deepEqual(buildOutfitIndex(canonical).byItem, { shirt: ["o-variants"], jeans: ["o-variants"] });
+});
+
 test("a piece in no outfits is simply absent, never zero-filled", () => {
   const { byItem } = buildOutfitIndex(summaries);
   assert.equal(byItem.scarf, undefined);

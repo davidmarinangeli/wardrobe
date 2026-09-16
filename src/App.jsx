@@ -20,6 +20,7 @@ import { MobileCompactBar, MobileHeadRow, useMobileHeaderScroll } from "./compon
 import { useChromeScroll } from "./hooks/useChromeScroll.js";
 import "./components/mobile-chrome.css";
 import { DISMISS_KEY as ONBOARDING_DISMISS_KEY, Onboarding, RESUME_KEY as ONBOARDING_RESUME_KEY } from "./onboarding.jsx";
+import { resolveOutfitPieces } from "../shared/wardrobe-model.mjs";
 
 const EMPTY_OUTFIT_INDEX = { outfits: {}, byItem: {} };
 const VIEW_TITLES = {
@@ -245,7 +246,7 @@ export function App() {
     return (outfitIndex.byItem[selectedId] || [])
       .map((id) => outfitIndex.outfits[id])
       .filter(Boolean)
-      .map((outfit) => ({ ...outfit, pieces: outfit.itemIds.map((id) => itemsById[id]).filter(Boolean) }));
+      .map((outfit) => ({ ...outfit, pieces: resolveOutfitPieces(outfit, itemsById) }));
   }, [selectedId, outfitIndex, itemsById]);
 
   const openOutfit = useCallback((outfitId) => {
@@ -348,7 +349,15 @@ export function App() {
     setSelectedId(null);
   };
 
-  const saveItem = (updatedItem) => {
+  const saveItem = async (updatedItem) => {
+    try {
+      const response = await fetch(`/api/wardrobe/items/${encodeURIComponent(updatedItem.id)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: updatedItem.name, part: updatedItem.part, color: updatedItem.color, secondaryColor: updatedItem.secondaryColor, tags: updatedItem.tags }) });
+      if (!response.ok) throw new Error("Could not save wardrobe item.");
+      updatedItem = await response.json();
+    } catch (requestError) {
+      setError(requestError.message);
+      return;
+    }
     setItems((current) => current.map((item) => item.id === updatedItem.id ? updatedItem : item));
     persistEdit(updatedItem);
   };
@@ -415,8 +424,8 @@ export function App() {
     setItems((current) => current.some((item) => item.id === newItem.id) ? current : [...current, newItem]);
   }, []);
 
-  const generateModeledPhoto = useCallback(async (item, tier, prompt) => {
-    const response = await fetch(`/api/import/wardrobe/${item.id}/modeled`, {
+  const generateModeledPhoto = useCallback(async (item, tier, prompt, variantId = item.defaultVariantId) => {
+    const response = await fetch(`/api/wardrobe/items/${encodeURIComponent(item.id)}/variants/${encodeURIComponent(variantId)}/modeled`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ tier, prompt }),
@@ -424,12 +433,12 @@ export function App() {
     const value = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(value.error || "Could not start generating a model photo.");
     setItems((current) => current.map((existing) => existing.id === item.id
-      ? { ...existing, modeledStatus: value.modeledStatus, modeledError: value.modeledError, modeledTier: value.modeledTier }
+      ? { ...existing, ...value, variants: value.variants || existing.variants }
       : existing));
   }, []);
 
   useEffect(() => {
-    if (!items.some((item) => item.modeledStatus === "processing")) return undefined;
+    if (!items.some((item) => item.modeledStatus === "processing" || item.variants?.some((variant) => variant.modeledStatus === "processing" || variant.processingStatus === "processing"))) return undefined;
     const timer = setInterval(() => {
       fetch("/api/import/wardrobe", { cache: "no-store" })
         .then((response) => response.ok ? response.json() : Promise.reject(new Error("Could not refresh the wardrobe.")))
@@ -437,7 +446,7 @@ export function App() {
           const freshById = Object.fromEntries(freshItems.map((item) => [item.id, item]));
           setItems((current) => current.map((item) => {
             const fresh = freshById[item.id];
-            return fresh ? { ...item, modeledImage: fresh.modeledImage, modeledStatus: fresh.modeledStatus, modeledError: fresh.modeledError, modeledTier: fresh.modeledTier } : item;
+            return fresh ? { ...item, ...fresh, variants: fresh.variants || item.variants } : item;
           }));
         })
         .catch(() => {});
