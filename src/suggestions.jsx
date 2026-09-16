@@ -5,6 +5,7 @@ import { OutfitStack } from "./components/OutfitStack.jsx";
 import { ViewerPanel } from "./components/ViewerPanel.jsx";
 import { useViewerKeyboard } from "./hooks/useViewerKeyboard.js";
 import { useDeckGesture } from "./hooks/useDeckGesture.js";
+import { resolveOutfitPieces } from "../shared/wardrobe-model.mjs";
 import "./suggestions.css";
 
 const OCCASIONS = [
@@ -153,7 +154,7 @@ export function SuggestionPanel({ items, onSaveOutfit, onClose }) {
   const sendSignal = (type, suggestion) => {
     api("/api/preferences/signal", {
       method: "POST",
-      body: JSON.stringify({ type, itemIds: suggestion.itemIds, name: suggestion.name }),
+      body: JSON.stringify({ type, pieces: suggestion.pieces, itemIds: suggestion.itemIds, name: suggestion.name }),
     }).catch(() => {});
   };
 
@@ -184,7 +185,7 @@ export function SuggestionPanel({ items, onSaveOutfit, onClose }) {
 
   const itemMap = useMemo(() => Object.fromEntries(items.map((item) => [item.id, item])), [items]);
   const piecesFor = useCallback(
-    (suggestion) => (suggestion?.itemIds || []).map((id) => itemMap[id]).filter(Boolean),
+    (suggestion) => resolveOutfitPieces(suggestion, itemMap),
     [itemMap],
   );
 
@@ -235,7 +236,7 @@ export function SuggestionPanel({ items, onSaveOutfit, onClose }) {
     advance("like");
     sendSignal("outfit_liked", suggestion);
     try {
-      await onSaveOutfit({ name: suggestion.name, itemIds: suggestion.itemIds, source: "suggestion" });
+      await onSaveOutfit({ name: suggestion.name, pieces: suggestion.pieces, itemIds: suggestion.itemIds, source: "suggestion" });
       setSavedCount((current) => current + 1);
     } catch (requestError) {
       setError(requestError.message);

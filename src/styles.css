@@ -884,6 +884,18 @@ button { font: inherit; }
   pointer-events: none;
 }
 
+.gallery-item__variant-stack {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+}
+
+.gallery-item img.gallery-item__variant-image {
+  grid-area: 1 / 1;
+}
+
 /* Inspo pins are full-bleed lifestyle photos, not cutouts floating on a shelf
    — no inset padding, no warm pool to read against, and cover instead of
    contain. The contact-shadow filter that sells a cutout as "sitting on" the
@@ -906,7 +918,8 @@ button { font: inherit; }
   -webkit-user-drag: none;
 }
 
-.gallery-item img[data-loaded] { opacity: 1; }
+.gallery-item img[data-loaded]:not(.gallery-item__variant-image),
+.gallery-item img.gallery-item__variant-image.is-active[data-loaded] { opacity: 1; }
 
 /* Optical size normalisation — object-fit: contain would otherwise render a
    sock at the same footprint as a coat. Caps are relative to the card. */
@@ -1609,15 +1622,19 @@ button { font: inherit; }
 .primary-button:focus-visible,
 .delete-button:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
 
-.modeled-photo-prompt {
+.modeled-photo-prompt,
+.variant-add-form {
   display: grid;
-  gap: 12px;
-  margin-bottom: 26px;
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
   background: var(--paper-raised);
   box-shadow: var(--shadow-xs);
+}
+
+.modeled-photo-prompt {
+  gap: 12px;
+  margin-bottom: 26px;
 }
 
 .modeled-photo-prompt.is-processing {
@@ -1643,6 +1660,7 @@ button { font: inherit; }
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
+.modeled-tier-picker--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
 .modeled-tier-picker button {
   display: grid;
@@ -2176,7 +2194,8 @@ button { font: inherit; }
   .details-label { margin-bottom: 16px; }
   .detail-tags { padding-bottom: 20px; gap: 8px 22px; }
   .viewer-text-close { margin-top: 20px; }
-  .viewer-actions { margin-top: 18px; }
+  .viewer-actions { gap: 6px; margin-top: 18px; }
+  .viewer-actions > button { min-height: 44px; padding-inline: 8px; font-size: 11px; }
   .color-controls { align-items: flex-start; flex-direction: column; }
   .sample-button { width: 100%; }
   .gallery-meta-row { align-items: flex-start; }
@@ -2289,4 +2308,120 @@ button { font: inherit; }
   .details-label { color: var(--ink-soft); }
 }
 
+/* A physical item stays one gallery card; usage modes live in its detail
+   sheet. The controls intentionally read like a small segmented shelf so the
+   selected mode is obvious on desktop and thumb-friendly on mobile. */
+.variant-picker { border: 0; margin: 24px 0 18px; padding: 0; }
+.variant-picker legend { color: var(--ink-soft); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+.variant-picker__options { display: grid; gap: 8px; margin-top: 10px; }
+.variant-picker__choice { display: grid; gap: 3px; min-width: 0; text-align: left; background: var(--paper-raised); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; color: var(--ink); cursor: pointer; }
+.variant-picker__choice.active { border-color: var(--accent-warm); box-shadow: 0 0 0 1px var(--accent-warm); }
+.variant-picker__choice small { color: var(--ink-soft); font-size: 12px; }
+.variant-delete {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  touch-action: manipulation;
+}
+.variant-delete__content { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 7px; }
+.variant-delete__progress {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background: color-mix(in srgb, var(--error) 18%, transparent);
+  clip-path: inset(0 100% 0 0);
+  pointer-events: none;
+  transition: clip-path var(--dur-pop) var(--ease-out);
+}
+.variant-delete[data-holding="true"] { transform: scale(.97); }
+.variant-delete[data-holding="true"] .variant-delete__progress {
+  clip-path: inset(0 0 0 0);
+  transition: clip-path 2s linear;
+}
+.variant-delete:disabled { opacity: .38; cursor: not-allowed; }
+.variant-picker__choice:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
+.variant-add-form {
+  gap: 14px;
+  margin-top: 12px;
+}
+.variant-add-form.is-processing {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+}
+.variant-add-form.is-processing p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.variant-add-form__composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 78px;
+  gap: 16px;
+}
+.variant-add-form__fields { display: grid; min-width: 0; gap: 8px; }
+.variant-add-form input { min-width: 0; }
+.variant-add-form__upload {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-left: 1px solid var(--line);
+  padding-left: 16px;
+}
+.variant-add-form__submit { justify-self: center; width: min(100%, 250px); }
+.variant-photo-upload {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--paper);
+  color: var(--ink-soft);
+  cursor: pointer;
+  box-shadow: var(--shadow-xs);
+}
+.variant-photo-upload:disabled { opacity: .45; cursor: not-allowed; }
+.variant-photo-upload:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
+.variant-photo-upload__art { position: relative; display: grid; place-items: center; width: 34px; height: 34px; }
+.variant-photo-upload__art img { width: 34px; height: 34px; border-radius: 8px; object-fit: cover; }
+.variant-photo-upload__plus {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--paper);
+  border-radius: 50%;
+  background: var(--accent);
+  color: white;
+}
+.variant-photo-upload.has-photo { border-color: var(--accent-warm); }
+.variant-notice { margin: 12px 0 0; color: var(--success); font-size: 11px; line-height: 1.4; }
+.gallery-item__variants { color: var(--ink-soft); }
 
+.variant-photo-missing {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  bottom: 24px;
+  max-width: calc(100% - 32px);
+  transform: translateX(-50%);
+  padding: 8px 11px;
+  border-radius: var(--r-full);
+  background: color-mix(in srgb, var(--ink) 82%, transparent);
+  color: var(--paper);
+  font-size: 11px;
+  font-weight: 520;
+  line-height: 1.2;
+  text-align: center;
+  white-space: normal;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .variant-delete,
+  .variant-delete__progress { transition: none; }
+  .variant-delete[data-holding="true"] { transform: none; }
+  .variant-delete[data-holding="true"] .variant-delete__progress { clip-path: inset(0 0 0 0); }
+}

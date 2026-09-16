@@ -6,6 +6,7 @@ import { COLOR_NAMES } from "./style-rules.mjs";
 import { GARMENT_DISAMBIGUATION_PROSE, GARMENT_PART_ID_SET, GARMENT_PART_IDS, GARMENT_PART_IDS_PROSE, MIRROR_REGIONS } from "../shared/garments.mjs";
 import { MIRROR_MATERIALS, OUTFIT_REGISTERS } from "../shared/style-catalogue.mjs";
 import { NO_JUDGMENT_PROMPT } from "../shared/prompt-guardrails.mjs";
+import { normalizeItemV2 } from "../shared/wardrobe-model.mjs";
 
 const API_ROOT = "/api/import/jobs";
 const ASSET_ROOT = "/api/import/assets";
@@ -374,6 +375,8 @@ export async function computeIdentityProfile({ root, dataDir, setting, provider,
 }
 
 // "standard" = Gemini 2.5 Flash Image / OpenAI medium quality (cheap). "premium" = Nano Banana 2 (gemini-3.1-flash-image) / OpenAI high quality.
+// Under OpenRouter, the explicit "openrouter" tier selects OPENROUTER_IMAGE_MODEL while the two
+// quality tiers retain their gpt-image defaults. This keeps the model choice visible and deliberate.
 // The OpenAI/OpenRouter qualities are defaults, not fixed: gpt-image-2.5 adds xhigh and max above
 // high, so each tier's quality is a setting rather than a literal.
 // MiniMax has no documented quality tiers, so both fall back to the same model unless a premium override is set.
@@ -395,10 +398,16 @@ export function resolveModeledModel(provider, tier, setting) {
     };
   }
   if (provider === "openrouter") {
+    if (tier === "openrouter") {
+      return {
+        model: setting("OPENROUTER_IMAGE_MODEL", "meta/muse-image"),
+        quality: setting("OPENROUTER_IMAGE_QUALITY", "high"),
+      };
+    }
     return {
       model: premium
-        ? setting("OPENROUTER_MODELED_PREMIUM_MODEL", setting("OPENROUTER_IMAGE_MODEL", "openai/gpt-image-2"))
-        : setting("OPENROUTER_MODELED_MODEL", setting("OPENROUTER_IMAGE_MODEL", "openai/gpt-image-2")),
+        ? setting("OPENROUTER_MODELED_PREMIUM_MODEL", "openai/gpt-image-2")
+        : setting("OPENROUTER_MODELED_MODEL", "openai/gpt-image-2"),
       quality: premium
         ? setting("OPENROUTER_MODELED_PREMIUM_QUALITY", "high")
         : setting("OPENROUTER_MODELED_QUALITY", "medium"),
@@ -1354,7 +1363,7 @@ export function wardrobeImportApi(options = {}) {
       // stays silent for items that predate this field rather than guessing.
       createdAt: existing?.createdAt || new Date().toISOString(),
     };
-    const next = [...records.filter((item) => item.id !== id), record];
+    const next = [...records.filter((item) => item.id !== id), normalizeItemV2(record)];
     await atomicJson(importedFile, next);
     return record;
   }
@@ -1581,7 +1590,9 @@ export function wardrobeImportApi(options = {}) {
           return json(res, 503, { error: `Setup required: add ${missing}, then restart the app.` });
         }
         const input = await body(req);
-        const tier = input.tier === "premium" ? "premium" : "standard";
+        const tier = input.tier === "openrouter" && setup.provider === "openrouter"
+          ? "openrouter"
+          : input.tier === "premium" ? "premium" : "standard";
         if (tier === "premium" && !isPremiumAllowed(setup.provider, setup.mode)) {
           return json(res, 400, { error: "Premium quality needs PROD mode — the free TEST key has no billing enabled for Nano Banana 2. Switch to PROD to generate this." });
         }

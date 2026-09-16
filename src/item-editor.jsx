@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowCounterClockwise, Check, Plus, Sparkle, SpinnerGap, X } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, Check, ImageSquare, Plus, Sparkle, SpinnerGap, Trash, X } from "@phosphor-icons/react";
 import { OptimizedImage } from "./OptimizedImage.jsx";
 import { useViewerKeyboard } from "./hooks/useViewerKeyboard.js";
 import { useDismiss } from "./hooks/useDismiss.js";
@@ -11,6 +11,8 @@ import { ModeledHero } from "./components/ModeledHero.jsx";
 import { PanelActions } from "./components/PanelActions.jsx";
 import { EditableTitle } from "./components/EditableTitle.jsx";
 import { WARDROBE_TYPES as TYPES, TYPE_MAP } from "./categories.js";
+import { itemVariant, variantImage, variantModeledImage, variantOwnImage } from "../shared/wardrobe-model.mjs";
+import { galleryVariantIndex, galleryVariantPhotos } from "./gallery-variants.js";
 
 function rgbToHex(red, green, blue) {
   return `#${[red, green, blue].map((value) => Math.max(0, Math.min(255, value)).toString(16).padStart(2, "0")).join("")}`;
@@ -104,12 +106,23 @@ function sampleImageColor(image, canvas, event) {
   return null;
 }
 
+const fileToDataUrl = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(reader.result);
+  reader.onerror = () => reject(reader.error || new Error("Could not read that image."));
+  reader.readAsDataURL(file);
+});
+
 // Memoised. Opening or closing a sheet is an App render, and without this every
 // card in the grid re-rendered with it — ~300 of them, in the same frames the
 // sheet's exit spring and the page's scale-back were trying to animate. Both call
 // sites pass a stable onOpen, so only the cards whose `selected` flipped render.
 export const GalleryItem = memo(function GalleryItem({ item, index, selected, onOpen, outfitCount = 0 }) {
+  const pointerScrub = useRef(null);
+  const [activePhotoIndex, setActivePhotoIndex] = useState(0);
+  const variantPhotos = useMemo(() => galleryVariantPhotos(item), [item]);
   const type = TYPE_MAP[item.part]?.singular || "wardrobe item";
+  const variantCount = Array.isArray(item.variants) ? item.variants.length : 1;
   // A piece in four looks is a different piece from one in none, and the grid
   // used to render them identically. The count rides the type line rather than
   // becoming a badge: the card's whole premise is a clean cutout on cream, and
@@ -117,11 +130,44 @@ export const GalleryItem = memo(function GalleryItem({ item, index, selected, on
   // no outfits is normal, especially early.
   const outfitLabel = outfitCount ? `in ${outfitCount} ${outfitCount === 1 ? "look" : "looks"}` : "";
 
+  useEffect(() => {
+    setActivePhotoIndex(0);
+    pointerScrub.current = null;
+  }, [variantPhotos]);
+
+  const startVariantScrub = (event) => {
+    if (event.pointerType !== "mouse" || variantPhotos.length <= 1) return;
+    pointerScrub.current = {
+      bounds: event.currentTarget.getBoundingClientRect(),
+      clientX: event.clientX,
+    };
+  };
+
+  const scrubVariant = (event) => {
+    if (event.pointerType !== "mouse" || variantPhotos.length <= 1) return;
+    const scrub = pointerScrub.current;
+    if (!scrub || scrub.clientX === event.clientX) return;
+    scrub.clientX = event.clientX;
+    setActivePhotoIndex(galleryVariantIndex(event.clientX, scrub.bounds, variantPhotos.length));
+  };
+
+  const resetVariantScrub = () => {
+    pointerScrub.current = null;
+    setActivePhotoIndex(0);
+  };
+
   return (
     <button
       className={`gallery-item${selected ? " selected" : ""}`}
       type="button"
-      onClick={(event) => onOpen(item.id, event.currentTarget)}
+      onClick={(event) => {
+        resetVariantScrub();
+        onOpen(item.id, event.currentTarget);
+      }}
+      onPointerEnter={startVariantScrub}
+      onPointerMove={scrubVariant}
+      onPointerLeave={resetVariantScrub}
+      onPointerCancel={resetVariantScrub}
       aria-label={outfitLabel ? `View ${item.name || type} — ${outfitLabel}` : `View ${item.name || type}`}
       aria-pressed={selected}
       data-part={item.part}
@@ -131,17 +177,24 @@ export const GalleryItem = memo(function GalleryItem({ item, index, selected, on
       data-testid={`wardrobe-item-${item.id}`}
     >
       <span className="gallery-item__art">
-        <OptimizedImage
-          src={item.thumbnail || item.image}
-          alt=""
-          sizes="(max-width: 520px) calc(50vw - 16px), (max-width: 860px) calc(33vw - 18px), 220px"
-          breakpoints={[120, 180, 240, 320, 480]}
-        />
+        <span className="gallery-item__variant-stack" aria-hidden="true">
+          {variantPhotos.map((photo, photoIndex) => (
+            <OptimizedImage
+              key={photo.variantId}
+              className={`gallery-item__variant-image${photoIndex === activePhotoIndex ? " is-active" : ""}`}
+              src={photo.image}
+              alt=""
+              sizes="(max-width: 520px) calc(50vw - 16px), (max-width: 860px) calc(33vw - 18px), 220px"
+              breakpoints={[120, 180, 240, 320, 480]}
+            />
+          ))}
+        </span>
       </span>
       <span className="gallery-item__label">
         <span className="gallery-item__name">{item.name || type}</span>
         <span className="gallery-item__type">
           {type}
+          {variantCount > 1 && <span className="gallery-item__variants"> · {variantCount} variants</span>}
           {outfitLabel && <span className="gallery-item__outfits"> · {outfitLabel}</span>}
         </span>
       </span>
@@ -307,7 +360,7 @@ export function ItemEditor({ draft, setDraft, palette, sampling, setSampling, sa
   );
 }
 
-// What the two tiers actually resolve to depends on AI_PROVIDER, so the copy has to follow it —
+// What the tiers actually resolve to depends on AI_PROVIDER, so the copy has to follow it —
 // these cards read as a promise about what you're paying for. Prices are per modeled photo at
 // 1536x1024 and approximate: OpenAI publishes token rates but no per-image token counts, so the
 // server logs the measured cost of each call ([image] lines) and that is the number to trust.
@@ -323,6 +376,7 @@ const MODEL_TIERS_BY_PROVIDER = {
   openrouter: [
     { id: "standard", label: "Standard", detail: "gpt-image medium — fast, ~$0.11/image" },
     { id: "premium", label: "Premium", detail: "gpt-image high — sharper detail, ~$0.26/image" },
+    { id: "openrouter", label: "OpenRouter", detail: "meta-muse — best quality for cost, $0.01/image" },
   ],
   minimax: [
     { id: "standard", label: "Standard", detail: "MiniMax image-01 — fast" },
@@ -341,9 +395,33 @@ export function modelTiers(provider) {
   return MODEL_TIERS_BY_PROVIDER[provider] || MODEL_TIERS_FALLBACK;
 }
 
+function ModelTierPicker({ tier, onChange, premiumAllowed, provider, ariaLabel }) {
+  const tiers = modelTiers(provider);
+  return (
+    <div className={`modeled-tier-picker modeled-tier-picker--${tiers.length}`} role="radiogroup" aria-label={ariaLabel}>
+      {tiers.map((option) => {
+        const disabled = option.id === "premium" && !premiumAllowed;
+        return (
+          <button
+            key={option.id}
+            type="button"
+            className={tier === option.id ? "active" : ""}
+            aria-pressed={tier === option.id}
+            disabled={disabled}
+            title={disabled ? "Switch to PROD mode to use Premium quality" : undefined}
+            onClick={() => onChange(option.id)}
+          >
+            <span>{option.label}</span>
+            <small>{disabled ? "Needs PROD mode" : option.detail}</small>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function ModeledPhotoPrompt({ status, error, busy, onGenerate, premiumAllowed = true, provider = null, hasImage = false, initialTier = "standard", note, onNoteChange }) {
   const [tier, setTier] = useState(initialTier);
-  const tiers = modelTiers(provider);
   useEffect(() => { if (tier === "premium" && !premiumAllowed) setTier("standard"); }, [premiumAllowed, tier]);
   if (status === "processing") {
     return (
@@ -362,25 +440,7 @@ export function ModeledPhotoPrompt({ status, error, busy, onGenerate, premiumAll
         </>
       )}
       {status === "error" && <p className="modeled-photo-prompt__error">{error || "That attempt failed."}</p>}
-      <div className="modeled-tier-picker" role="radiogroup" aria-label="Model photo quality">
-        {tiers.map((option) => {
-          const disabled = option.id === "premium" && !premiumAllowed;
-          return (
-            <button
-              key={option.id}
-              type="button"
-              className={tier === option.id ? "active" : ""}
-              aria-pressed={tier === option.id}
-              disabled={disabled}
-              title={disabled ? "Switch to PROD mode to use Premium quality" : undefined}
-              onClick={() => setTier(option.id)}
-            >
-              <span>{option.label}</span>
-              <small>{disabled ? "Needs PROD mode" : option.detail}</small>
-            </button>
-          );
-        })}
-      </div>
+      <ModelTierPicker tier={tier} onChange={setTier} premiumAllowed={premiumAllowed} provider={provider} ariaLabel="Model photo quality" />
       {hasImage && onNoteChange && (
         <input
           type="text"
@@ -439,6 +499,87 @@ function OutfitsWithItem({ outfits, onOpen }) {
   );
 }
 
+const VARIANT_DELETE_HOLD_MS = 2000;
+
+function VariantDeleteButton({ variant, disabled, busy, onDelete }) {
+  const timerRef = useRef(null);
+  const holdingRef = useRef(false);
+  const [holding, setHolding] = useState(false);
+
+  const cancelHold = useCallback(() => {
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    timerRef.current = null;
+    holdingRef.current = false;
+    setHolding(false);
+  }, []);
+
+  const startHold = useCallback(() => {
+    if (disabled || busy || holdingRef.current) return;
+    holdingRef.current = true;
+    setHolding(true);
+    timerRef.current = window.setTimeout(() => {
+      timerRef.current = null;
+      holdingRef.current = false;
+      setHolding(false);
+      onDelete(variant);
+    }, VARIANT_DELETE_HOLD_MS);
+  }, [busy, disabled, onDelete, variant]);
+
+  useEffect(() => () => {
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+  }, []);
+
+  const movePointer = (event) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) cancelHold();
+  };
+
+  const label = disabled
+    ? `${variant.name} cannot be deleted because it is the only variant`
+    : `Hold for 2 seconds to delete ${variant.name}`;
+
+  return (
+    <button
+      className="delete-button variant-delete"
+      type="button"
+      disabled={disabled || busy}
+      aria-label={label}
+      aria-busy={busy}
+      title={label}
+      data-holding={holding}
+      onContextMenu={(event) => event.preventDefault()}
+      onPointerDown={(event) => {
+        if (event.button !== 0) return;
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+        startHold();
+      }}
+      onPointerMove={movePointer}
+      onPointerUp={cancelHold}
+      onPointerCancel={cancelHold}
+      onLostPointerCapture={cancelHold}
+      onKeyDown={(event) => {
+        if ((event.key === " " || event.key === "Enter") && !event.repeat) {
+          event.preventDefault();
+          startHold();
+        }
+      }}
+      onKeyUp={(event) => {
+        if (event.key === " " || event.key === "Enter") {
+          event.preventDefault();
+          cancelHold();
+        }
+      }}
+      onBlur={cancelHold}
+    >
+      <span className="variant-delete__progress" aria-hidden="true" />
+      <span className="variant-delete__content">
+        {busy ? <SpinnerGap className="modeled-photo-spinner" size={15} aria-hidden="true" /> : <Trash size={15} weight="regular" aria-hidden="true" />}
+        Variant
+      </span>
+    </button>
+  );
+}
+
 export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled, premiumAllowed, provider = null, showModeledPhoto = true, openedFrom = null, outfits = [], onOpenOutfit }) {
   const closeButtonRef = useRef(null);
   const entryRef = useRef(null);
@@ -446,11 +587,21 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
   const overlayRef = useRef(null);
   const imageRef = useRef(null);
   const samplingCanvasRef = useRef(null);
+  const variantPhotoInputRef = useRef(null);
   const shakeTimerRef = useRef(null);
   const [sampling, setSampling] = useState(null);
   const [sampleStatus, setSampleStatus] = useState("");
   const [palette, setPalette] = useState(item.palette || []);
   const [draft, setDraft] = useState({ name: item.name || "", part: item.part, color: item.color || "#9a9286", secondaryColor: item.secondaryColor || null, tags: [...(item.tags || [])] });
+  const [selectedVariantId, setSelectedVariantId] = useState(item.defaultVariantId || item.variants?.[0]?.id || null);
+  const [variantName, setVariantName] = useState("");
+  const [variantDescription, setVariantDescription] = useState("");
+  const [variantPhoto, setVariantPhoto] = useState(null);
+  const [variantTier, setVariantTier] = useState("standard");
+  const [variantBusy, setVariantBusy] = useState(false);
+  const [deletingVariantId, setDeletingVariantId] = useState(null);
+  const [variantError, setVariantError] = useState("");
+  const [variantNotice, setVariantNotice] = useState(null);
   const [shaking, setShaking] = useState(false);
   // This viewer is hand-rolled rather than a ViewerPanel — it needs the
   // unsaved-changes shake — so it opts into the card-anchored entry itself.
@@ -460,12 +611,22 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
   const [generating, setGenerating] = useState(false);
   const [modeledNote, setModeledNote] = useState("");
   const type = TYPE_MAP[item.part]?.singular || "Wardrobe item";
-  const hasModeledImage = Boolean(item.modeledImage);
+  const selectedVariant = itemVariant(item, selectedVariantId);
+  const selectedVariantImage = variantOwnImage(item, selectedVariantId);
+  const selectedImage = selectedVariantImage || variantImage(item);
+  const isVariantPhotoMissing = Boolean(selectedVariantId && !selectedVariantImage);
+  const hasModeledImage = Boolean(variantModeledImage(item, selectedVariantId));
+  const hasVariantInput = Boolean(variantName.trim() || variantDescription.trim() || variantPhoto);
+  const isVariantProcessing = variantBusy || selectedVariant?.processingStatus === "processing";
+
+  useEffect(() => {
+    if (variantTier === "premium" && !premiumAllowed) setVariantTier("standard");
+  }, [premiumAllowed, variantTier]);
 
   const handleGenerateModeled = async (tier) => {
     setGenerating(true);
     try {
-      await onGenerateModeled(item, tier, modeledNote.trim());
+      await onGenerateModeled(item, tier, modeledNote.trim(), selectedVariantId);
       setModeledNote("");
     } catch {
       // surfaced via item.modeledError once the request settles
@@ -548,7 +709,95 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
     setSampleStatus("");
     setPalette(item.palette || []);
     setDraft({ name: item.name || "", part: item.part, color: item.color || "#9a9286", secondaryColor: item.secondaryColor || null, tags: [...(item.tags || [])] });
+    setSelectedVariantId((current) => item.variants?.some((variant) => variant.id === current)
+      ? current
+      : item.defaultVariantId || item.variants?.[0]?.id || null);
+    setVariantName("");
+    setVariantDescription("");
+    setVariantPhoto(null);
+    setDeletingVariantId(null);
+    setVariantError("");
   }, [item]);
+
+  const addVariant = async () => {
+    const requestedVariantName = variantName.trim();
+    if (!hasVariantInput) return;
+    setVariantBusy(true);
+    setVariantError("");
+    try {
+      const response = await fetch(`/api/wardrobe/items/${encodeURIComponent(item.id)}/variants`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: requestedVariantName,
+          description: variantDescription.trim(),
+          origin: variantPhoto ? "photo" : "generated",
+          sourceVariantId: variantPhoto ? undefined : selectedVariantId,
+          imageDataUrl: variantPhoto?.dataUrl,
+          tier: variantTier,
+        }),
+      });
+      const value = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(value.error || "Could not add variant");
+      onSave(value);
+      const created = value.variants?.find((variant) => variant.id === value.createdVariantId)
+        || (requestedVariantName ? value.variants?.find((variant) => variant.name === requestedVariantName) : null)
+        || value.variants?.at(-1);
+      if (created) setSelectedVariantId(created.id);
+      setVariantName("");
+      setVariantDescription("");
+      setVariantPhoto(null);
+      if (variantPhotoInputRef.current) variantPhotoInputRef.current.value = "";
+    } catch (error) {
+      setVariantError(error.message);
+    } finally {
+      setVariantBusy(false);
+    }
+  };
+
+  const chooseVariantPhoto = async (event) => {
+    const [file] = event.target.files || [];
+    if (!file) return;
+    setVariantError("");
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      setVariantPhoto({ dataUrl, name: file.name });
+    } catch (error) {
+      setVariantPhoto(null);
+      setVariantError(error.message);
+    }
+  };
+
+  const deleteVariant = async (variant) => {
+    const replacement = item.variants?.find((candidate) => candidate.id === item.defaultVariantId && candidate.id !== variant.id)
+      || item.variants?.find((candidate) => candidate.id !== variant.id);
+    if (!replacement) {
+      setVariantError("At least one variant is required.");
+      return;
+    }
+
+    setDeletingVariantId(variant.id);
+    setVariantError("");
+    setVariantNotice(null);
+    try {
+      const response = await fetch(`/api/wardrobe/items/${encodeURIComponent(item.id)}/variants/${encodeURIComponent(variant.id)}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ replacementVariantId: replacement.id }),
+      });
+      const value = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(value.error || "Could not delete variant");
+      const updatedItem = value.item;
+      if (!updatedItem) throw new Error("Could not refresh the item after deleting the variant");
+      setSelectedVariantId((current) => current === variant.id ? (updatedItem.defaultVariantId || replacement.id) : current);
+      setVariantNotice({ itemId: item.id, message: `${variant.name} deleted.` });
+      onSave(updatedItem);
+    } catch (error) {
+      setVariantError(error.message);
+    } finally {
+      setDeletingVariantId(null);
+    }
+  };
 
   const cancelEditing = () => {
     setDraft({ name: item.name || "", part: item.part, color: item.color || "#9a9286", secondaryColor: item.secondaryColor || null, tags: [...(item.tags || [])] });
@@ -590,7 +839,7 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
     >
       <OptimizedImage
         ref={imageRef}
-        src={item.image}
+        src={selectedImage}
         alt={`Selected ${type.toLowerCase()}`}
         sizes="(max-width: 520px) 40vw, 300px"
         breakpoints={[160, 240, 320, 480, 640]}
@@ -599,6 +848,7 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
         onClick={handleImageClick}
       />
       {sampling && <span className="sample-hint">Click garment to sample</span>}
+      {isVariantPhotoMissing && <span className="variant-photo-missing" role="status">Photo not generated yet</span>}
     </div>
   );
 
@@ -632,7 +882,7 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
       </button>
 
       {hasModeledImage ? (
-        <ModeledHero src={item.modeledImage} alt={`${draft.name || type} worn by a model`} showHeading={false}>
+        <ModeledHero src={variantModeledImage(item, selectedVariantId)} alt={`${draft.name || type} worn by a model`} showHeading={false}>
           {garmentArtwork}
         </ModeledHero>
       ) : (
@@ -640,16 +890,84 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
       )}
 
       <div className="viewer-details editing">
-        {showModeledPhoto && (
+        {item.variants?.length > 0 && (
+          <fieldset className="variant-picker">
+            <legend>How you wear it</legend>
+            <div className="variant-picker__options" role="radiogroup" aria-label="Choose usage variant">
+              {item.variants.map((variant) => (
+                <button
+                  key={variant.id}
+                  type="button"
+                  className={`variant-picker__choice${variant.id === selectedVariantId ? " active" : ""}`}
+                  aria-pressed={variant.id === selectedVariantId}
+                  onClick={() => setSelectedVariantId(variant.id)}
+                >
+                  <span>{variant.name}</span>
+                  <small>{variant.description || (variant.origin === "generated" ? "Generated variation" : "Source view")}</small>
+                </button>
+              ))}
+            </div>
+            <div className={`variant-add-form${isVariantProcessing ? " is-processing" : ""}`}>
+              {isVariantProcessing ? (
+                <>
+                  <SpinnerGap size={16} className="modeled-photo-spinner" aria-hidden="true" />
+                  <p>Processing your variant — extracting the garment, completing its details, and generating the model photo.</p>
+                </>
+              ) : (
+                <>
+                  <ModelTierPicker tier={variantTier} onChange={setVariantTier} premiumAllowed={premiumAllowed} provider={provider} ariaLabel="Variant model quality" />
+                  {selectedVariant?.processingStatus === "error" && <p className="modeled-photo-prompt__error" role="alert">{selectedVariant.processingError || "That variant could not be processed."}</p>}
+                  <div className="variant-add-form__composer">
+                    <div className="variant-add-form__fields">
+                      <input className="outfit-card-note" value={variantName} onChange={(event) => setVariantName(event.target.value)} placeholder="New usage, e.g. sleeves rolled" aria-label="Variant name" />
+                      <input className="outfit-card-note" value={variantDescription} onChange={(event) => setVariantDescription(event.target.value)} placeholder="Describe the presentation" aria-label="Variant description" />
+                    </div>
+                    <div className="variant-add-form__upload">
+                      <input
+                        ref={variantPhotoInputRef}
+                        type="file"
+                        accept="image/*"
+                        hidden
+                        disabled={variantBusy}
+                        onChange={chooseVariantPhoto}
+                      />
+                      <button
+                        type="button"
+                        className={`variant-photo-upload${variantPhoto ? " has-photo" : ""}`}
+                        disabled={variantBusy}
+                        onClick={() => variantPhotoInputRef.current?.click()}
+                        aria-label={variantPhoto ? `Replace variant photo: ${variantPhoto.name}` : "Choose a photo for this variant"}
+                        title={variantPhoto ? variantPhoto.name : "Choose a photo for this variant"}
+                      >
+                        <span className="variant-photo-upload__art" aria-hidden="true">
+                          {variantPhoto
+                            ? <img src={variantPhoto.dataUrl} alt="" />
+                            : <ImageSquare size={30} weight="regular" />}
+                          <span className="variant-photo-upload__plus"><Plus size={11} weight="bold" /></span>
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                  <button type="button" className="primary-button variant-add-form__submit" disabled={!hasVariantInput} onClick={addVariant}>
+                    <Plus size={15} weight="bold" aria-hidden="true" /> Add variant
+                  </button>
+                </>
+              )}
+            </div>
+            {variantNotice?.itemId === item.id && <p className="variant-notice" role="status" aria-live="polite">{variantNotice.message}</p>}
+            {variantError && <p className="status error" role="alert">{variantError}</p>}
+          </fieldset>
+        )}
+        {showModeledPhoto && selectedVariant?.processingStatus !== "processing" && (
           <ModeledPhotoPrompt
-            status={item.modeledStatus}
-            error={item.modeledError}
+            status={selectedVariant?.modeledStatus}
+            error={selectedVariant?.modeledError}
             busy={generating}
             onGenerate={handleGenerateModeled}
             premiumAllowed={premiumAllowed}
             provider={provider}
             hasImage={hasModeledImage}
-            initialTier={item.modeledTier || "standard"}
+            initialTier={selectedVariant?.modeledTier || "standard"}
             note={modeledNote}
             onNoteChange={setModeledNote}
           />
@@ -669,6 +987,13 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
 
         <PanelActions
           onDelete={() => onDelete(item.id)}
+          leadingActions={selectedVariant && item.variants.length > 1 && (
+            <VariantDeleteButton
+              variant={selectedVariant}
+              busy={deletingVariantId === selectedVariant.id}
+              onDelete={deleteVariant}
+            />
+          )}
           onCancel={cancelEditing}
           onConfirm={saveEditing}
           confirmIcon={<Check size={15} weight="bold" aria-hidden="true" />}

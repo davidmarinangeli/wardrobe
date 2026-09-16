@@ -494,6 +494,10 @@
 
 .outfit-piece:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
 .outfit-piece:active { transform: scale(.96); }
+.builder-piece-option { display: grid; justify-items: center; gap: 5px; }
+.builder-variant-picker { display: flex; max-width: 96px; flex-wrap: wrap; justify-content: center; gap: 3px; }
+.builder-variant-picker button { border: 1px solid var(--line); border-radius: 999px; background: var(--paper-raised); color: var(--ink-soft); font-size: 10px; line-height: 1.2; padding: 4px 6px; cursor: pointer; }
+.builder-variant-picker button.active { border-color: var(--accent-warm); color: var(--ink); }
 
 /* Greyed rather than hidden: the piece is still in the wardrobe, it just can't
    join this particular outfit (a dress already covers that half). */

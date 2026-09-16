@@ -10,6 +10,7 @@ import { responsiveImageApi } from "./scripts/responsive-image-api.mjs";
 import { wardrobeSetupApi } from "./scripts/setup-api.mjs";
 import { preferencesApi } from "./scripts/preferences-api.mjs";
 import { colorProfileApi } from "./scripts/color-profile-api.mjs";
+import { variantApi } from "./scripts/variant-api.mjs";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
@@ -41,6 +42,7 @@ export default defineConfig(({ mode }) => {
       wardrobeSetupApi({ env }),
       preferencesApi({ env }),
       colorProfileApi({ env }),
+      variantApi({ env }),
     ],
   };
 });

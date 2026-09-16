@@ -167,6 +167,26 @@ test("signals are stamped server-side and stripped to known fields", () => {
   assert.notEqual(signal.at, "1999-01-01T00:00:00.000Z", "the timestamp is ours, not the caller's");
 });
 
+test("v2 pieces keep the legacy itemIds projection for preference consumers", () => {
+  const signal = normalizeSignal({
+    type: "outfit_saved",
+    pieces: [
+      { itemId: "navy-tee", variantId: "navy-tee-standard" },
+      { itemId: "olive-pants", variantId: "olive-pants-pleated" },
+    ],
+    itemIds: ["wrong-source"],
+  });
+
+  assert.deepEqual(signal.pieces, [
+    { itemId: "navy-tee", variantId: "navy-tee-standard" },
+    { itemId: "olive-pants", variantId: "olive-pants-pleated" },
+  ]);
+  assert.deepEqual(signal.itemIds, ["navy-tee", "olive-pants"]);
+
+  const profile = derivePreferences([{ ...signal, at: daysAgo(1) }], { items: wardrobe, outfits: [], now: NOW });
+  assert.deepEqual(profile.favouredColors.map((entry) => entry.name).sort(), ["navy", "olive"]);
+});
+
 // Found in the browser, not in a unit test: tapping ♥ on one card and ✕ on the
 // next fired two appends that both read the same base state, and the last write
 // silently dropped the other. It dropped the pass — the only honest negative

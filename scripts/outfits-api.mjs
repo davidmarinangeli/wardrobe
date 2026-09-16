@@ -5,6 +5,7 @@ import { atomicJson, buildModeledPrompt, checkSetup, computeIdentityProfile, gem
 
 import { recordSignal } from "./preferences-api.mjs";
 import { summarizeOutfits } from "../shared/outfit-index.mjs";
+import { migrateOutfit, normalizeItemV2, validateOutfitPieces, variantApprovedImage } from "../shared/wardrobe-model.mjs";
 
 const OUTFIT_ASSET_ROOT = "/api/outfits/assets";
 
@@ -28,23 +29,30 @@ async function body(req, limit = 256 * 1024) {
   catch { throw Object.assign(new Error("Expected a JSON request body"), { status: 400 }); }
 }
 
-function normalizeOutfit(value = {}, existing = null) {
+function normalizeOutfit(value = {}, existing = null, items = []) {
   const name = typeof value.name === "string" ? value.name.trim().slice(0, 120) : "";
   const itemIds = Array.isArray(value.itemIds) ? value.itemIds.filter((id) => typeof id === "string").slice(0, 12) : [];
+  const pieces = Array.isArray(value.pieces)
+    ? value.pieces.slice(0, 12)
+    : itemIds.map((itemId) => ({ itemId, variantId: items.find((item) => item.id === itemId)?.defaultVariantId || null }));
   if (!name) throw Object.assign(new Error("An outfit name is required"), { status: 400 });
-  if (!itemIds.length) throw Object.assign(new Error("An outfit needs at least one item"), { status: 400 });
-  const itemsChanged = existing && JSON.stringify([...existing.itemIds].sort()) !== JSON.stringify([...itemIds].sort());
+  const normalizedPieces = validateOutfitPieces(pieces, items);
+  const normalizedItemIds = normalizedPieces.map((piece) => piece.itemId);
+  const previousPieces = existing ? migrateOutfit(existing, items).pieces : [];
+  const pieceKey = (piece) => `${piece.itemId}:${piece.variantId}`;
+  const piecesChanged = existing && JSON.stringify(previousPieces.map(pieceKey).sort()) !== JSON.stringify(normalizedPieces.map(pieceKey).sort());
   return {
     id: existing?.id || randomUUID(),
     name,
-    itemIds,
+    pieces: normalizedPieces,
+    itemIds: normalizedItemIds,
     // A changed lineup invalidates any existing model photo — it was generated from the old set of pieces.
-    modeledImage: itemsChanged ? null : existing?.modeledImage || null,
-    modeledStatus: itemsChanged ? null : existing?.modeledStatus || null,
-    modeledError: itemsChanged ? null : existing?.modeledError || null,
-    modeledTier: itemsChanged ? null : existing?.modeledTier || null,
-    description: itemsChanged ? null : existing?.description || null,
-    tags: itemsChanged ? [] : existing?.tags || [],
+    modeledImage: piecesChanged ? null : existing?.modeledImage || null,
+    modeledStatus: piecesChanged ? null : existing?.modeledStatus || null,
+    modeledError: piecesChanged ? null : existing?.modeledError || null,
+    modeledTier: piecesChanged ? null : existing?.modeledTier || null,
+    description: piecesChanged ? null : existing?.description || null,
+    tags: piecesChanged ? [] : existing?.tags || [],
     createdAt: existing?.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -68,14 +76,47 @@ export function outfitsApi(options = {}) {
   }
 
   async function loadLibrary() {
-    try { return JSON.parse(await readFile(path.join(dataDir, "library.json"), "utf8")); }
+    try { return (JSON.parse(await readFile(path.join(dataDir, "library.json"), "utf8")) || []).map((item) => normalizeItemV2(item)).filter(Boolean); }
     catch (error) { if (error.code === "ENOENT") return []; throw error; }
+  }
+
+  async function loadOutfitGarments(outfit, libraryRecords) {
+    const recordsById = new Map(libraryRecords.map((record) => [record.id, record]));
+    const outfitRecords = outfit.pieces.map((piece) => recordsById.get(piece.itemId)).filter(Boolean);
+    const hasFullLengthBottom = outfitRecords.some((record) => isLikelyBottom(record) && !isLikelySocks(record) && !isLikelyCroppedOrShortBottom(record));
+    const garments = [];
+    const garmentMeta = [];
+    for (const piece of outfit.pieces) {
+      const record = recordsById.get(piece.itemId);
+      if (hasFullLengthBottom && isLikelySocks(record)) continue;
+      if (!record) throw Object.assign(new Error(`Wardrobe item ${piece.itemId} not found`), { status: 409 });
+      const variant = record.variants.find((candidate) => candidate.id === piece.variantId);
+      const image = variant && variantApprovedImage(record, piece.variantId);
+      if (!image) throw Object.assign(new Error(`Variant ${piece.variantId} of ${piece.itemId} has no approved cutout yet`), { status: 409 });
+      const filename = path.basename(new URL(image, "http://localhost").pathname);
+      let data;
+      try {
+        data = await readFile(path.join(libraryAssetDir, filename));
+      } catch (error) {
+        if (error.code === "ENOENT") throw Object.assign(new Error(`Variant ${piece.variantId} of ${piece.itemId} has no approved cutout yet`), { status: 409 });
+        throw error;
+      }
+      garments.push({ data, mime: "image/png", name: `${piece.itemId}-${piece.variantId || "standard"}.png` });
+      garmentMeta.push({ name: `${record.name} — ${variant.name}`, tags: [...(record.tags || []), ...(variant.tags || []), variant.description].filter(Boolean), part: record.part });
+    }
+    if (!garments.length) throw Object.assign(new Error("None of this outfit's pieces have a garment image to work from"), { status: 409 });
+    return { garments, garmentMeta };
   }
 
   async function generateModeledForOutfit(id, { tier, prompt }) {
     if (running.has(id)) return running.get(id);
     const task = (async () => {
       try {
+        const outfits = await loadOutfits();
+        const libraryRecords = await loadLibrary();
+        const outfit = outfits.map((entry) => migrateOutfit(entry, libraryRecords)).find((item) => item.id === id);
+        if (!outfit) throw new Error("Outfit not found");
+        const { garments, garmentMeta } = await loadOutfitGarments(outfit, libraryRecords);
         const { provider } = resolveProvider(setting);
         const mode = await currentMode();
         const { key, keyName } = resolveApiKey(setting, provider, mode);
@@ -83,29 +124,6 @@ export function outfitsApi(options = {}) {
         if (tier === "premium" && !isPremiumAllowed(provider, mode)) {
           throw new Error("Premium quality needs PROD mode — the free TEST key has no billing enabled for Nano Banana 2. Switch to PROD to generate this.");
         }
-        const outfits = await loadOutfits();
-        const outfit = outfits.find((item) => item.id === id);
-        if (!outfit) throw new Error("Outfit not found");
-        const libraryRecords = await loadLibrary();
-        const recordsById = new Map(libraryRecords.map((record) => [record.id, record]));
-        // Socks won't be visible under full-length trousers — rather than trust a weaker model to
-        // follow a "don't cuff the trousers to expose them" instruction, just don't send the socks
-        // image at all when the outfit's bottoms are actual long trousers (not shorts/cropped).
-        const outfitRecords = outfit.itemIds.map((itemId) => recordsById.get(itemId)).filter(Boolean);
-        const hasFullLengthBottom = outfitRecords.some((record) => isLikelyBottom(record) && !isLikelySocks(record) && !isLikelyCroppedOrShortBottom(record));
-        const garments = [];
-        const garmentMeta = [];
-        for (const itemId of outfit.itemIds) {
-          const record = recordsById.get(itemId);
-          if (hasFullLengthBottom && isLikelySocks(record)) continue;
-          try {
-            garments.push({ data: await readFile(path.join(libraryAssetDir, `${itemId}-garment.png`)), mime: "image/png", name: `${itemId}.png` });
-            garmentMeta.push({ name: record?.name, tags: record?.tags, part: record?.part });
-          } catch (error) {
-            if (error.code !== "ENOENT") throw error;
-          }
-        }
-        if (!garments.length) throw new Error("None of this outfit's pieces have a garment image to work from");
         const modelPath = path.resolve(root, setting("WARDROBE_MODEL_REFERENCE", "data/model-reference.png"));
         let modelData;
         try {
@@ -117,12 +135,6 @@ export function outfitsApi(options = {}) {
         const model = { data: modelData, mime: "image/png", name: "model.png" };
         const face = await loadFaceReference(root, setting);
         const referenceImages = face ? [model, face] : [model];
-        // Tried dropping the face closeup on standard tier on the theory that two "person" images
-        // were competing — tested against the same outfit and it was still an unreliable draw either
-        // way, so the face closeup isn't the cause. Reverted; keeping this for reference in case it's
-        // worth revisiting once standard tier itself changes.
-        // const useFaceReference = tier === "premium" && Boolean(face);
-        // const referenceImages = useFaceReference ? [model, face] : [model];
         const basePrompt = options.modeledPrompt || buildModeledPrompt(garmentMeta, { hasFaceReference: Boolean(face) });
         const identityProfile = await computeIdentityProfile({ root, dataDir, setting, provider, mode });
         const withIdentity = identityProfile ? `${basePrompt}\nAdditional identity notes for consistency: ${identityProfile}` : basePrompt;
@@ -191,18 +203,21 @@ export function outfitsApi(options = {}) {
     if (!url.pathname.startsWith("/api/outfits")) return next();
     try {
       if (url.pathname === "/api/outfits" && req.method === "GET") {
-        return json(res, 200, await loadOutfits());
+        const items = await loadLibrary();
+        return json(res, 200, (await loadOutfits()).map((outfit) => migrateOutfit(outfit, items)));
       }
       // Read-only, for the wardrobe grid: which outfits use which pieces, minus
       // the model photo state, style prose and timestamps the full list carries.
       // See shared/outfit-index.mjs for why the grouping happens on the client.
       if (url.pathname === "/api/outfits/index" && req.method === "GET") {
-        return json(res, 200, { outfits: summarizeOutfits(await loadOutfits()) });
+        const items = await loadLibrary();
+        return json(res, 200, { outfits: summarizeOutfits((await loadOutfits()).map((outfit) => migrateOutfit(outfit, items))) });
       }
       if (url.pathname === "/api/outfits" && req.method === "POST") {
         const input = await body(req);
-        const outfit = normalizeOutfit(input);
         const outfits = await loadOutfits();
+        const items = await loadLibrary();
+        const outfit = normalizeOutfit(input, null, items);
         await atomicJson(outfitsFile, [...outfits, outfit]);
         // Saving an outfit is the strongest positive signal the app can observe:
         // the user is stating they will wear this combination.
@@ -220,7 +235,11 @@ export function outfitsApi(options = {}) {
         const existing = outfits.find((outfit) => outfit.id === match[1]);
         if (!existing) return json(res, 404, { error: "Outfit not found" });
         const input = await body(req);
-        const updated = normalizeOutfit({ ...existing, ...input }, existing);
+        const items = await loadLibrary();
+        const value = input.pieces === undefined && Object.hasOwn(input, "itemIds")
+          ? { ...existing, ...input, pieces: undefined }
+          : { ...existing, ...input };
+        const updated = normalizeOutfit(value, existing, items);
         await atomicJson(outfitsFile, outfits.map((outfit) => outfit.id === updated.id ? updated : outfit));
         return json(res, 200, updated);
       }
@@ -237,6 +256,8 @@ export function outfitsApi(options = {}) {
         const outfits = await loadOutfits();
         const outfit = outfits.find((item) => item.id === id);
         if (!outfit) return json(res, 404, { error: "Outfit not found" });
+        const items = await loadLibrary();
+        await loadOutfitGarments(migrateOutfit(outfit, items), items);
         const setup = await checkSetup(root, setting, await currentMode());
         if (!setup.ready) {
           const missing = [
@@ -246,7 +267,9 @@ export function outfitsApi(options = {}) {
           return json(res, 503, { error: `Setup required: add ${missing}, then restart the app.` });
         }
         const input = await body(req);
-        const tier = input.tier === "premium" ? "premium" : "standard";
+        const tier = input.tier === "openrouter" && setup.provider === "openrouter"
+          ? "openrouter"
+          : input.tier === "premium" ? "premium" : "standard";
         if (tier === "premium" && !isPremiumAllowed(setup.provider, setup.mode)) {
           return json(res, 400, { error: "Premium quality needs PROD mode — the free TEST key has no billing enabled for Nano Banana 2. Switch to PROD to generate this." });
         }

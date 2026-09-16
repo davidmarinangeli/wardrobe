@@ -3,13 +3,14 @@ import { Trash } from "@phosphor-icons/react";
 /**
  * Standard panel footer action row.
  *
- * Layout:  [Delete]  ···spacer···  [Cancel]  [Confirm]
+ * Layout:  [Delete] [Leading actions]  ···spacer···  [Cancel]  [Confirm]
  *
  * All slots are optional — pass only what the panel needs.
  *
  * Props
  * ─────
  * onDelete        fn     – Renders a left-aligned delete button.
+ * leadingActions  node   – Extra buttons rendered beside the delete button.
  * onCancel        fn     – Renders a secondary "Cancel" button.
  * cancelLabel     string – Override "Cancel" (e.g. "Done").
  * onConfirm       fn     – Renders the primary action button.
@@ -20,6 +21,7 @@ import { Trash } from "@phosphor-icons/react";
  */
 export function PanelActions({
   onDelete,
+  leadingActions,
   onCancel,
   cancelLabel = "Cancel",
   onConfirm,
@@ -35,6 +37,7 @@ export function PanelActions({
           <Trash size={15} weight="regular" aria-hidden="true" /> Delete
         </button>
       )}
+      {leadingActions}
       <span className="action-spacer" />
       {children}
       {onCancel && (
