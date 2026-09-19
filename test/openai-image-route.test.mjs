@@ -3,6 +3,7 @@ import test from "node:test";
 import sharp from "sharp";
 import {
   describeImageUsage,
+  loadFaceReference,
   openAIImage,
   openAIImageOptions,
   resolveModeledModel,
@@ -109,6 +110,29 @@ test("still uses the Image API when the route is left alone", async (t) => {
   assert.equal(url, "https://api.openai.com/v1/images/edits");
 });
 
+test("passes input fidelity on the Image API route too, not just Responses", async (t) => {
+  let request;
+  const originalFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  globalThis.fetch = async (url, options) => {
+    request = options;
+    return Response.json({ data: [{ b64_json: Buffer.from("x").toString("base64") }] });
+  };
+
+  await openAIImage({
+    ...openAIImageOptions(settingFrom({ OPENAI_IMAGE_INPUT_FIDELITY: "high" })),
+    key: "sk-test",
+    baseUrl: "https://api.openai.com/v1",
+    model: "gpt-image-2",
+    prompt: "Create a clean garment image.",
+    images: [{ data: inputPng }],
+    size: "1536x1024",
+    quality: "high",
+  });
+
+  assert.equal(request.body.get("input_fidelity"), "high");
+});
+
 test("prices a call from the usage the API reported", () => {
   const usage = { input_tokens_details: { text_tokens: 200, image_tokens: 5800 }, output_tokens: 6600 };
   const summary = describeImageUsage("gpt-image-2.5-sunburst-2026-09-08", usage);
@@ -136,4 +160,11 @@ test("each tier's model and quality can be set independently", () => {
   });
   assert.deepEqual(resolveModeledModel("openai", "premium", setting), { model: "gpt-image-2.5-sunburst", quality: "max" });
   assert.deepEqual(resolveModeledModel("openai", "standard", setting), { model: "gpt-image-2", quality: "medium" });
+});
+
+test("the face closeup can be switched off without deleting the file", async () => {
+  const settingWith = (value) => (name, fallback = "") => (name === "WARDROBE_FACE_REFERENCE" ? value : fallback);
+  assert.equal(await loadFaceReference(process.cwd(), settingWith("off")), null);
+  assert.equal(await loadFaceReference(process.cwd(), settingWith("NONE")), null);
+  assert.equal(await loadFaceReference(process.cwd(), settingWith("")), null);
 });

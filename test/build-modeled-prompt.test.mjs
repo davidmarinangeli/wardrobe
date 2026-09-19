@@ -5,8 +5,9 @@ import { buildModeledPrompt } from "../scripts/import-job-api.mjs";
 test("single garment, no face reference: image roles and non-extension clause", () => {
   const prompt = buildModeledPrompt([{ name: "Crew Neck T-Shirt", tags: ["oversized", "crew neck"] }], { hasFaceReference: false });
   assert.match(prompt, /Image 1 is the exact person/);
-  assert.match(prompt, /Image 2 is the exact Crew Neck T-Shirt \(oversized, crew neck\)/);
-  assert.match(prompt, /Never lengthen, shorten, tighten, loosen/);
+  // "crew neck" is already in the name, so only the tag that adds something survives.
+  assert.match(prompt, /Image 2 is the exact Crew Neck T-Shirt \(oversized\)/);
+  assert.match(prompt, /Do not resize a garment or restyle it toward a more generic fit/);
   assert.match(prompt, /oversized/);
   assert.doesNotMatch(prompt, /close-up reference of that same person's face/);
 });
@@ -102,4 +103,24 @@ test("socks with shorts skip the no-rolling rule", () => {
 test("socks alone (no bottoms in the outfit) do not trigger the trouser rule", () => {
   const prompt = buildModeledPrompt([{ name: "Ribbed Socks", tags: [], part: "socks" }], { hasFaceReference: false });
   assert.doesNotMatch(prompt, /Do not cuff, roll up, or shorten the trousers/);
+});
+
+test("fidelity is owed to the garment, not to the pose it holds in its photo", () => {
+  const prompt = buildModeledPrompt([{ name: "Wide Leg Cargo Pants", tags: ["wide-leg", "cargo", "casual"] }], { hasFaceReference: false });
+  assert.match(prompt, /photographed unworn/);
+  assert.match(prompt, /derive its shape from how that garment would hang/);
+  assert.match(prompt, /Reproduce the garment, not its resting pose/);
+  // The old wording demanded a pixel-faithful copy and then forbade loosening or tightening, which
+  // together instructed the model to paint a flat-lay's outline onto a body.
+  assert.doesNotMatch(prompt, /pixel-faithful/);
+  assert.doesNotMatch(prompt, /tighten, loosen/);
+  // Both fit words are already in the name — including across the hyphen/space difference — so
+  // only the tag that adds something is kept.
+  assert.match(prompt, /Wide Leg Cargo Pants \(casual\)/);
+});
+
+test("a cap is worn on the head rather than turned to face the camera", () => {
+  const prompt = buildModeledPrompt([{ name: "Baseball Cap", tags: ["embroidered"] }], { hasFaceReference: false });
+  assert.match(prompt, /a cap sits properly on the head/);
+  assert.doesNotMatch(prompt, /clearly visible and unobstructed/);
 });
