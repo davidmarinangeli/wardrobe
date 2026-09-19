@@ -64,9 +64,10 @@ export function useDeckGesture({ cardRef, deckRef, enabled, onCommit }) {
   useEffect(() => stopAnimation, [stopAnimation]);
 
   // One place that knows how a horizontal offset turns into a pose, so the
-  // drag, the spring home and the fling can't drift apart.
-  const paint = useCallback((dx, dy) => {
-    const card = cardRef.current;
+  // drag, the spring home and the fling can't drift apart. Operates on an
+  // explicit card element so an exit animation never leaks onto the next card
+  // when React promotes it.
+  const paintCard = useCallback((card, dx, dy) => {
     if (!card) return;
     // The class carries the grab cursor and the lifted shadow, and switches the
     // transform transition off — a transition here would smooth every frame the
@@ -81,16 +82,28 @@ export function useDeckGesture({ cardRef, deckRef, enabled, onCommit }) {
     const pass = card.querySelector("[data-stamp='pass']");
     if (like) like.style.opacity = dx > 0 ? stamp : 0;
     if (pass) pass.style.opacity = dx < 0 ? stamp : 0;
-  }, [cardRef]);
+  }, []);
 
-  const clearPose = useCallback(() => {
-    const card = cardRef.current;
+  const paint = useCallback((dx, dy) => {
+    paintCard(cardRef.current, dx, dy);
+  }, [cardRef, paintCard]);
+
+  const clearPose = useCallback((targetCard = cardRef.current) => {
+    const card = targetCard;
     if (!card) return;
     card.classList.remove("is-dragging");
     card.style.transform = "";
     card.style.opacity = "";
     card.querySelectorAll("[data-stamp]").forEach((node) => { node.style.opacity = ""; });
   }, [cardRef]);
+
+  // When a card becomes the active top card, ensure it is in its resting pose
+  // and free of any residual dragging classes or off-screen transforms.
+  useEffect(() => {
+    if (enabled && cardRef.current) {
+      clearPose(cardRef.current);
+    }
+  }, [enabled, cardRef, clearPose]);
 
   /**
    * Throw the card off the deck. Called by the gesture on commit, and by the
@@ -115,13 +128,16 @@ export function useDeckGesture({ cardRef, deckRef, enabled, onCommit }) {
       // px/ms at the finger becomes px/s for the spring — this is the handoff.
       velocity: velocity * 1000,
       onUpdate: (value) => {
-        paint(value, startY);
+        paintCard(card, value, startY);
         const progress = Math.min(1, Math.abs(value) / (width * 0.9));
         card.style.opacity = String(1 - progress);
       },
+      onComplete: () => {
+        stopAnimation();
+      },
     });
     onCommit(verdict);
-  }, [cardRef, deckRef, onCommit, paint, stopAnimation]);
+  }, [cardRef, deckRef, onCommit, paintCard, stopAnimation]);
 
   const dragHandlers = {
     onPointerDown: (event) => {
@@ -224,5 +240,5 @@ export function useDeckGesture({ cardRef, deckRef, enabled, onCommit }) {
     },
   };
 
-  return { dragHandlers, fling, clearPose };
+  return { dragHandlers, fling, clearPose, stopAnimation };
 }
