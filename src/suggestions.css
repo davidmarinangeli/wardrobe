@@ -192,7 +192,7 @@
    a transition would smooth every frame the pointer produces and put the card
    permanently behind the finger. */
 .deck-card.is-dragging,
-.deck-card.is-leaving { transition: opacity 300ms var(--ease-out); }
+.deck-card.is-leaving { transition: none; }
 
 .deck-card-name {
   margin: 0;

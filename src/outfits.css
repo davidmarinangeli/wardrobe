@@ -277,34 +277,94 @@
   text-transform: uppercase;
 }
 
+/* The outfit's name, set on the card like a lookbook caption: centred in the
+   lower third over a fade to paper — the same floor the modeled hero stands on
+   in the viewer. Not in the vertical middle: that is where the scattered pieces
+   meet (tops fill the upper half, bottoms rise from below), so a title there
+   would sit on the clothes the hover exists to show.
+
+   Where the pointer can hover it waits for the hover: the floor fades in with
+   the photo's fade, and the name rises onto it a beat later. On touch there is
+   no hover, so it is simply there. */
+.outfit-card-caption {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  padding: 64px 18px 18px;
+  background: linear-gradient(to top, color-mix(in srgb, var(--paper-warm) 94%, transparent) 28%, transparent);
+  pointer-events: none;
+}
+
 .outfit-card-name {
-  margin: 12px 2px 0;
-  min-width: 0;
+  display: -webkit-box;
   overflow: hidden;
-  color: var(--ink-soft);
-  font-size: 13px;
+  max-width: 100%;
+  color: var(--ink);
+  font-size: 20px;
   font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.15;
+  letter-spacing: var(--track-tight);
+  text-align: center;
+  text-wrap: balance;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
-.outfit-card-note {
-  width: 100%;
-  min-height: 40px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
-  padding: 9px 10px;
-  background: var(--paper-raised);
-  color: var(--ink-soft);
-  font-size: 11px;
-  font-family: inherit;
-  transition: border-color var(--dur-pop) var(--ease-out), box-shadow var(--dur-pop) var(--ease-out);
+/* Above the "Generating model photo…" band along the bottom. */
+.outfit-card-art.is-processing .outfit-card-caption { bottom: 36px; }
+
+/* Two cards across a phone: the same caption at a size the column can carry. */
+@media (max-width: 520px) {
+  .outfit-card-caption { padding: 44px 10px 11px; }
+  .outfit-card-name { font-size: 14px; }
 }
 
-.outfit-card-note:focus-visible {
-  border-color: var(--accent-warm);
-  box-shadow: var(--ring-focus);
-  outline: none;
+@media (hover: hover) and (pointer: fine) {
+  /* Rest, and the way out: no delay and quicker than the way in, so leaving a
+     card never leaves its name trailing behind the pointer. */
+  .outfit-card-caption {
+    opacity: 0;
+    transition: opacity var(--dur-press) var(--ease-out);
+  }
+
+  .outfit-card-name {
+    opacity: 0;
+    transform: translateY(40%);
+    transition:
+      opacity var(--dur-press) var(--ease-out),
+      transform var(--dur-press) var(--ease-out);
+  }
+
+  .outfit-card:hover .outfit-card-caption,
+  .outfit-card:focus-visible .outfit-card-caption {
+    opacity: 1;
+    transition-duration: var(--dur-panel);
+  }
+
+  /* 40% of its own height: a two-line title travels further than a one-line
+     one, so both read as the same rise. */
+  .outfit-card:hover .outfit-card-name,
+  .outfit-card:focus-visible .outfit-card-name {
+    opacity: 1;
+    transform: none;
+    transition-duration: var(--dur-panel);
+    transition-delay: 30ms;
+  }
+}
+
+/* Fewer and gentler: it fades in with the hover, nothing rises. */
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: reduce) {
+  .outfit-card-name,
+  .outfit-card:hover .outfit-card-name,
+  .outfit-card:focus-visible .outfit-card-name {
+    transform: none;
+    transition-property: opacity;
+    transition-delay: 0ms;
+  }
 }
 
 .outfit-builder-entry { width: clamp(390px, 40vw, 560px); }
@@ -391,6 +451,16 @@
   inset: 0;
   pointer-events: none;
 }
+
+/* Holds the flat-lay and the photo action on it. The flat-lay clips its pieces
+   to its rounded square; this wrapper does not, so the quality menu can open
+   upward past that clip. */
+.outfit-viewer-stage { position: relative; margin-bottom: 24px; }
+.outfit-viewer-stage .viewer-art.outfit-viewer-art { margin-bottom: 0; }
+
+/* A band along the bottom for the action, the way the item stage keeps one —
+   otherwise the pill lands on the bottoms and shoes, which live down there. */
+.outfit-viewer-stage .outfit-card-flatlay { inset: 0 0 68px; }
 
 .outfit-viewer-art .outfit-stack {
   height: 100%;
@@ -495,9 +565,50 @@
 .outfit-piece:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
 .outfit-piece:active { transform: scale(.96); }
 .builder-piece-option { display: grid; justify-items: center; gap: 5px; }
-.builder-variant-picker { display: flex; max-width: 96px; flex-wrap: wrap; justify-content: center; gap: 3px; }
-.builder-variant-picker button { border: 1px solid var(--line); border-radius: 999px; background: var(--paper-raised); color: var(--ink-soft); font-size: 10px; line-height: 1.2; padding: 4px 6px; cursor: pointer; }
-.builder-variant-picker button.active { border-color: var(--accent-warm); color: var(--ink); }
+/* Scrolls rather than wrapping: wrapping text pills grew the row's height per
+   piece and shoved the categories below it around. A fixed-height strip under
+   a 72px thumbnail keeps every row the same shape however many variants a
+   piece has. */
+.builder-variant-picker {
+  display: flex;
+  width: 72px;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.builder-variant-picker::-webkit-scrollbar { display: none; }
+
+.builder-variant-picker button {
+  display: grid;
+  place-items: center;
+  flex: none;
+  /* 44px square — Apple's floor, and just under twice the 24px WCAG 2.5.8
+     minimum the 18px-tall pills here used to miss. */
+  width: 44px;
+  height: 44px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--paper-raised);
+  color: var(--ink-soft);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    border-color var(--dur-pop) var(--ease-out),
+    box-shadow var(--dur-pop) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
+}
+
+.builder-variant-picker button img { width: 100%; height: 100%; object-fit: contain; }
+.builder-variant-picker button.active { border-color: var(--accent-warm); box-shadow: 0 0 0 1px var(--accent-warm); color: var(--ink); }
+.builder-variant-picker button:active { transform: scale(.94); }
+.builder-variant-picker button:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
+
+/* Until its photo exists a variant still needs a distinguishable tile, so it
+   falls back to the first letter of its name. */
+.builder-variant-picker__pending { font-size: 13px; font-weight: 500; color: var(--muted); }
 
 /* Greyed rather than hidden: the piece is still in the wardrobe, it just can't
    join this particular outfit (a dress already covers that half). */
@@ -520,9 +631,9 @@
    it lives here now — it used to sit in suggestions.css, where it picked up a
    hardcoded 52px gutter that missed the page's own --page-x by four pixels.
 
-   Material is the same recipe .modeled-photo-prompt uses for an inline prompt
-   card (styles.css): translucent warm fill, light on the top edge, one soft
-   shadow. The old rgba(255,255,255,.08) was effectively invisible on cream. */
+   Material is the app's inline-card recipe: warm raised fill, light on the
+   top edge, one soft shadow. The old rgba(255,255,255,.08) was effectively
+   invisible on cream. */
 .nudge-banner {
   display: flex;
   align-items: center;

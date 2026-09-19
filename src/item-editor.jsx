@@ -1,6 +1,6 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowCounterClockwise, Check, ImageSquare, Plus, Sparkle, SpinnerGap, Trash, X } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, CaretDown, CaretRight, Check, DotsThree, ImageSquare, PencilLine, Plus, Sparkle, SpinnerGap, Star, Trash, UploadSimple, X } from "@phosphor-icons/react";
 import { OptimizedImage } from "./OptimizedImage.jsx";
 import { useViewerKeyboard } from "./hooks/useViewerKeyboard.js";
 import { useDismiss } from "./hooks/useDismiss.js";
@@ -8,11 +8,13 @@ import { useSheetGesture } from "./hooks/useSheetGesture.js";
 import { useIsPhone } from "./hooks/useIsPhone.js";
 import { useExpandOrigin } from "./hooks/useExpandOrigin.js";
 import { ModeledHero } from "./components/ModeledHero.jsx";
-import { PanelActions } from "./components/PanelActions.jsx";
 import { EditableTitle } from "./components/EditableTitle.jsx";
 import { WARDROBE_TYPES as TYPES, TYPE_MAP } from "./categories.js";
 import { itemVariant, variantImage, variantModeledImage, variantOwnImage } from "../shared/wardrobe-model.mjs";
-import { galleryVariantIndex, galleryVariantPhotos } from "./gallery-variants.js";
+import { galleryVariantIndex, galleryVariantPhotos, isPeekGesture } from "./gallery-variants.js";
+import { DEFAULT_ITEM_COLOR, changedDraftFields, itemMenuActions, itemMetaLine, unsavedLabel } from "./item-sheet.js";
+import { GenerateButton, RefineComposer, StageStatus, useRememberedTier } from "./components/ModelPhotoControls.jsx";
+import { moveMenuFocus, useDismissOnOutsidePointer } from "./hooks/usePopover.js";
 
 function rgbToHex(red, green, blue) {
   return `#${[red, green, blue].map((value) => Math.max(0, Math.min(255, value)).toString(16).padStart(2, "0")).join("")}`;
@@ -118,11 +120,16 @@ const fileToDataUrl = (file) => new Promise((resolve, reject) => {
 // sheet's exit spring and the page's scale-back were trying to animate. Both call
 // sites pass a stable onOpen, so only the cards whose `selected` flipped render.
 export const GalleryItem = memo(function GalleryItem({ item, index, selected, onOpen, outfitCount = 0 }) {
-  const pointerScrub = useRef(null);
+  const peek = useRef(null);
+  // Set the moment a drag clears PEEK_SLOP, read by the click that follows it.
+  // A ref rather than state: the click handler needs the value synchronously in
+  // the same gesture, and re-rendering on it would fight the image cross-fade.
+  const peeked = useRef(false);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const variantPhotos = useMemo(() => galleryVariantPhotos(item), [item]);
+  // One photo is not a carousel: no dots, no gesture, no aria position.
+  const canPeek = variantPhotos.length > 1;
   const type = TYPE_MAP[item.part]?.singular || "wardrobe item";
-  const variantCount = Array.isArray(item.variants) ? item.variants.length : 1;
   // A piece in four looks is a different piece from one in none, and the grid
   // used to render them identically. The count rides the type line rather than
   // becoming a badge: the card's whole premise is a clean cutout on cream, and
@@ -132,43 +139,85 @@ export const GalleryItem = memo(function GalleryItem({ item, index, selected, on
 
   useEffect(() => {
     setActivePhotoIndex(0);
-    pointerScrub.current = null;
+    peek.current = null;
+    peeked.current = false;
   }, [variantPhotos]);
 
-  const startVariantScrub = (event) => {
-    if (event.pointerType !== "mouse" || variantPhotos.length <= 1) return;
-    pointerScrub.current = {
+  // A mouse peeks on hover; a finger peeks by dragging. The shipped version
+  // returned early on anything but a mouse, which left the whole feature
+  // nonexistent on phones — the shape this app is mostly used in.
+  const armHoverPeek = (event) => {
+    if (!canPeek || event.pointerType !== "mouse") return;
+    peek.current = { bounds: event.currentTarget.getBoundingClientRect(), clientX: event.clientX, dragging: false };
+  };
+
+  const armDragPeek = (event) => {
+    if (!canPeek || event.pointerType === "mouse") return;
+    peeked.current = false;
+    peek.current = {
       bounds: event.currentTarget.getBoundingClientRect(),
       clientX: event.clientX,
+      originX: event.clientX,
+      dragging: true,
     };
+    // Capture, so a finger that slides past the card's edge keeps steering it
+    // instead of silently dropping the gesture mid-swipe.
+    event.currentTarget.setPointerCapture?.(event.pointerId);
   };
 
-  const scrubVariant = (event) => {
-    if (event.pointerType !== "mouse" || variantPhotos.length <= 1) return;
-    const scrub = pointerScrub.current;
-    if (!scrub || scrub.clientX === event.clientX) return;
-    scrub.clientX = event.clientX;
-    setActivePhotoIndex(galleryVariantIndex(event.clientX, scrub.bounds, variantPhotos.length));
+  const movePeek = (event) => {
+    const current = peek.current;
+    if (!current || current.clientX === event.clientX) return;
+    if (current.dragging && isPeekGesture(current.originX, event.clientX)) peeked.current = true;
+    current.clientX = event.clientX;
+    setActivePhotoIndex(galleryVariantIndex(event.clientX, current.bounds, variantPhotos.length));
   };
 
-  const resetVariantScrub = () => {
-    pointerScrub.current = null;
-    setActivePhotoIndex(0);
+  // A mouse leaving means the peek is over, so the card returns to its default
+  // presentation. A finger lifting does not: the swipe was deliberate, and
+  // snapping back would read as the gesture having failed. What it swiped to is
+  // what the tap then opens.
+  const endPeek = (event) => {
+    const current = peek.current;
+    if (!current) return;
+    if (current.dragging) {
+      peek.current = null;
+      return;
+    }
+    if (event?.pointerType === "mouse" || !event) {
+      peek.current = null;
+      setActivePhotoIndex(0);
+    }
   };
+
+  const stepPeek = (event) => {
+    if (!canPeek) return;
+    const delta = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+    if (!delta) return;
+    event.preventDefault();
+    setActivePhotoIndex((current) => Math.max(0, Math.min(variantPhotos.length - 1, current + delta)));
+  };
+
+  const activeVariantId = variantPhotos[activePhotoIndex]?.variantId;
+  const peekPosition = canPeek ? ` — showing ${activePhotoIndex + 1} of ${variantPhotos.length} ways to wear it` : "";
 
   return (
     <button
       className={`gallery-item${selected ? " selected" : ""}`}
       type="button"
       onClick={(event) => {
-        resetVariantScrub();
-        onOpen(item.id, event.currentTarget);
+        // The release of a swipe is not a tap. Without this, every peek on a
+        // phone would also open the sheet.
+        if (peeked.current) {
+          peeked.current = false;
+          return;
+        }
+        // Open on what the card is actually showing, so a peeked variant is the
+        // one the sheet lands on rather than snapping back to the default.
+        onOpen(item.id, event.currentTarget, activeVariantId);
       }}
-      onPointerEnter={startVariantScrub}
-      onPointerMove={scrubVariant}
-      onPointerLeave={resetVariantScrub}
-      onPointerCancel={resetVariantScrub}
-      aria-label={outfitLabel ? `View ${item.name || type} — ${outfitLabel}` : `View ${item.name || type}`}
+      onKeyDown={stepPeek}
+      aria-label={`View ${item.name || type}${outfitLabel ? ` — ${outfitLabel}` : ""}${peekPosition}`}
       aria-pressed={selected}
       data-part={item.part}
       // Stagger is capped: past the first screenful the delay would only ever
@@ -176,7 +225,19 @@ export const GalleryItem = memo(function GalleryItem({ item, index, selected, on
       style={{ "--stagger-index": Math.min(index, 11) }}
       data-testid={`wardrobe-item-${item.id}`}
     >
-      <span className="gallery-item__art">
+      <span
+        className="gallery-item__art"
+        // Only the art takes the gesture. The label below stays an ordinary tap
+        // target, and `touch-action: pan-y` in CSS keeps the page scrollable
+        // vertically through the card.
+        data-peekable={canPeek ? "" : undefined}
+        onPointerEnter={armHoverPeek}
+        onPointerDown={armDragPeek}
+        onPointerMove={movePeek}
+        onPointerUp={endPeek}
+        onPointerLeave={endPeek}
+        onPointerCancel={endPeek}
+      >
         <span className="gallery-item__variant-stack" aria-hidden="true">
           {variantPhotos.map((photo, photoIndex) => (
             <OptimizedImage
@@ -190,11 +251,19 @@ export const GalleryItem = memo(function GalleryItem({ item, index, selected, on
           ))}
         </span>
       </span>
+      {/* The dots are what make the gesture discoverable, and they carry the
+          count the type line used to spell out in words. */}
+      {canPeek && (
+        <span className="gallery-item__peek-dots" aria-hidden="true">
+          {variantPhotos.map((photo, photoIndex) => (
+            <span key={photo.variantId} className={`gallery-item__peek-dot${photoIndex === activePhotoIndex ? " is-active" : ""}`} />
+          ))}
+        </span>
+      )}
       <span className="gallery-item__label">
         <span className="gallery-item__name">{item.name || type}</span>
         <span className="gallery-item__type">
           {type}
-          {variantCount > 1 && <span className="gallery-item__variants"> · {variantCount} variants</span>}
           {outfitLabel && <span className="gallery-item__outfits"> · {outfitLabel}</span>}
         </span>
       </span>
@@ -305,160 +374,6 @@ export function ColorControl({ label, field, value, palette, onChange, sampling,
   );
 }
 
-export function ItemEditor({ draft, setDraft, palette, sampling, setSampling, sampleStatus }) {
-  const suggestedSecondary = palette.find((color) => color.toLowerCase() !== draft.color?.toLowerCase()) || "#9a9286";
-
-  return (
-    <div className="item-editor">
-      <EditableTitle
-        value={draft.name}
-        placeholder={TYPE_MAP[draft.part]?.singular || "Wardrobe item"}
-        onChange={(name) => setDraft((current) => ({ ...current, name }))}
-        ariaLabel="Item name"
-      />
-
-      <label className="field">
-        <span>Category</span>
-        <select value={draft.part} onChange={(event) => setDraft((current) => ({ ...current, part: event.target.value }))}>
-          {TYPES.slice(1).map((type) => <option value={type.id} key={type.id}>{type.label}</option>)}
-        </select>
-      </label>
-
-      <fieldset className="color-field">
-        <legend>Colors</legend>
-        <div className="colors-editor">
-          <ColorControl
-            label="Primary color"
-            field="primary"
-            value={draft.color}
-            palette={palette}
-            onChange={(color) => setDraft((current) => ({ ...current, color }))}
-            sampling={sampling}
-            setSampling={setSampling}
-          />
-          <ColorControl
-            label="Secondary color"
-            field="secondary"
-            value={draft.secondaryColor}
-            palette={palette}
-            onChange={(secondaryColor) => setDraft((current) => ({ ...current, secondaryColor }))}
-            sampling={sampling}
-            setSampling={setSampling}
-            optional
-            onClear={() => setDraft((current) => ({ ...current, secondaryColor: null }))}
-            onAdd={() => setDraft((current) => ({ ...current, secondaryColor: suggestedSecondary }))}
-          />
-        </div>
-        <p className="color-help" aria-live="polite">{sampling ? `Click anywhere on the garment to sample the ${sampling} color.` : sampleStatus || "Primary colors come from the image. A secondary is suggested only when a distinct color has meaningful coverage."}</p>
-      </fieldset>
-
-      <div className="field details-field">
-        <span>Details</span>
-        <TagEditor tags={draft.tags} onChange={(tags) => setDraft((current) => ({ ...current, tags }))} />
-      </div>
-    </div>
-  );
-}
-
-// What the tiers actually resolve to depends on AI_PROVIDER, so the copy has to follow it —
-// these cards read as a promise about what you're paying for. Prices are per modeled photo at
-// 1536x1024 and approximate: OpenAI publishes token rates but no per-image token counts, so the
-// server logs the measured cost of each call ([image] lines) and that is the number to trust.
-const MODEL_TIERS_BY_PROVIDER = {
-  gemini: [
-    { id: "standard", label: "Standard", detail: "Gemini 2.5 Flash — fast, free tier" },
-    { id: "premium", label: "Premium", detail: "Nano Banana 2 — sharper detail, ~$0.07/image" },
-  ],
-  openai: [
-    { id: "standard", label: "Standard", detail: "gpt-image medium — fast, ~$0.11/image" },
-    { id: "premium", label: "Premium", detail: "gpt-image high — sharper detail, ~$0.26/image" },
-  ],
-  openrouter: [
-    { id: "standard", label: "Standard", detail: "gpt-image medium — fast, ~$0.11/image" },
-    { id: "premium", label: "Premium", detail: "gpt-image high — sharper detail, ~$0.26/image" },
-    { id: "openrouter", label: "OpenRouter", detail: "meta-muse — best quality for cost, $0.01/image" },
-  ],
-  minimax: [
-    { id: "standard", label: "Standard", detail: "MiniMax image-01 — fast" },
-    { id: "premium", label: "Premium", detail: "MiniMax image-01 — sharper detail" },
-  ],
-};
-
-// An unknown or not-yet-loaded provider gets the tier names with no model or price attached,
-// which is better than naming the wrong model.
-const MODEL_TIERS_FALLBACK = [
-  { id: "standard", label: "Standard", detail: "Faster, cheaper" },
-  { id: "premium", label: "Premium", detail: "Sharper detail" },
-];
-
-export function modelTiers(provider) {
-  return MODEL_TIERS_BY_PROVIDER[provider] || MODEL_TIERS_FALLBACK;
-}
-
-function ModelTierPicker({ tier, onChange, premiumAllowed, provider, ariaLabel }) {
-  const tiers = modelTiers(provider);
-  return (
-    <div className={`modeled-tier-picker modeled-tier-picker--${tiers.length}`} role="radiogroup" aria-label={ariaLabel}>
-      {tiers.map((option) => {
-        const disabled = option.id === "premium" && !premiumAllowed;
-        return (
-          <button
-            key={option.id}
-            type="button"
-            className={tier === option.id ? "active" : ""}
-            aria-pressed={tier === option.id}
-            disabled={disabled}
-            title={disabled ? "Switch to PROD mode to use Premium quality" : undefined}
-            onClick={() => onChange(option.id)}
-          >
-            <span>{option.label}</span>
-            <small>{disabled ? "Needs PROD mode" : option.detail}</small>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-export function ModeledPhotoPrompt({ status, error, busy, onGenerate, premiumAllowed = true, provider = null, hasImage = false, initialTier = "standard", note, onNoteChange }) {
-  const [tier, setTier] = useState(initialTier);
-  useEffect(() => { if (tier === "premium" && !premiumAllowed) setTier("standard"); }, [premiumAllowed, tier]);
-  if (status === "processing") {
-    return (
-      <div className="modeled-photo-prompt is-processing">
-        <SpinnerGap size={16} className="modeled-photo-spinner" aria-hidden="true" />
-        <p>Generating your model photo — this can take a bit.</p>
-      </div>
-    );
-  }
-  return (
-    <div className="modeled-photo-prompt">
-      {!hasImage && (
-        <>
-          <p className="modeled-photo-prompt__title">No model photo yet</p>
-          <p className="modeled-photo-prompt__detail">Optional — generate an editorial shot of this piece worn by your reference model. Nothing happens until you pick a quality and generate.</p>
-        </>
-      )}
-      {status === "error" && <p className="modeled-photo-prompt__error">{error || "That attempt failed."}</p>}
-      <ModelTierPicker tier={tier} onChange={setTier} premiumAllowed={premiumAllowed} provider={provider} ariaLabel="Model photo quality" />
-      {hasImage && onNoteChange && (
-        <input
-          type="text"
-          className="outfit-card-note"
-          value={note}
-          onChange={(event) => onNoteChange(event.target.value)}
-          placeholder="What's off? e.g. jacket should be darker"
-        />
-      )}
-      <button className="primary-button" type="button" disabled={busy} onClick={() => onGenerate(tier)}>
-        {hasImage
-          ? <><ArrowCounterClockwise size={15} weight="bold" aria-hidden="true" /> Regenerate model photo</>
-          : <><Sparkle size={15} weight="bold" aria-hidden="true" /> Generate model photo</>}
-      </button>
-    </div>
-  );
-}
-
 // The other half of the answer: the grid says how many, this says which, with
 // enough of each look to recognise it. Tapping one lands on the outfit itself
 // rather than on a filtered grid.
@@ -468,7 +383,7 @@ function OutfitsWithItem({ outfits, onOpen }) {
 
   return (
     <section className="item-outfits">
-      <p className="details-label">In {outfits.length} {outfits.length === 1 ? "outfit" : "outfits"}</p>
+      <p className="details-label">Outfits · {outfits.length}</p>
       <div className="item-outfits__row">
         {outfits.map((outfit) => (
           <button
@@ -499,109 +414,451 @@ function OutfitsWithItem({ outfits, onOpen }) {
   );
 }
 
-const VARIANT_DELETE_HOLD_MS = 2000;
+// ─── Item sheet ──────────────────────────────────────────────────────────────
 
-function VariantDeleteButton({ variant, disabled, busy, onDelete }) {
-  const timerRef = useRef(null);
-  const holdingRef = useRef(false);
-  const [holding, setHolding] = useState(false);
-
-  const cancelHold = useCallback(() => {
-    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
-    timerRef.current = null;
-    holdingRef.current = false;
-    setHolding(false);
-  }, []);
-
-  const startHold = useCallback(() => {
-    if (disabled || busy || holdingRef.current) return;
-    holdingRef.current = true;
-    setHolding(true);
-    timerRef.current = window.setTimeout(() => {
-      timerRef.current = null;
-      holdingRef.current = false;
-      setHolding(false);
-      onDelete(variant);
-    }, VARIANT_DELETE_HOLD_MS);
-  }, [busy, disabled, onDelete, variant]);
-
-  useEffect(() => () => {
-    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
-  }, []);
-
-  const movePointer = (event) => {
-    const bounds = event.currentTarget.getBoundingClientRect();
-    if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) cancelHold();
+function draftFromItem(item) {
+  return {
+    name: item.name || "",
+    part: item.part,
+    color: item.color || DEFAULT_ITEM_COLOR,
+    secondaryColor: item.secondaryColor || null,
+    tags: [...(item.tags || [])],
   };
+}
 
-  const label = disabled
-    ? `${variant.name} cannot be deleted because it is the only variant`
-    : `Hold for 2 seconds to delete ${variant.name}`;
+/**
+ * The ⋯ menu: rare and destructive actions, off the sheet itself. Destructive
+ * entries take two taps — the first turns the entry into its own confirmation,
+ * so a stray tap in a menu that has only just opened cannot delete anything.
+ */
+function MoreMenu({ sections, busyAction, onSelect, onClose }) {
+  const menuRef = useRef(null);
+  const [confirming, setConfirming] = useState(null);
+
+  useEffect(() => {
+    menuRef.current?.querySelector('[role="menuitem"]:not(:disabled)')?.focus({ preventScroll: true });
+  }, []);
 
   return (
-    <button
-      className="delete-button variant-delete"
-      type="button"
-      disabled={disabled || busy}
-      aria-label={label}
-      aria-busy={busy}
-      title={label}
-      data-holding={holding}
-      onContextMenu={(event) => event.preventDefault()}
-      onPointerDown={(event) => {
-        if (event.button !== 0) return;
-        event.currentTarget.setPointerCapture?.(event.pointerId);
-        startHold();
-      }}
-      onPointerMove={movePointer}
-      onPointerUp={cancelHold}
-      onPointerCancel={cancelHold}
-      onLostPointerCapture={cancelHold}
+    <div
+      ref={menuRef}
+      className="sheet-menu"
+      role="menu"
+      aria-label="More actions"
       onKeyDown={(event) => {
-        if ((event.key === " " || event.key === "Enter") && !event.repeat) {
+        if (event.key === "Escape") {
+          event.stopPropagation();
           event.preventDefault();
-          startHold();
+          onClose();
+          return;
         }
+        moveMenuFocus(event, event.currentTarget);
       }}
-      onKeyUp={(event) => {
-        if (event.key === " " || event.key === "Enter") {
-          event.preventDefault();
-          cancelHold();
-        }
-      }}
-      onBlur={cancelHold}
     >
-      <span className="variant-delete__progress" aria-hidden="true" />
-      <span className="variant-delete__content">
-        {busy ? <SpinnerGap className="modeled-photo-spinner" size={15} aria-hidden="true" /> : <Trash size={15} weight="regular" aria-hidden="true" />}
-        Variant
-      </span>
-    </button>
+      {sections.map((section, sectionIndex) => (
+        <Fragment key={section.id}>
+          {sectionIndex > 0 && <span className="sheet-menu__divider" role="separator" />}
+          {section.label && <p className="sheet-menu__label">{section.label}</p>}
+          {section.entries.map((entry) => {
+            const isConfirming = confirming === entry.id;
+            return (
+              <button
+                key={entry.id}
+                type="button"
+                role="menuitem"
+                className={`sheet-menu__item${entry.danger ? " is-danger" : ""}${isConfirming ? " is-confirming" : ""}`}
+                disabled={busyAction === entry.id}
+                onClick={() => {
+                  if (entry.confirmLabel && !isConfirming) {
+                    setConfirming(entry.id);
+                    return;
+                  }
+                  onSelect(entry.id);
+                }}
+              >
+                {busyAction === entry.id ? <SpinnerGap size={18} className="modeled-photo-spinner" aria-hidden="true" /> : entry.icon}
+                <span>{isConfirming ? entry.confirmLabel : entry.label}</span>
+              </button>
+            );
+          })}
+        </Fragment>
+      ))}
+    </div>
   );
 }
 
-export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled, premiumAllowed, provider = null, showModeledPhoto = true, openedFrom = null, outfits = [], onOpenOutfit }) {
+/**
+ * Ways to wear it, as a gallery strip ending in an Add tile — the same shape at
+ * one variant as at four. Variants differ visually, so the thumbnail is the
+ * label and the name is its caption.
+ */
+function VariantStrip({ item, selectedVariantId, onSelect, onAdd, canAdd }) {
+  const variants = item.variants || [];
+  const several = variants.length > 1;
+
+  return (
+    <section className="variant-strip" aria-label="Ways to wear it">
+      <p className="variant-strip__label">Ways to wear it{several ? ` · ${variants.length}` : ""}</p>
+      <div className="variant-strip__row">
+        {variants.map((variant) => {
+          const image = variantOwnImage(item, variant.id);
+          const processing = variant.processingStatus === "processing";
+          // The cover is what the wardrobe grid shows. With one variant there is
+          // nothing to distinguish it from, so it carries no mark.
+          const isCover = several && variant.id === item.defaultVariantId;
+          const art = (
+            <span className="variant-strip__art">
+              {processing
+                ? <SpinnerGap size={20} className="modeled-photo-spinner" aria-hidden="true" />
+                : image
+                  ? <OptimizedImage src={image} alt="" sizes="64px" breakpoints={[64, 128]} />
+                  : <Sparkle size={18} aria-hidden="true" />}
+              {isCover && <Star className="variant-strip__cover" size={13} weight="fill" aria-hidden="true" />}
+            </span>
+          );
+          const caption = <span className="variant-strip__name">{variant.name}</span>;
+
+          // Nothing to choose between yet, so not a control.
+          if (!several) return <span key={variant.id} className="variant-strip__tile">{art}{caption}</span>;
+
+          const active = variant.id === selectedVariantId;
+          return (
+            <button
+              key={variant.id}
+              type="button"
+              className={`variant-strip__tile${active ? " active" : ""}`}
+              aria-pressed={active}
+              aria-label={[variant.name, isCover && "cover", processing && "being made"].filter(Boolean).join(", ")}
+              onClick={() => onSelect(variant.id)}
+            >
+              {art}
+              {caption}
+            </button>
+          );
+        })}
+        {canAdd && (
+          <button type="button" className="variant-strip__tile variant-strip__add" onClick={onAdd} aria-label="Add a way to wear it">
+            <span className="variant-strip__art"><Plus size={18} aria-hidden="true" /></span>
+            <span className="variant-strip__name">Add</span>
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function Swatch({ color }) {
+  return (
+    <span className="detail-swatch">
+      <span className="detail-swatch__dot" style={{ backgroundColor: color }} />
+      {color}
+    </span>
+  );
+}
+
+/**
+ * The item's properties as rows you tap to edit — iOS Settings, Notion. Only
+ * one editor is open at a time. The colour editor alone used to put ten
+ * controls on screen permanently; now it is one row until it is wanted.
+ */
+function ItemDetails({ draft, setDraft, palette, sampling, setSampling, sampleStatus }) {
+  const [openRow, setOpenRow] = useState(null);
+  const toggle = (row) => setOpenRow((current) => current === row ? null : row);
+  // Sampling happens on the photo, so the editor it started from has to stay
+  // open to show what was picked.
+  const colorsOpen = openRow === "colors" || Boolean(sampling);
+  const suggestedSecondary = palette.find((color) => color.toLowerCase() !== draft.color?.toLowerCase()) || DEFAULT_ITEM_COLOR;
+
+  return (
+    <section className="detail-rows" aria-label="Details">
+      {/* A real select, styled as a row: on a phone the tap opens the native
+          picker, which is the best category chooser the platform has. */}
+      <label className="detail-row">
+        <span className="detail-row__label">Category</span>
+        <select
+          className="detail-row__select"
+          value={draft.part}
+          onChange={(event) => setDraft((current) => ({ ...current, part: event.target.value }))}
+        >
+          {TYPES.slice(1).map((type) => <option value={type.id} key={type.id}>{type.label}</option>)}
+        </select>
+        <CaretDown className="detail-row__caret" size={14} weight="bold" aria-hidden="true" />
+      </label>
+
+      <button
+        type="button"
+        className="detail-row"
+        aria-expanded={colorsOpen}
+        aria-controls="item-colors-editor"
+        onClick={() => {
+          if (sampling) setSampling(null);
+          toggle("colors");
+        }}
+      >
+        <span className="detail-row__label">Colors</span>
+        <span className="detail-row__value detail-row__swatches">
+          <Swatch color={draft.color} />
+          {draft.secondaryColor ? <Swatch color={draft.secondaryColor} /> : <span className="detail-row__muted">No secondary</span>}
+        </span>
+        <CaretRight className="detail-row__caret" size={14} weight="bold" aria-hidden="true" />
+      </button>
+      {colorsOpen && (
+        <div id="item-colors-editor" className="detail-row__editor">
+          <div className="colors-editor">
+            <ColorControl
+              label="Primary color"
+              field="primary"
+              value={draft.color}
+              palette={palette}
+              onChange={(color) => setDraft((current) => ({ ...current, color }))}
+              sampling={sampling}
+              setSampling={setSampling}
+            />
+            <ColorControl
+              label="Secondary color"
+              field="secondary"
+              value={draft.secondaryColor}
+              palette={palette}
+              onChange={(secondaryColor) => setDraft((current) => ({ ...current, secondaryColor }))}
+              sampling={sampling}
+              setSampling={setSampling}
+              optional
+              onClear={() => setDraft((current) => ({ ...current, secondaryColor: null }))}
+              onAdd={() => setDraft((current) => ({ ...current, secondaryColor: suggestedSecondary }))}
+            />
+          </div>
+          {(sampling || sampleStatus) && (
+            <p className="color-help" aria-live="polite">
+              {sampling ? `Tap the garment in the photo to sample the ${sampling} color.` : sampleStatus}
+            </p>
+          )}
+        </div>
+      )}
+
+      <button
+        type="button"
+        className="detail-row"
+        aria-expanded={openRow === "tags"}
+        aria-controls="item-tags-editor"
+        onClick={() => toggle("tags")}
+      >
+        <span className="detail-row__label">Tags</span>
+        <span className="detail-row__value detail-row__tags">
+          {draft.tags.length
+            ? draft.tags.map((tag) => <span className="detail-row__tag" key={tag}>{tag}</span>)
+            : <span className="detail-row__muted">Add details</span>}
+        </span>
+        <CaretRight className="detail-row__caret" size={14} weight="bold" aria-hidden="true" />
+      </button>
+      {openRow === "tags" && (
+        <div id="item-tags-editor" className="detail-row__editor">
+          <TagEditor tags={draft.tags} onChange={(tags) => setDraft((current) => ({ ...current, tags }))} />
+        </div>
+      )}
+    </section>
+  );
+}
+
+/**
+ * Adding a way to wear it, in its own sheet over the item rather than a form
+ * inside it. The method is the first question because it decides which of two
+ * pipelines runs; every field below it follows from that answer.
+ */
+function AddVariantSheet({ item, sourceVariantId, tier, tiers, onTierChange, premiumAllowed, onCreated, onClose }) {
+  const [method, setMethod] = useState("describe");
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [photo, setPhoto] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const photoInputRef = useRef(null);
+  const dialogRef = useRef(null);
+  // A described variant is nothing without the words that generate it, and a
+  // photo variant is nothing without the photo.
+  const canSubmit = method === "photo" ? Boolean(photo) : Boolean(name.trim() || description.trim());
+
+  // Focus the sheet, not its first field: on a phone a focused input raises the
+  // keyboard over the very sheet that just opened.
+  useEffect(() => {
+    dialogRef.current?.focus({ preventScroll: true });
+  }, []);
+
+  const choosePhoto = async (event) => {
+    const [file] = event.target.files || [];
+    if (!file) return;
+    setError("");
+    try {
+      setPhoto({ dataUrl: await fileToDataUrl(file), name: file.name });
+    } catch (readError) {
+      setPhoto(null);
+      setError(readError.message);
+    }
+  };
+
+  const submit = async () => {
+    if (!canSubmit || busy) return;
+    const requestedName = name.trim();
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/wardrobe/items/${encodeURIComponent(item.id)}/variants`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: requestedName,
+          description: description.trim(),
+          origin: method === "photo" ? "photo" : "generated",
+          sourceVariantId: method === "photo" ? undefined : sourceVariantId,
+          imageDataUrl: method === "photo" ? photo?.dataUrl : undefined,
+          tier,
+        }),
+      });
+      const value = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(value.error || "Could not add that way to wear it.");
+      const created = value.variants?.find((variant) => variant.id === value.createdVariantId)
+        || (requestedName ? value.variants?.find((variant) => variant.name === requestedName) : null)
+        || value.variants?.at(-1);
+      onCreated(value, created?.id || null);
+    } catch (submitError) {
+      setError(submitError.message);
+      setBusy(false);
+    }
+  };
+
+  const methods = [
+    { id: "describe", label: "Describe it", detail: "Restyles the cutout you already have", icon: <PencilLine size={20} aria-hidden="true" /> },
+    { id: "photo", label: "Use a photo", detail: "Cuts the garment out of your own shot", icon: <UploadSimple size={20} aria-hidden="true" /> },
+  ];
+
+  return (
+    <div className="add-variant-layer">
+      <div className="add-variant-scrim" aria-hidden="true" onPointerDown={() => { if (!busy) onClose(); }} />
+      <div
+        ref={dialogRef}
+        className="add-variant-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-variant-title"
+        tabIndex={-1}
+        onKeyDown={(event) => {
+          if (event.key !== "Escape") return;
+          event.stopPropagation();
+          event.preventDefault();
+          if (!busy) onClose();
+        }}
+      >
+        <span className="add-variant-sheet__grabber" aria-hidden="true" />
+        <div className="add-variant-sheet__head">
+          <div>
+            <h2 id="add-variant-title">Add a way to wear it</h2>
+            <p>{item.name || "This item"}</p>
+          </div>
+          <button type="button" className="add-variant-sheet__close" aria-label="Close" onClick={onClose} disabled={busy}>
+            <X size={18} weight="bold" aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className="variant-method-picker" role="group" aria-label="How to make it">
+          {methods.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              className={method === option.id ? "active" : ""}
+              aria-pressed={method === option.id}
+              disabled={busy}
+              onClick={() => setMethod(option.id)}
+            >
+              {option.icon}
+              <span>{option.label}</span>
+              <small>{option.detail}</small>
+            </button>
+          ))}
+        </div>
+
+        {method === "photo" && (
+          <div className="add-variant-sheet__photo">
+            <input ref={photoInputRef} type="file" accept="image/*" hidden disabled={busy} onChange={choosePhoto} />
+            <button
+              type="button"
+              className={`variant-photo-upload${photo ? " has-photo" : ""}`}
+              disabled={busy}
+              onClick={() => photoInputRef.current?.click()}
+              aria-label={photo ? `Replace photo: ${photo.name}` : "Choose a photo of it worn this way"}
+            >
+              <span className="variant-photo-upload__art" aria-hidden="true">
+                {photo ? <img src={photo.dataUrl} alt="" /> : <ImageSquare size={30} weight="regular" />}
+                <span className="variant-photo-upload__plus"><Plus size={11} weight="bold" /></span>
+              </span>
+              <span className="variant-photo-upload__text">{photo ? photo.name : "Choose a photo of it worn this way"}</span>
+            </button>
+          </div>
+        )}
+
+        <label className="sheet-field">
+          <span>Name</span>
+          <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Sleeves rolled" disabled={busy} />
+          <small>Shown under the thumbnail.</small>
+        </label>
+
+        <label className="sheet-field">
+          <span>Detail <em>— optional</em></span>
+          <input value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Folded twice, above the elbow" disabled={busy} />
+          <small>{method === "describe" ? "Guides both the garment image and the model photo." : "Guides the model photo."}</small>
+        </label>
+
+        {error && <p className="status error" role="alert">{error}</p>}
+
+        <p className="add-variant-sheet__cost">
+          {method === "describe"
+            ? "Makes two images — the garment, then a model photo wearing it."
+            : "Cuts the garment out of your photo, then makes a model photo wearing it."}
+          {" "}About a minute.
+        </p>
+
+        <GenerateButton
+          block
+          icon={<Sparkle size={16} weight="bold" aria-hidden="true" />}
+          label={method === "describe" ? "Generate" : "Add from photo"}
+          busy={busy}
+          disabled={!canSubmit}
+          onGenerate={submit}
+          tier={tier}
+          tiers={tiers}
+          onTierChange={onTierChange}
+          premiumAllowed={premiumAllowed}
+        />
+      </div>
+    </div>
+  );
+}
+
+export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled, premiumAllowed, provider = null, showModeledPhoto = true, openedFrom = null, initialVariantId = null, outfits = [], onOpenOutfit, deleteLabel = "Delete from wardrobe" }) {
   const closeButtonRef = useRef(null);
   const entryRef = useRef(null);
   const sheetRef = useRef(null);
   const overlayRef = useRef(null);
   const imageRef = useRef(null);
   const samplingCanvasRef = useRef(null);
-  const variantPhotoInputRef = useRef(null);
   const shakeTimerRef = useRef(null);
+  const moreRef = useRef(null);
   const [sampling, setSampling] = useState(null);
   const [sampleStatus, setSampleStatus] = useState("");
   const [palette, setPalette] = useState(item.palette || []);
-  const [draft, setDraft] = useState({ name: item.name || "", part: item.part, color: item.color || "#9a9286", secondaryColor: item.secondaryColor || null, tags: [...(item.tags || [])] });
-  const [selectedVariantId, setSelectedVariantId] = useState(item.defaultVariantId || item.variants?.[0]?.id || null);
-  const [variantName, setVariantName] = useState("");
-  const [variantDescription, setVariantDescription] = useState("");
-  const [variantPhoto, setVariantPhoto] = useState(null);
-  const [variantTier, setVariantTier] = useState("standard");
-  const [variantBusy, setVariantBusy] = useState(false);
-  const [deletingVariantId, setDeletingVariantId] = useState(null);
+  const [draft, setDraft] = useState(() => draftFromItem(item));
+  // Seeded from the card that opened this sheet, so a variant peeked in the
+  // grid is still the one on screen here. Validated against the record rather
+  // than trusted, since the caller's id may be stale by the time we mount.
+  const [selectedVariantId, setSelectedVariantId] = useState(
+    () => (initialVariantId && item.variants?.some((variant) => variant.id === initialVariantId)
+      ? initialVariantId
+      : item.defaultVariantId || item.variants?.[0]?.id || null),
+  );
+  const [addingVariant, setAddingVariant] = useState(false);
   const [variantError, setVariantError] = useState("");
   const [variantNotice, setVariantNotice] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuBusy, setMenuBusy] = useState(null);
+  const [regenerateOpen, setRegenerateOpen] = useState(false);
   const [shaking, setShaking] = useState(false);
   // This viewer is hand-rolled rather than a ViewerPanel — it needs the
   // unsaved-changes shake — so it opts into the card-anchored entry itself.
@@ -609,52 +866,49 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
   const [closeBlocked, setCloseBlocked] = useState(false);
   const isPhone = useIsPhone();
   const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState("");
   const [modeledNote, setModeledNote] = useState("");
-  const type = TYPE_MAP[item.part]?.singular || "Wardrobe item";
+  const { tier, tiers, chooseTier } = useRememberedTier(provider, premiumAllowed);
+  // From the draft, so the meta line follows a category change before it is saved.
+  const type = TYPE_MAP[draft.part]?.singular || "Wardrobe item";
+  const variants = item.variants || [];
   const selectedVariant = itemVariant(item, selectedVariantId);
   const selectedVariantImage = variantOwnImage(item, selectedVariantId);
   const selectedImage = selectedVariantImage || variantImage(item);
   const isVariantPhotoMissing = Boolean(selectedVariantId && !selectedVariantImage);
   const hasModeledImage = Boolean(variantModeledImage(item, selectedVariantId));
-  const hasVariantInput = Boolean(variantName.trim() || variantDescription.trim() || variantPhoto);
-  const isVariantProcessing = variantBusy || selectedVariant?.processingStatus === "processing";
+  const modeledStatus = selectedVariant ? selectedVariant.modeledStatus : item.modeledStatus;
+  const modeledError = selectedVariant ? selectedVariant.modeledError : item.modeledError;
+  const variantProcessing = selectedVariant?.processingStatus === "processing";
+  const modeledProcessing = modeledStatus === "processing";
+  const canModel = showModeledPhoto && Boolean(onGenerateModeled);
+  const canGenerate = canModel && !hasModeledImage && !isVariantPhotoMissing && !variantProcessing && !modeledProcessing;
+  const canRegenerate = canModel && hasModeledImage && !variantProcessing && !modeledProcessing;
+  const changes = useMemo(() => changedDraftFields(draft, item), [draft, item]);
+  const isDirty = changes.length > 0;
+  // What the draft resets against. The app re-fetches every item every 1.5s
+  // while anything is processing, handing this sheet a new `item` object each
+  // time; resetting on the object itself wiped unsaved edits on every poll.
+  const savedFields = JSON.stringify([item.id, item.name, item.part, item.color, item.secondaryColor, item.tags]);
 
-  useEffect(() => {
-    if (variantTier === "premium" && !premiumAllowed) setVariantTier("standard");
-  }, [premiumAllowed, variantTier]);
-
-  const handleGenerateModeled = async (tier) => {
+  const handleGenerateModeled = async (chosenTier) => {
     setGenerating(true);
+    setGenerateError("");
     try {
-      await onGenerateModeled(item, tier, modeledNote.trim(), selectedVariantId);
+      await onGenerateModeled(item, chosenTier, modeledNote.trim(), selectedVariantId);
       setModeledNote("");
-    } catch {
-      // surfaced via item.modeledError once the request settles
+      setRegenerateOpen(false);
+    } catch (error) {
+      setGenerateError(error.message || "Could not start generating a model photo.");
     } finally {
       setGenerating(false);
     }
   };
+
   const pieceRotation = useMemo(() => {
     const hash = [...item.id].reduce((total, character) => total + character.charCodeAt(0), 0);
     return `${(hash % 9) - 4}deg`;
   }, [item.id]);
-
-  const isDirty = useMemo(() => {
-    const normalizedTags = (tags) => tags.map((tag) => tag.trim()).filter(Boolean);
-    return JSON.stringify({
-      name: draft.name.trim(),
-      part: draft.part,
-      color: draft.color?.toLowerCase() || null,
-      secondaryColor: draft.secondaryColor?.toLowerCase() || null,
-      tags: normalizedTags(draft.tags),
-    }) !== JSON.stringify({
-      name: (item.name || "").trim(),
-      part: item.part,
-      color: item.color?.toLowerCase() || null,
-      secondaryColor: item.secondaryColor?.toLowerCase() || null,
-      tags: normalizedTags(item.tags || []),
-    });
-  }, [draft, item]);
 
   const nudgeUnsaved = useCallback(() => {
     setCloseBlocked(true);
@@ -693,11 +947,18 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
     else onOpenOutfit(outfitId);
   }, [isDirty, nudgeUnsaved, onOpenOutfit]);
 
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
+  useDismissOnOutsidePointer(menuOpen, moreRef, closeMenu);
+
   useEffect(() => {
-    if (!sampling) return;
-    const onKeyDown = (e) => { if (e.key === 'Escape') setSampling(null); };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
+    if (!sampling) return undefined;
+    const onKeyDown = (e) => { if (e.key === "Escape") setSampling(null); };
+    document.addEventListener("keydown", onKeyDown);
+    // The colour editor sits below the photo it samples from; bring the photo
+    // back into view so the instruction to tap it is something you can act on.
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    imageRef.current?.scrollIntoView?.({ block: "center", behavior: reduceMotion ? "auto" : "smooth" });
+    return () => document.removeEventListener("keydown", onKeyDown);
   }, [sampling]);
 
   useEffect(() => {
@@ -707,109 +968,116 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
   useEffect(() => {
     setSampling(null);
     setSampleStatus("");
+    setDraft(draftFromItem(item));
+    // Only when what is saved actually changed — see savedFields.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedFields]);
+
+  useEffect(() => {
     setPalette(item.palette || []);
-    setDraft({ name: item.name || "", part: item.part, color: item.color || "#9a9286", secondaryColor: item.secondaryColor || null, tags: [...(item.tags || [])] });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id]);
+
+  useEffect(() => {
     setSelectedVariantId((current) => item.variants?.some((variant) => variant.id === current)
       ? current
       : item.defaultVariantId || item.variants?.[0]?.id || null);
-    setVariantName("");
-    setVariantDescription("");
-    setVariantPhoto(null);
-    setDeletingVariantId(null);
-    setVariantError("");
   }, [item]);
 
-  const addVariant = async () => {
-    const requestedVariantName = variantName.trim();
-    if (!hasVariantInput) return;
-    setVariantBusy(true);
-    setVariantError("");
-    try {
-      const response = await fetch(`/api/wardrobe/items/${encodeURIComponent(item.id)}/variants`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: requestedVariantName,
-          description: variantDescription.trim(),
-          origin: variantPhoto ? "photo" : "generated",
-          sourceVariantId: variantPhoto ? undefined : selectedVariantId,
-          imageDataUrl: variantPhoto?.dataUrl,
-          tier: variantTier,
-        }),
-      });
-      const value = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(value.error || "Could not add variant");
-      onSave(value);
-      const created = value.variants?.find((variant) => variant.id === value.createdVariantId)
-        || (requestedVariantName ? value.variants?.find((variant) => variant.name === requestedVariantName) : null)
-        || value.variants?.at(-1);
-      if (created) setSelectedVariantId(created.id);
-      setVariantName("");
-      setVariantDescription("");
-      setVariantPhoto(null);
-      if (variantPhotoInputRef.current) variantPhotoInputRef.current.value = "";
-    } catch (error) {
-      setVariantError(error.message);
-    } finally {
-      setVariantBusy(false);
-    }
+  const selectVariant = (variantId) => {
+    setSelectedVariantId(variantId);
+    setRegenerateOpen(false);
+    setGenerateError("");
+    setVariantNotice(null);
   };
 
-  const chooseVariantPhoto = async (event) => {
-    const [file] = event.target.files || [];
-    if (!file) return;
-    setVariantError("");
-    try {
-      const dataUrl = await fileToDataUrl(file);
-      setVariantPhoto({ dataUrl, name: file.name });
-    } catch (error) {
-      setVariantPhoto(null);
-      setVariantError(error.message);
-    }
+  const setCover = async (variantId) => {
+    const response = await fetch(`/api/wardrobe/items/${encodeURIComponent(item.id)}/variants/${encodeURIComponent(variantId)}/default`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ variantId }),
+    });
+    const value = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(value.error || "Could not change the cover");
+    onSave(value);
   };
 
   const deleteVariant = async (variant) => {
-    const replacement = item.variants?.find((candidate) => candidate.id === item.defaultVariantId && candidate.id !== variant.id)
-      || item.variants?.find((candidate) => candidate.id !== variant.id);
+    const replacement = variants.find((candidate) => candidate.id === item.defaultVariantId && candidate.id !== variant.id)
+      || variants.find((candidate) => candidate.id !== variant.id);
     if (!replacement) {
-      setVariantError("At least one variant is required.");
+      setVariantError("An item needs at least one way to wear it.");
       return;
     }
-
-    setDeletingVariantId(variant.id);
     setVariantError("");
     setVariantNotice(null);
+    const response = await fetch(`/api/wardrobe/items/${encodeURIComponent(item.id)}/variants/${encodeURIComponent(variant.id)}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ replacementVariantId: replacement.id }),
+    });
+    const value = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(value.error || "Could not delete that way to wear it");
+    const updatedItem = value.item;
+    if (!updatedItem) throw new Error("Could not refresh the item after deleting");
+    setSelectedVariantId(updatedItem.defaultVariantId || replacement.id);
+    setVariantNotice({ itemId: item.id, message: `“${variant.name}” deleted.` });
+    onSave(updatedItem);
+  };
+
+  const runMenuAction = async (id) => {
+    if (id === "regenerate") {
+      setMenuOpen(false);
+      setRegenerateOpen(true);
+      return;
+    }
+    if (id === "delete-item") {
+      setMenuOpen(false);
+      onDelete(item.id);
+      return;
+    }
+    setMenuBusy(id);
     try {
-      const response = await fetch(`/api/wardrobe/items/${encodeURIComponent(item.id)}/variants/${encodeURIComponent(variant.id)}`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ replacementVariantId: replacement.id }),
-      });
-      const value = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(value.error || "Could not delete variant");
-      const updatedItem = value.item;
-      if (!updatedItem) throw new Error("Could not refresh the item after deleting the variant");
-      setSelectedVariantId((current) => current === variant.id ? (updatedItem.defaultVariantId || replacement.id) : current);
-      setVariantNotice({ itemId: item.id, message: `${variant.name} deleted.` });
-      onSave(updatedItem);
+      if (id === "cover") await setCover(selectedVariantId);
+      if (id === "delete-variant" && selectedVariant) await deleteVariant(selectedVariant);
+      setMenuOpen(false);
     } catch (error) {
       setVariantError(error.message);
+      setMenuOpen(false);
     } finally {
-      setDeletingVariantId(null);
+      setMenuBusy(null);
     }
   };
 
-  const cancelEditing = () => {
-    setDraft({ name: item.name || "", part: item.part, color: item.color || "#9a9286", secondaryColor: item.secondaryColor || null, tags: [...(item.tags || [])] });
+  const menu = itemMenuActions({
+    variants,
+    selectedVariantId,
+    defaultVariantId: item.defaultVariantId,
+    canRegenerate,
+    canDeleteItem: Boolean(onDelete),
+  });
+  const menuEntries = {
+    regenerate: { label: "Regenerate model photo", icon: <ArrowCounterClockwise size={18} aria-hidden="true" /> },
+    cover: { label: "Use as cover in wardrobe", icon: <Star size={18} aria-hidden="true" /> },
+    "delete-variant": { label: "Delete this way to wear it", confirmLabel: "Tap again to delete it", danger: true, icon: <Trash size={18} aria-hidden="true" /> },
+    // Named by where it is deleted from: the same sheet opens wishlist pieces in Inspo.
+    "delete-item": { label: deleteLabel, confirmLabel: "Tap again to delete the item", danger: true, icon: <Trash size={18} aria-hidden="true" /> },
+  };
+  const menuSections = [
+    menu.variantActions.length > 0 && { id: "variant", label: menu.variantLabel, entries: menu.variantActions.map((id) => ({ id, ...menuEntries[id] })) },
+    menu.itemActions.length > 0 && { id: "item", label: menu.variantLabel ? "Item" : null, entries: menu.itemActions.map((id) => ({ id, ...menuEntries[id] })) },
+  ].filter(Boolean);
+
+  const discardEditing = () => {
+    setDraft(draftFromItem(item));
     setSampling(null);
     setSampleStatus("");
-    dismiss();
   };
 
   const saveEditing = () => {
     onSave({ ...item, ...draft, name: draft.name.trim(), tags: draft.tags.map((tag) => tag.trim()).filter(Boolean) });
     setSampling(null);
-    setSampleStatus("Changes saved.");
+    setSampleStatus("");
   };
 
   const handleImageLoad = (event) => {
@@ -847,8 +1115,38 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
         onLoad={handleImageLoad}
         onClick={handleImageClick}
       />
-      {sampling && <span className="sample-hint">Click garment to sample</span>}
-      {isVariantPhotoMissing && <span className="variant-photo-missing" role="status">Photo not generated yet</span>}
+      {sampling && <span className="sample-hint">Tap the garment to sample</span>}
+      {isVariantPhotoMissing && !variantProcessing && <span className="variant-photo-missing" role="status">Photo not generated yet</span>}
+    </div>
+  );
+
+  // ⋯ and ✕ ride on the photo, top right, in both hero treatments.
+  const toolbar = (
+    <div className="viewer-toolbar">
+      {menuSections.length > 0 && (
+        <div className="viewer-more" ref={moreRef}>
+          <button
+            type="button"
+            className="viewer-toolbar__button"
+            aria-label="More actions"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            <DotsThree size={20} weight="bold" aria-hidden="true" />
+          </button>
+          {menuOpen && <MoreMenu sections={menuSections} busyAction={menuBusy} onSelect={runMenuAction} onClose={closeMenu} />}
+        </div>
+      )}
+      <button type="button" className="viewer-toolbar__button" onClick={() => requestClose()} aria-label="Close viewer" ref={closeButtonRef}>
+        <X size={18} weight="bold" aria-hidden="true" />
+      </button>
+    </div>
+  );
+
+  const stageStatus = (variantProcessing || modeledProcessing) && (
+    <div className="stage-action">
+      <StageStatus>{variantProcessing ? "Making this way to wear it…" : "Generating model photo…"}</StageStatus>
     </div>
   );
 
@@ -867,112 +1165,90 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
     <div ref={entryRef} className={`viewer-entry${openedFrom ? " viewer-entry--from-card" : ""}`}>
     <aside
       ref={sheetRef}
-      className={`viewer editing${hasModeledImage ? " has-modeled-image" : ""}${shaking ? " shake" : ""}`}
+      className={`viewer editing item-sheet${hasModeledImage ? " has-modeled-image" : ""}${shaking ? " shake" : ""}`}
       role="dialog"
       aria-modal="true"
-      aria-label="Selected wardrobe item"
+      aria-label={draft.name || type}
       {...(isPhone ? dragHandlers : null)}
     >
-      {/* Hand-rolled rather than a ViewerPanel (it needs the unsaved-changes
-          shake), so it has to opt into the sheet gesture itself. requestClose
-          rather than onClose: a swipe is still a close, and it must respect the
-          same unsaved-changes guard the X button does. */}
-      <button className="icon-button viewer-icon-close" type="button" onClick={() => requestClose()} aria-label="Close viewer" ref={closeButtonRef}>
-        <X size={24} weight="light" aria-hidden="true" />
-      </button>
-
       {hasModeledImage ? (
         <ModeledHero src={variantModeledImage(item, selectedVariantId)} alt={`${draft.name || type} worn by a model`} showHeading={false}>
           {garmentArtwork}
+          {toolbar}
+          {stageStatus}
+          {/* Opened from ⋯, so there is no chip to grow from; it rises from
+              the bottom centre, where the photo's actions always sit. */}
+          <RefineComposer
+            open={regenerateOpen && canRegenerate}
+            onClose={() => setRegenerateOpen(false)}
+            note={modeledNote}
+            onNoteChange={setModeledNote}
+            busy={generating}
+            onGenerate={handleGenerateModeled}
+            tier={tier}
+            tiers={tiers}
+            onTierChange={chooseTier}
+            premiumAllowed={premiumAllowed}
+          />
         </ModeledHero>
       ) : (
-        garmentArtwork
+        <div className="item-stage">
+          {garmentArtwork}
+          {toolbar}
+          {stageStatus || (canGenerate && (
+            <div className="stage-action">
+              <GenerateButton
+                icon={<Sparkle size={16} weight="bold" aria-hidden="true" />}
+                label="Generate model photo"
+                busy={generating}
+                onGenerate={handleGenerateModeled}
+                tier={tier}
+                tiers={tiers}
+                onTierChange={chooseTier}
+                premiumAllowed={premiumAllowed}
+              />
+            </div>
+          ))}
+        </div>
       )}
 
       <div className="viewer-details editing">
-        {item.variants?.length > 0 && (
-          <fieldset className="variant-picker">
-            <legend>How you wear it</legend>
-            <div className="variant-picker__options" role="radiogroup" aria-label="Choose usage variant">
-              {item.variants.map((variant) => (
-                <button
-                  key={variant.id}
-                  type="button"
-                  className={`variant-picker__choice${variant.id === selectedVariantId ? " active" : ""}`}
-                  aria-pressed={variant.id === selectedVariantId}
-                  onClick={() => setSelectedVariantId(variant.id)}
-                >
-                  <span>{variant.name}</span>
-                  <small>{variant.description || (variant.origin === "generated" ? "Generated variation" : "Source view")}</small>
-                </button>
-              ))}
-            </div>
-            <div className={`variant-add-form${isVariantProcessing ? " is-processing" : ""}`}>
-              {isVariantProcessing ? (
-                <>
-                  <SpinnerGap size={16} className="modeled-photo-spinner" aria-hidden="true" />
-                  <p>Processing your variant — extracting the garment, completing its details, and generating the model photo.</p>
-                </>
-              ) : (
-                <>
-                  <ModelTierPicker tier={variantTier} onChange={setVariantTier} premiumAllowed={premiumAllowed} provider={provider} ariaLabel="Variant model quality" />
-                  {selectedVariant?.processingStatus === "error" && <p className="modeled-photo-prompt__error" role="alert">{selectedVariant.processingError || "That variant could not be processed."}</p>}
-                  <div className="variant-add-form__composer">
-                    <div className="variant-add-form__fields">
-                      <input className="outfit-card-note" value={variantName} onChange={(event) => setVariantName(event.target.value)} placeholder="New usage, e.g. sleeves rolled" aria-label="Variant name" />
-                      <input className="outfit-card-note" value={variantDescription} onChange={(event) => setVariantDescription(event.target.value)} placeholder="Describe the presentation" aria-label="Variant description" />
-                    </div>
-                    <div className="variant-add-form__upload">
-                      <input
-                        ref={variantPhotoInputRef}
-                        type="file"
-                        accept="image/*"
-                        hidden
-                        disabled={variantBusy}
-                        onChange={chooseVariantPhoto}
-                      />
-                      <button
-                        type="button"
-                        className={`variant-photo-upload${variantPhoto ? " has-photo" : ""}`}
-                        disabled={variantBusy}
-                        onClick={() => variantPhotoInputRef.current?.click()}
-                        aria-label={variantPhoto ? `Replace variant photo: ${variantPhoto.name}` : "Choose a photo for this variant"}
-                        title={variantPhoto ? variantPhoto.name : "Choose a photo for this variant"}
-                      >
-                        <span className="variant-photo-upload__art" aria-hidden="true">
-                          {variantPhoto
-                            ? <img src={variantPhoto.dataUrl} alt="" />
-                            : <ImageSquare size={30} weight="regular" />}
-                          <span className="variant-photo-upload__plus"><Plus size={11} weight="bold" /></span>
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-                  <button type="button" className="primary-button variant-add-form__submit" disabled={!hasVariantInput} onClick={addVariant}>
-                    <Plus size={15} weight="bold" aria-hidden="true" /> Add variant
-                  </button>
-                </>
-              )}
-            </div>
-            {variantNotice?.itemId === item.id && <p className="variant-notice" role="status" aria-live="polite">{variantNotice.message}</p>}
-            {variantError && <p className="status error" role="alert">{variantError}</p>}
-          </fieldset>
+        {(generateError || modeledStatus === "error") && (
+          <p className="stage-error" role="alert">{generateError || modeledError || "That model photo could not be made."}</p>
         )}
-        {showModeledPhoto && selectedVariant?.processingStatus !== "processing" && (
-          <ModeledPhotoPrompt
-            status={selectedVariant?.modeledStatus}
-            error={selectedVariant?.modeledError}
-            busy={generating}
-            onGenerate={handleGenerateModeled}
-            premiumAllowed={premiumAllowed}
-            provider={provider}
-            hasImage={hasModeledImage}
-            initialTier={selectedVariant?.modeledTier || "standard"}
-            note={modeledNote}
-            onNoteChange={setModeledNote}
+
+        {/* The name straight after the photo. It used to be the fourth thing on
+            the sheet, under two optional AI features. */}
+        <header className="item-heading">
+          <EditableTitle
+            value={draft.name}
+            placeholder={type}
+            onChange={(name) => setDraft((current) => ({ ...current, name }))}
+            ariaLabel="Item name"
+          />
+          <p className="item-meta">
+            {itemMetaLine({ typeLabel: type, outfitCount: onOpenOutfit ? outfits.length : 0, createdAt: item.createdAt })}
+          </p>
+        </header>
+
+        {variants.length > 0 && (
+          <VariantStrip
+            item={item}
+            selectedVariantId={selectedVariantId}
+            onSelect={selectVariant}
+            onAdd={() => setAddingVariant(true)}
+            canAdd={showModeledPhoto}
           />
         )}
-        <ItemEditor
+        {selectedVariant?.processingStatus === "error" && (
+          <p className="status error variant-strip__status" role="alert">
+            {selectedVariant.processingError || "That way to wear it could not be made."}
+          </p>
+        )}
+        {variantNotice?.itemId === item.id && <p className="variant-notice" role="status" aria-live="polite">{variantNotice.message}</p>}
+        {variantError && <p className="status error variant-strip__status" role="alert">{variantError}</p>}
+
+        <ItemDetails
           draft={draft}
           setDraft={setDraft}
           palette={palette}
@@ -983,26 +1259,51 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
 
         {onOpenOutfit && <OutfitsWithItem outfits={outfits} onOpen={openOutfit} />}
 
-        {closeBlocked && <p className="unsaved-notice" role="status">Save or cancel changes before closing.</p>}
-
-        <PanelActions
-          onDelete={() => onDelete(item.id)}
-          leadingActions={selectedVariant && item.variants.length > 1 && (
-            <VariantDeleteButton
-              variant={selectedVariant}
-              busy={deletingVariantId === selectedVariant.id}
-              onDelete={deleteVariant}
-            />
-          )}
-          onCancel={cancelEditing}
-          onConfirm={saveEditing}
-          confirmIcon={<Check size={15} weight="bold" aria-hidden="true" />}
-        />
+        {/* Save and Discard exist only while there is something to save — the
+            contextual save bar of Shopify's admin. The footer they replace
+            showed Delete, Cancel and a filled Save on every item, always. */}
+        {isDirty && (
+          <div className={`save-bar${closeBlocked ? " is-blocked" : ""}`} role="region" aria-label="Unsaved changes">
+            <span className="save-bar__label" role="status">
+              {closeBlocked ? "Save or discard before closing" : unsavedLabel(changes.length)}
+            </span>
+            <button type="button" className="save-bar__discard" onClick={discardEditing}>Discard</button>
+            <button type="button" className="save-bar__save" onClick={saveEditing}>
+              <Check size={15} weight="bold" aria-hidden="true" /> Save
+            </button>
+          </div>
+        )}
       </div>
     </aside>
     </div>
     </div>
   );
 
-  return typeof document !== "undefined" ? createPortal(content, document.body) : content;
+  // The add sheet is a sibling of the viewer in the React tree, not a child.
+  // React replays pointer events up its own tree, so a child — even portalled —
+  // would feed every drag inside the sub-sheet to the viewer's swipe-to-close.
+  const addSheet = addingVariant && (
+    <AddVariantSheet
+      item={item}
+      sourceVariantId={selectedVariantId}
+      tier={tier}
+      tiers={tiers}
+      onTierChange={chooseTier}
+      premiumAllowed={premiumAllowed}
+      onCreated={(updatedItem, createdId) => {
+        onSave(updatedItem);
+        if (createdId) setSelectedVariantId(createdId);
+        setAddingVariant(false);
+      }}
+      onClose={() => setAddingVariant(false)}
+    />
+  );
+
+  if (typeof document === "undefined") return content;
+  return (
+    <>
+      {createPortal(content, document.body)}
+      {addSheet && createPortal(addSheet, document.body)}
+    </>
+  );
 }

@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, Palette, PencilSimple, Sparkle, SpinnerGap, X } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, Check, Palette, PencilSimple, Sparkle, SpinnerGap, X } from "@phosphor-icons/react";
 import { CheckCircle } from "@phosphor-icons/react";
 import { OptimizedImage } from "./OptimizedImage.jsx";
 import { api } from "./api.js";
 import { OUTFIT_CATEGORIES as CATEGORIES } from "./categories.js";
 import { GARMENT_PART_MAP } from "../shared/garments.mjs";
-import { resolveOutfitPieces, variantImage } from "../shared/wardrobe-model.mjs";
-import { ModeledPhotoPrompt } from "./item-editor.jsx";
+import { initialVariantForPiece, resolveOutfitPieces, variantImage, variantOwnImage } from "../shared/wardrobe-model.mjs";
+import { GenerateButton, RefineComposer, StageChip, StageStatus, useRememberedTier } from "./components/ModelPhotoControls.jsx";
 import { SuggestionPanel } from "./suggestions.jsx";
 import { useSheetGesture } from "./hooks/useSheetGesture.js";
 import { useIsPhone } from "./hooks/useIsPhone.js";
@@ -184,9 +184,11 @@ function OutfitBuilder({ items, initialOutfit, onCancel, onSave }) {
       if (next.has(itemId)) next.delete(itemId);
       else {
         const item = items.find((candidate) => candidate.id === itemId);
-        // A physical item with multiple usage variants needs an explicit choice.
-        // Single-variant items keep the one-click flow.
-        next.set(itemId, item?.variants?.length > 1 ? null : item?.defaultVariantId || item?.variants?.[0]?.id || null);
+        // Every piece lands on its default way of being worn, whatever its
+        // variant count. The previous null forced a second tap on every
+        // multi-variant piece and failed the save if it was missed — an invalid
+        // intermediate state in place of a sensible starting one.
+        next.set(itemId, initialVariantForPiece(item));
       }
       return next;
     });
@@ -227,7 +229,6 @@ function OutfitBuilder({ items, initialOutfit, onCancel, onSave }) {
     setError("");
     if (!name.trim()) return setError("Give this outfit a name.");
     if (!selectedItems.length) return setError("Pick at least one piece.");
-    if ([...selected.values()].some((variantId) => !variantId)) return setError("Choose how to wear every piece with multiple variants.");
     setSaving(true);
     try {
       await onSave({ name: name.trim(), pieces: [...selected.entries()].map(([itemId, variantId]) => ({ itemId, variantId })) });
@@ -290,10 +291,29 @@ function OutfitBuilder({ items, initialOutfit, onCancel, onSave }) {
                             <OptimizedImage src={item.thumbnail || item.image} alt="" sizes="72px" breakpoints={[72, 108]} />
                           </button>
                           {selected.has(item.id) && item.variants?.length > 1 && (
-                            <div className="builder-variant-picker" role="group" aria-label={`Variant for ${item.name}`}>
-                              {item.variants.map((variant) => (
-                                <button key={variant.id} type="button" className={selected.get(item.id) === variant.id ? "active" : ""} aria-pressed={selected.get(item.id) === variant.id} onClick={() => selectVariant(item.id, variant.id)}>{variant.name}</button>
-                              ))}
+                            /* Thumbnails, not names. The difference between
+                               rolled sleeves and tucked is visual, and the 10px
+                               text pills this replaced were both unreadable and
+                               under half the 44px a finger needs. */
+                            <div className="builder-variant-picker" role="group" aria-label={`How to wear ${item.name}`}>
+                              {item.variants.map((variant) => {
+                                const thumbnail = variantOwnImage(item, variant.id);
+                                return (
+                                  <button
+                                    key={variant.id}
+                                    type="button"
+                                    className={selected.get(item.id) === variant.id ? "active" : ""}
+                                    aria-pressed={selected.get(item.id) === variant.id}
+                                    title={variant.name}
+                                    aria-label={variant.name}
+                                    onClick={() => selectVariant(item.id, variant.id)}
+                                  >
+                                    {thumbnail
+                                      ? <OptimizedImage src={thumbnail} alt="" sizes="40px" breakpoints={[40, 60, 80]} />
+                                      : <span className="builder-variant-picker__pending" aria-hidden="true">{variant.name.slice(0, 1)}</span>}
+                                  </button>
+                                );
+                              })}
                             </div>
                           )}
                         </span>
@@ -333,7 +353,7 @@ function OutfitCard({ outfit, itemMap, onOpen, wornToday, onWear }) {
   return (
     <div className="outfit-card-wrap">
     <button type="button" className="outfit-card" onClick={(event) => onOpen(outfit.id, event.currentTarget)} aria-label={`View ${outfit.name}`}>
-      <div className="outfit-card-art">
+      <div className={`outfit-card-art${processing ? " is-processing" : ""}`}>
         {hasModeledImage ? (
           <>
             <div className="outfit-card-hero">
@@ -351,8 +371,11 @@ function OutfitCard({ outfit, itemMap, onOpen, wornToday, onWear }) {
             <p className="outfit-card-status"><SpinnerGap size={13} className="outfit-card-spinner" aria-hidden="true" /> Generating model photo…</p>
           </div>
         )}
+        {/* Hidden from assistive tech: the card's aria-label already names it. */}
+        <span className="outfit-card-caption" aria-hidden="true">
+          <span className="outfit-card-name">{outfit.name}</span>
+        </span>
       </div>
-      <p className="outfit-card-name">{outfit.name}</p>
     </button>
     <button
       type="button"
@@ -374,22 +397,56 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
   const pieces = resolveOutfitPieces(outfit, itemMap);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const [refining, setRefining] = useState(false);
+  const [generateError, setGenerateError] = useState("");
+  // The chip the refine composer grows out of and shrinks back into.
+  const refineChipRef = useRef(null);
+  const { tier, tiers, chooseTier } = useRememberedTier(provider, premiumAllowed);
   const hasModeledImage = Boolean(outfit.modeledImage);
   const processing = outfit.modeledStatus === "processing";
 
   useViewerKeyboard(onClose, closeButtonRef);
 
-  const generate = async (tier) => {
+  const generate = async (chosenTier) => {
     setBusy(true);
+    setGenerateError("");
     try {
-      await onGenerateModeled(outfit, tier, note.trim());
+      await onGenerateModeled(outfit, chosenTier, note.trim());
       setNote("");
-    } catch {
-      // surfaced via outfit.modeledError once the request settles
+      setRefining(false);
+    } catch (error) {
+      setGenerateError(error.message || "Could not start generating a model photo.");
     } finally {
       setBusy(false);
     }
   };
+
+  // Where the photo's action goes: on the photo, the way the item sheet does
+  // it. Making the first one is the accent pill; another go at an existing one
+  // is a glass chip that opens the note, because refining with a note is the
+  // point of regenerating an outfit.
+  const mediaAction = processing ? (
+    <StageStatus>Generating model photo…</StageStatus>
+  ) : hasModeledImage ? (
+    <StageChip
+      ref={refineChipRef}
+      icon={<ArrowCounterClockwise size={15} weight="bold" aria-hidden="true" />}
+      label="Refine photo"
+      onClick={() => setRefining(true)}
+      concealed={refining}
+    />
+  ) : (
+    <GenerateButton
+      icon={<Sparkle size={16} weight="bold" aria-hidden="true" />}
+      label="Generate model photo"
+      busy={busy}
+      onGenerate={generate}
+      tier={tier}
+      tiers={tiers}
+      onTierChange={chooseTier}
+      premiumAllowed={premiumAllowed}
+    />
+  );
 
   return (
     <ViewerPanel
@@ -400,18 +457,43 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
       panelClassName={hasModeledImage ? "has-modeled-image" : undefined}
     >
       {hasModeledImage ? (
-        <ModeledHero src={outfit.modeledImage} alt={`${outfit.name} worn by a model`} showHeading={false} />
+        <ModeledHero src={outfit.modeledImage} alt={`${outfit.name} worn by a model`} showHeading={false}>
+          {mediaAction && <div className="stage-action">{mediaAction}</div>}
+          <RefineComposer
+            open={refining && !processing}
+            onClose={() => setRefining(false)}
+            originRef={refineChipRef}
+            note={note}
+            onNoteChange={setNote}
+            busy={busy}
+            onGenerate={generate}
+            tier={tier}
+            tiers={tiers}
+            onTierChange={chooseTier}
+            premiumAllowed={premiumAllowed}
+          />
+        </ModeledHero>
       ) : (
-        <div className="viewer-art outfit-viewer-art">
-          {pieces.length ? (
-            <OutfitFlatLay outfitId={outfit.id} pieces={pieces} />
-          ) : (
-            <OutfitStack items={pieces} />
-          )}
+        // The flat-lay clips its scattered pieces to its rounded square; the
+        // action sits outside that clip so the quality menu, which opens
+        // upward out of it, is not cut off by the corners.
+        <div className="outfit-viewer-stage">
+          <div className="viewer-art outfit-viewer-art">
+            {pieces.length ? (
+              <OutfitFlatLay outfitId={outfit.id} pieces={pieces} />
+            ) : (
+              <OutfitStack items={pieces} />
+            )}
+          </div>
+          {mediaAction && <div className="stage-action">{mediaAction}</div>}
         </div>
       )}
 
       <div className="viewer-details editing">
+        {(generateError || outfit.modeledStatus === "error") && (
+          <p className="stage-error" role="alert">{generateError || outfit.modeledError || "That model photo could not be made."}</p>
+        )}
+
         <EditableTitle
           value={outfit.name}
           placeholder="Outfit"
@@ -436,23 +518,6 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
             </div>
           ))}
         </div>
-
-        {processing ? (
-          <p className="outfit-card-status"><SpinnerGap size={13} className="outfit-card-spinner" aria-hidden="true" /> Generating model photo…</p>
-        ) : (
-          <ModeledPhotoPrompt
-            status={outfit.modeledStatus}
-            error={outfit.modeledError}
-            busy={busy}
-            onGenerate={generate}
-            premiumAllowed={premiumAllowed}
-            provider={provider}
-            hasImage={hasModeledImage}
-            initialTier={outfit.modeledTier || "standard"}
-            note={note}
-            onNoteChange={setNote}
-          />
-        )}
 
         <PanelActions
           onDelete={() => onDelete(outfit.id)}
