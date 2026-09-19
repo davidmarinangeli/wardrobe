@@ -299,3 +299,14 @@ export function markVariantAssetsStale(item, changedReference = null) {
     }),
   };
 }
+
+/**
+ * The variant a piece starts on when it is added to an outfit.
+ *
+ * Always a real variant, never null: `defaultVariantId` exists to answer this
+ * question, and returning nothing for multi-variant pieces forced a second tap
+ * and failed the save when it was missed.
+ */
+export function initialVariantForPiece(item) {
+  return item?.defaultVariantId || item?.variants?.[0]?.id || null;
+}

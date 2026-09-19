@@ -17,3 +17,6 @@ public/drapes/
 # poster frames in docs/screenshots/ belong in the repo.
 docs/screenshots/*.gif
 docs/screenshots/*.mov
+
+# JetBrains project files — local IDE state, including machine paths.
+.idea/

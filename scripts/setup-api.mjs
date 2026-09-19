@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
-import { AI_PROVIDERS } from "./import-job-api.mjs";
+import { AI_PROVIDERS, resolveApiKey, resolveProvider } from "./import-job-api.mjs";
 
 const WRITABLE_KEYS = new Set(["AI_PROVIDER", "OPENAI_API_KEY", "OPENROUTER_API_KEY", "GEMINI_API_KEY_TEST", "GEMINI_API_KEY_PROD", "MINIMAX_API_KEY"]);
 const ENV_LINE = /^([A-Z0-9_]+)=/;
@@ -53,6 +53,19 @@ export function upsertEnvValues(content, values) {
   return `${updated.join("\n").replace(/\n+$/, "")}\n`;
 }
 
+/**
+ * Which providers have a key saved, as yes/no — the keys themselves never leave
+ * the server. Gemini counts as ready with either of its two keys, since the
+ * TEST/PROD switch in Settings chooses between them after the fact.
+ */
+export function configuredProviders(setting) {
+  const hasKey = (provider, mode) => Boolean(String(resolveApiKey(setting, provider, mode).key || "").trim());
+  return Object.fromEntries([...AI_PROVIDERS].map((provider) => [
+    provider,
+    provider === "gemini" ? hasKey(provider, "test") || hasKey(provider, "prod") : hasKey(provider),
+  ]));
+}
+
 export function wardrobeSetupApi(options = {}) {
   let root;
   const setting = (name, fallback = "") => options.env?.[name] || process.env[name] || fallback;
@@ -68,6 +81,11 @@ export function wardrobeSetupApi(options = {}) {
     const url = new URL(req.url, "http://localhost");
     if (!url.pathname.startsWith("/api/setup/")) return next();
     try {
+      // What the Settings provider picker needs: the one in use, and which
+      // others could be switched to without asking for a key first.
+      if (url.pathname === "/api/setup/providers" && req.method === "GET") {
+        return json(res, 200, { provider: resolveProvider(setting).provider, configured: configuredProviders(setting) });
+      }
       if (url.pathname === "/api/setup/config" && req.method === "POST") {
         const input = await body(req);
         const values = {};

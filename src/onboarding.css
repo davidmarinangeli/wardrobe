@@ -465,3 +465,75 @@
 @media (max-width: 640px) {
   .photo-guide-content { grid-template-columns: 1fr; }
 }
+
+/* ─── Settings: AI provider ─────────────────────────────────────────────────
+   Same card language as the setup wizard's provider list (ink border when
+   chosen, a wash behind it), compacted to one row each: a setting you revisit
+   should read at a glance, not re-pitch every provider. */
+.provider-switch {
+  display: grid;
+  gap: 10px;
+  padding-top: 18px;
+  margin: 4px 0 22px;
+  border-top: 1px solid var(--line);
+}
+
+.provider-switch__label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.provider-switch__list { display: grid; gap: 8px; }
+
+.provider-switch__option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    border-color var(--dur-pop) var(--ease-out),
+    background var(--dur-pop) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
+}
+
+.provider-switch__option:active:not(:disabled) { transform: scale(.99); }
+.provider-switch__option:focus-visible { border-color: var(--ink); outline: 2px solid var(--accent-warm); outline-offset: 2px; }
+.provider-switch__option.is-active { border-color: var(--ink); background: var(--wash-1); cursor: default; }
+.provider-switch__option:disabled { opacity: .5; cursor: progress; }
+.provider-switch__option.is-busy { border-color: var(--ink); cursor: progress; }
+
+@media (hover: hover) and (pointer: fine) {
+  .provider-switch__option:hover:not(:disabled):not(.is-active) { border-color: var(--ink); }
+}
+
+.provider-switch__text { display: grid; flex: 1; gap: 2px; min-width: 0; }
+.provider-switch__name { font-size: 14px; font-weight: 600; }
+.provider-switch__tagline { color: var(--muted); font-size: 11px; }
+
+.provider-switch__state {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.provider-switch__state.is-active { color: var(--success); font-weight: 500; }
+.provider-switch__state.is-add { color: var(--accent-warm); font-weight: 500; }
+
+.onboarding-status.is-success { color: var(--success); }

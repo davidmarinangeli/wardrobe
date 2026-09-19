@@ -7,6 +7,10 @@ import "./onboarding.css";
 const CONFIG_API = "/api/import/config";
 export const DISMISS_KEY = "open-wardrobe-onboarding-dismissed-v1";
 export const RESUME_KEY = "open-wardrobe-onboarding-resume-v1";
+// Set to the provider being switched to. Switching rewrites .env, Vite restarts
+// and the page reloads under you, so App reopens Settings when it finds this and
+// the provider picker reads it back to confirm the switch landed.
+export const SWITCHED_KEY = "open-wardrobe-provider-switched-v1";
 
 const STEPS = ["welcome", "provider", "keys", "photos", "done"];
 const STEP_LABELS = { welcome: "Welcome", provider: "Provider", keys: "API key", photos: "Reference photo", done: "Done" };
@@ -183,7 +187,7 @@ function ProviderStep({ provider, setProvider, onNext, onBack }) {
   );
 }
 
-function KeysStep({ provider, onSaved, onBack }) {
+function KeysStep({ provider, onSaved, onBack, fromSettings = false }) {
   const option = PROVIDERS.find((item) => item.id === provider);
   const [openaiKey, setOpenaiKey] = useState("");
   const [openrouterKey, setOpenrouterKey] = useState("");
@@ -207,6 +211,7 @@ function KeysStep({ provider, onSaved, onBack }) {
     setSaving(true); setError("");
     try {
       sessionStorage.setItem(RESUME_KEY, "1");
+      if (fromSettings) sessionStorage.setItem(SWITCHED_KEY, provider);
       // Gemini checks the PROD key by default; a TEST-only key would otherwise stay unusable
       // until someone flips the mode switch on the done step, so point the app at whichever key
       // is being saved — before the .env write below, since that write restarts the dev server.
@@ -239,7 +244,7 @@ function KeysStep({ provider, onSaved, onBack }) {
 
   return (
     <div className="onboarding-step">
-      <p className="onboarding-eyebrow">Step 2 of 3</p>
+      <p className="onboarding-eyebrow">{fromSettings ? "Switch provider" : "Step 2 of 3"}</p>
       <h2>Add your {option.label} key</h2>
       <p className="onboarding-lede">
         Saved straight into <code>.env</code> on your machine — it never leaves this computer. Get a key at{" "}
@@ -441,17 +446,127 @@ function PhotosStep({ setup, onSetupChange, onNext, onBack }) {
   );
 }
 
-function DoneStep({ setup, onModeChange, onClose }) {
+/**
+ * Switch providers from Settings. A provider with a key saved switches in one
+ * tap; one without goes to the key step first, since switching to it would only
+ * leave every generation failing. The keys stay on the server — this only ever
+ * learns whether each one exists.
+ */
+function ProviderSwitcher({ setup, onSetupChange, onAddKey }) {
+  const [configured, setConfigured] = useState(null);
+  const [switchingTo, setSwitchingTo] = useState(null);
+  const [error, setError] = useState("");
+  // A switch reloads the page; this is the note it left for after the reload.
+  const [justSwitched] = useState(() => {
+    try {
+      const value = sessionStorage.getItem(SWITCHED_KEY);
+      sessionStorage.removeItem(SWITCHED_KEY);
+      return value;
+    } catch {
+      return null;
+    }
+  });
+  const current = setup?.provider;
+
+  useEffect(() => {
+    let cancelled = false;
+    api("/api/setup/providers").then((value) => { if (!cancelled) setConfigured(value.configured); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  const choose = async (id) => {
+    if (id === current || switchingTo) return;
+    if (configured && !configured[id]) {
+      onAddKey(id);
+      return;
+    }
+    setSwitchingTo(id);
+    setError("");
+    try {
+      sessionStorage.setItem(SWITCHED_KEY, id);
+      await api("/api/setup/config", { method: "POST", body: JSON.stringify({ provider: id }) });
+      // The .env write restarts the dev server. Poll until it answers with the
+      // new provider; usually the page reloads on its own before this finishes.
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        await wait(750);
+        try {
+          const latest = await api(CONFIG_API);
+          if (latest.provider === id) {
+            sessionStorage.removeItem(SWITCHED_KEY);
+            onSetupChange?.(latest);
+            setSwitchingTo(null);
+            return;
+          }
+        } catch {
+          // Mid-restart — keep polling.
+        }
+      }
+      setError("Still waiting on the dev server to restart. If this page doesn't reload on its own, refresh it.");
+    } catch (requestError) {
+      sessionStorage.removeItem(SWITCHED_KEY);
+      setError(requestError.message);
+    }
+    setSwitchingTo(null);
+  };
+
+  const confirmed = justSwitched && justSwitched === current ? PROVIDERS.find((option) => option.id === current) : null;
+
+  return (
+    <section className="provider-switch" aria-labelledby="provider-switch-title">
+      <p id="provider-switch-title" className="provider-switch__label">AI provider</p>
+      <div className="provider-switch__list" role="radiogroup" aria-labelledby="provider-switch-title">
+        {PROVIDERS.map((option) => {
+          const active = option.id === current;
+          const ready = configured ? configured[option.id] : null;
+          const busy = switchingTo === option.id;
+          return (
+            <button
+              key={option.id}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              disabled={Boolean(switchingTo) && !busy}
+              aria-busy={busy}
+              className={`provider-switch__option${active ? " is-active" : ""}${busy ? " is-busy" : ""}`}
+              onClick={() => choose(option.id)}
+            >
+              <span className="provider-switch__text">
+                <span className="provider-switch__name">{option.label}</span>
+                <span className="provider-switch__tagline">{option.tagline}</span>
+              </span>
+              <span className={`provider-switch__state${active ? " is-active" : ready === false ? " is-add" : ""}`}>
+                {busy
+                  ? <><SpinnerGap size={13} className="onboarding-spinner" aria-hidden="true" /> Switching…</>
+                  : active
+                    ? <><CheckCircle size={14} weight="fill" aria-hidden="true" /> In use</>
+                    : ready === false
+                      ? <>Add key <ArrowRight size={12} weight="bold" aria-hidden="true" /></>
+                      : ready ? "Key saved" : ""}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {confirmed && (
+        <p className="onboarding-status is-success" role="status"><CheckCircle size={14} weight="fill" aria-hidden="true" /> Now using {confirmed.label}.</p>
+      )}
+      {switchingTo && <p className="onboarding-status" role="status">Saving to .env and restarting the dev server…</p>}
+      {error && <p className="onboarding-status is-error" role="alert"><WarningCircle size={14} aria-hidden="true" /> {error}</p>}
+    </section>
+  );
+}
+
+function DoneStep({ setup, onSetupChange, onModeChange, onAddKey, onClose }) {
   return (
     <div className="onboarding-step">
       <p className="onboarding-eyebrow">All set</p>
       <h2>Your wardrobe is ready</h2>
       <p className="onboarding-lede">Drag any clothing photo onto the gallery — or paste one — to start importing. Every item gets a clean cutout and, once you ask for it, a modeled photo of you wearing it.</p>
       <ul className="onboarding-highlights">
-        <li>Running on <strong>{setup?.provider}</strong>{setup?.provider === "gemini" && <> — switch keys below any time</>}</li>
         <li>Try the bundled <code>$import-clothes</code> and <code>$generate-outfits</code> Codex skills for hands-off importing</li>
         <li>Have a whole camera roll? <code>npm run bulk-import -- --input ~/Pictures/outfits --dry-run</code></li>
       </ul>
+      <ProviderSwitcher setup={setup} onSetupChange={onSetupChange} onAddKey={onAddKey} />
       <AiModeToggle setup={setup} onChange={onModeChange} />
       <div className="onboarding-actions">
         <span className="action-spacer" />
@@ -468,6 +583,8 @@ export function Onboarding({ setup, onSetupChange, onModeChange, onClose }) {
   // setup.provider as intentional once a key actually exists; otherwise default to the
   // free-tier-friendly recommendation.
   const [provider, setProvider] = useState(setup?.hasApiKey ? setup.provider : "gemini");
+  // Whether the key step was reached from Settings, so Back returns there.
+  const [keysFromSettings, setKeysFromSettings] = useState(false);
 
   useEffect(() => {
     sessionStorage.removeItem(RESUME_KEY);
@@ -497,12 +614,21 @@ export function Onboarding({ setup, onSetupChange, onModeChange, onClose }) {
       {step === "keys" && (
         <KeysStep
           provider={provider}
-          onBack={() => setStep("provider")}
+          fromSettings={keysFromSettings}
+          onBack={() => setStep(keysFromSettings ? "done" : "provider")}
           onSaved={(latest) => { onSetupChange?.(latest); setStep(latest.hasModelReference ? "done" : "photos"); }}
         />
       )}
       {step === "photos" && <PhotosStep setup={setup} onSetupChange={onSetupChange} onNext={() => setStep("done")} onBack={() => setStep(setup?.hasApiKey ? "welcome" : "keys")} />}
-      {step === "done" && <DoneStep setup={setup} onModeChange={onModeChange} onClose={finish} />}
+      {step === "done" && (
+        <DoneStep
+          setup={setup}
+          onSetupChange={onSetupChange}
+          onModeChange={onModeChange}
+          onAddKey={(id) => { setProvider(id); setKeysFromSettings(true); setStep("keys"); }}
+          onClose={finish}
+        />
+      )}
     </ViewerPanel>
   );
 }

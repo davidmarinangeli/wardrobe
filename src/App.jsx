@@ -19,7 +19,7 @@ import { BottomNav } from "./components/BottomNav.jsx";
 import { MobileCompactBar, MobileHeadRow, useMobileHeaderScroll } from "./components/MobileHeader.jsx";
 import { useChromeScroll } from "./hooks/useChromeScroll.js";
 import "./components/mobile-chrome.css";
-import { DISMISS_KEY as ONBOARDING_DISMISS_KEY, Onboarding, RESUME_KEY as ONBOARDING_RESUME_KEY } from "./onboarding.jsx";
+import { DISMISS_KEY as ONBOARDING_DISMISS_KEY, Onboarding, RESUME_KEY as ONBOARDING_RESUME_KEY, SWITCHED_KEY as PROVIDER_SWITCHED_KEY } from "./onboarding.jsx";
 import { resolveOutfitPieces } from "../shared/wardrobe-model.mjs";
 
 const EMPTY_OUTFIT_INDEX = { outfits: {}, byItem: {} };
@@ -107,8 +107,15 @@ export function App() {
   // coordinates — opening the viewer reflows the page behind it, so the rect is
   // read later, once that has settled. See useExpandOrigin.
   const [openedFrom, setOpenedFrom] = useState(null);
+  // Which variant the card was showing when it was tapped, so a peeked variant
+  // is the one the sheet opens on. Null means "whatever the item's default is".
+  const [openedVariantId, setOpenedVariantId] = useState(null);
   // Stable, so memo(GalleryItem) can skip every card whose `selected` did not change.
-  const openItem = useCallback((id, element) => { setOpenedFrom(element); setSelectedId(id); }, []);
+  const openItem = useCallback((id, element, variantId = null) => {
+    setOpenedFrom(element);
+    setOpenedVariantId(variantId);
+    setSelectedId(id);
+  }, []);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [colorProfile, setColorProfile] = useState(() => readColorProfile());
@@ -168,6 +175,12 @@ export function App() {
 
   useEffect(() => {
     if (!aiSetup || loading) return;
+    // A provider switch reloads the page mid-Settings; bring Settings back so
+    // the switch can be confirmed where it was made. The picker clears the key.
+    if (sessionStorage.getItem(PROVIDER_SWITCHED_KEY)) {
+      setShowOnboarding(true);
+      return;
+    }
     if (aiSetup.ready) return;
     const resuming = sessionStorage.getItem(ONBOARDING_RESUME_KEY) === "1";
     const dismissed = localStorage.getItem(ONBOARDING_DISMISS_KEY) === "1";
@@ -599,7 +612,7 @@ export function App() {
 
       <BottomNav view={view} onSelect={setView} navRef={bottomNavRef} />
 
-      {selectedItem && <ItemViewer item={selectedItem} openedFrom={openedFrom} onClose={() => setSelectedId(null)} onSave={saveItem} onDelete={deleteItem} onGenerateModeled={generateModeledPhoto} premiumAllowed={premiumAllowed} provider={aiSetup?.provider ?? null} outfits={selectedItemOutfits} onOpenOutfit={openOutfit} />}
+      {selectedItem && <ItemViewer item={selectedItem} openedFrom={openedFrom} initialVariantId={openedVariantId} onClose={() => setSelectedId(null)} onSave={saveItem} onDelete={deleteItem} onGenerateModeled={generateModeledPhoto} premiumAllowed={premiumAllowed} provider={aiSetup?.provider ?? null} outfits={selectedItemOutfits} onOpenOutfit={openOutfit} />}
       {showColorQuiz && (
         <ColorProfileModal
           initialProfile={colorProfile}
