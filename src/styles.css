@@ -2264,6 +2264,57 @@ button { font: inherit; }
    act on: generating on the photo, rare and destructive ones behind ⋯, saving in
    a bar that only exists while there is something to save. */
 
+/* The panel is the rounded shell; only its inner surface scrolls. Keeping the
+   clipping here means the scrollbar and the hero share the shell's corners,
+   while the content keeps the same padding it had when .viewer scrolled. */
+.viewer-overlay .item-sheet {
+  padding: 0;
+  overflow: hidden;
+}
+
+.item-sheet__scroll {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  width: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 42px 34px 46px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--wash-3) transparent;
+}
+
+.item-sheet.has-modeled-image > .item-sheet__scroll { padding: 0; }
+
+.item-sheet__scroll::-webkit-scrollbar { width: 8px; }
+.item-sheet__scroll::-webkit-scrollbar-track { background: transparent; margin-block: 12px; }
+.item-sheet__scroll::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: var(--r-full);
+  background: var(--wash-3);
+  background-clip: padding-box;
+}
+.item-sheet__scroll::-webkit-scrollbar-corner { background: transparent; }
+
+.item-sheet .modeled-hero { border-radius: 0; }
+
+@media (max-width: 1180px) {
+  .viewer-overlay .item-sheet:not(.has-modeled-image) > .item-sheet__scroll { padding-inline: 30px; }
+}
+
+@media (max-width: 860px) {
+  .viewer-overlay .item-sheet:not(.has-modeled-image) > .item-sheet__scroll {
+    padding: 24px 22px calc(24px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 520px) {
+  .viewer-overlay .item-sheet:not(.has-modeled-image) > .item-sheet__scroll {
+    padding: max(24px, env(safe-area-inset-top)) 22px max(28px, env(safe-area-inset-bottom));
+  }
+}
+
 /* The cutout's stage. Overflow stays visible: the quality menu opens upward out
    of the generate button and must not be clipped by the stage's corners. */
 .item-stage {
@@ -3097,4 +3148,3 @@ button.variant-strip__tile:active .variant-strip__art { transform: scale(.96); }
   white-space: normal;
   pointer-events: none;
 }
-

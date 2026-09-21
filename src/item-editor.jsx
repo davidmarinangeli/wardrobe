@@ -836,6 +836,7 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
   const closeButtonRef = useRef(null);
   const entryRef = useRef(null);
   const sheetRef = useRef(null);
+  const scrollRef = useRef(null);
   const overlayRef = useRef(null);
   const imageRef = useRef(null);
   const samplingCanvasRef = useRef(null);
@@ -936,6 +937,7 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
   const { dragHandlers } = useSheetGesture({
     sheetRef,
     overlayRef,
+    scrollRef,
     enabled: isPhone,
     onDismiss: () => requestClose({ instant: true }),
   });
@@ -1171,6 +1173,7 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
       aria-label={draft.name || type}
       {...(isPhone ? dragHandlers : null)}
     >
+      <div ref={scrollRef} className="item-sheet__scroll">
       {hasModeledImage ? (
         <ModeledHero src={variantModeledImage(item, selectedVariantId)} alt={`${draft.name || type} worn by a model`} showHeading={false}>
           {garmentArtwork}
@@ -1273,6 +1276,7 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
             </button>
           </div>
         )}
+      </div>
       </div>
     </aside>
     </div>
