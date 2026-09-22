@@ -1,24 +1,8 @@
 /* Pins and wishlist pieces render as .gallery-item / .gallery-item__art--photo
    (styles.css) in one merged .gallery-grid, so this file no longer needs its
-   own card/grid rules — only the importer, the pin detail panel's detect
-   action, and the pin's notes field are Inspo-specific. */
-
-/* ─── Pin detail panel — detect action ──────────────────────────────────────── */
-
-.pin-detect {
-  display: grid;
-  gap: 8px;
-  margin: 4px 0 22px;
-}
-
-.pin-detect__error {
-  margin: 0;
-  color: var(--error);
-  font-size: 11px;
-  line-height: 1.4;
-}
-
-.pin-detect .secondary-button { justify-self: start; }
+   own card/grid rules — only the importer and the pin's notes field are
+   Inspo-specific. The detect action shares the model-photo controls in
+   styles.css (.stage-action, .generate-button, .stage-chip). */
 
 .inspo-notes-field textarea {
   width: 100%;

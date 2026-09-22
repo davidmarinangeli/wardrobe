@@ -10,6 +10,7 @@ import { PageShell } from "./components/PageShell.jsx";
 import { PageStatus } from "./components/PageStatus.jsx";
 import { ModeledHero } from "./components/ModeledHero.jsx";
 import { EditableTitle } from "./components/EditableTitle.jsx";
+import { GenerateButton, StageChip, StageStatus } from "./components/ModelPhotoControls.jsx";
 import { useViewerKeyboard } from "./hooks/useViewerKeyboard.js";
 import { useTypeFilteredItems } from "./hooks/useTypeFilteredItems.js";
 import "./inspo.css";
@@ -248,23 +249,41 @@ function PinViewer({ pin, wishlistCount, onClose, onSave, onDelete, onDetect, op
 
   const handleDetect = async () => {
     setDetecting(true);
+    setError("");
     try {
       const updated = await onDetect(pin.id);
       onSave(updated);
-    } catch {
-      // surfaces via pin.detectError once the poll settles
+    } catch (detectError) {
+      setError(detectError.message || "Could not start detecting items.");
     } finally {
       setDetecting(false);
     }
   };
 
-  const detectLabel = (detecting || isProcessing)
-    ? "Detecting items…"
-    : wishlistCount ? "Re-detect items" : isError ? "Retry detect" : "Detect items";
+  // Detection is this panel's one generation, so it goes on the photo like the
+  // item sheet's and outfit viewer's do: the accent pill the first time (or to
+  // retry a failure), a glass chip to run it again over pieces already saved.
+  const detectAction = (detecting || isProcessing) ? (
+    <StageStatus>Detecting items…</StageStatus>
+  ) : wishlistCount && !isError ? (
+    <StageChip
+      icon={<ArrowCounterClockwise size={15} weight="bold" aria-hidden="true" />}
+      label="Re-detect items"
+      onClick={handleDetect}
+    />
+  ) : (
+    <GenerateButton
+      icon={<MagicWand size={16} weight="bold" aria-hidden="true" />}
+      label={isError ? "Retry detecting items" : "Detect items"}
+      onGenerate={handleDetect}
+    />
+  );
 
   return (
     <ViewerPanel ariaLabel={`Inspo pin: ${pin.name || "untitled"}`} onClose={onClose} closeRef={closeButtonRef} openedFrom={openedFrom}>
-      <ModeledHero src={pin.image} alt={pin.name || "Inspiration photo"} showHeading={false} />
+      <ModeledHero src={pin.image} alt={pin.name || "Inspiration photo"} showHeading={false}>
+        <div className="stage-action">{detectAction}</div>
+      </ModeledHero>
 
       <div className="viewer-details editing">
         <EditableTitle
@@ -277,15 +296,7 @@ function PinViewer({ pin, wishlistCount, onClose, onSave, onDelete, onDetect, op
           {categoryLabel || "Unclassified"}{!!wishlistCount && ` · ${wishlistCount} in wishlist`}
         </p>
 
-        <div className="pin-detect">
-          {isError && <p className="pin-detect__error">{pin.detectError || "Detection failed."}</p>}
-          <button className="secondary-button" type="button" onClick={handleDetect} disabled={detecting || isProcessing}>
-            {(detecting || isProcessing)
-              ? <SpinnerGap size={14} className="top-action__spinner" aria-hidden="true" />
-              : <MagicWand size={14} weight="bold" aria-hidden="true" />}
-            {detectLabel}
-          </button>
-        </div>
+        {isError && <p className="stage-error" role="alert">{pin.detectError || "Detection failed."}</p>}
 
         <label className="field">
           <span>Category</span>
@@ -527,6 +538,7 @@ export function Inspo({ showImporter, onImporterClose }) {
           onClose={() => setSelectedItemId(null)}
           onSave={saveItem}
           onDelete={deleteItem}
+          deleteLabel="Delete from wishlist"
           showModeledPhoto={false}
         />
       )}

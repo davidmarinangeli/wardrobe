@@ -194,7 +194,9 @@ export function SuggestionPanel({ items, onSaveOutfit, onClose }) {
     // card it points at is replaced, or a failed generate would leave an undo
     // aimed at a suggestion that no longer exists.
     settlePass();
+    clearTimeout(exitTimer.current);
     clearTimeout(undoTimer.current);
+    stopAnimation();
     setUndo(null);
     setGenerating(true);
     setError("");
@@ -226,8 +228,9 @@ export function SuggestionPanel({ items, onSaveOutfit, onClose }) {
     exitTimer.current = setTimeout(() => {
       setLeaving(null);
       setIndex((current) => current + 1);
+      stopAnimation();
     }, prefersReducedMotion() ? 0 : EXIT_MS);
-  }, [index]);
+  }, [index, stopAnimation]);
 
   const like = useCallback(async (suggestion) => {
     if (leaving) return;
@@ -262,11 +265,15 @@ export function SuggestionPanel({ items, onSaveOutfit, onClose }) {
     pendingPass.current = null;
     clearTimeout(exitTimer.current);
     clearTimeout(undoTimer.current);
+    stopAnimation();
     setLeaving(null);
     setIndex(undo.index);
     setUndo(null);
     setAnnouncement("Brought that one back.");
-  }, [undo]);
+    requestAnimationFrame(() => {
+      clearPose(topCardRef.current);
+    });
+  }, [clearPose, stopAnimation, undo]);
 
   const current = suggestions[index] || null;
   const exhausted = suggestions.length > 0 && !current && !leaving;
@@ -281,7 +288,7 @@ export function SuggestionPanel({ items, onSaveOutfit, onClose }) {
     else pass(current, index);
   }, [current, index, like, pass]);
 
-  const { dragHandlers, fling } = useDeckGesture({
+  const { dragHandlers, fling, clearPose, stopAnimation } = useDeckGesture({
     cardRef: topCardRef,
     deckRef,
     enabled: Boolean(current) && !leaving,
@@ -414,7 +421,7 @@ export function SuggestionPanel({ items, onSaveOutfit, onClose }) {
                 type="button"
                 className="deck-action deck-action--pass"
                 onClick={() => commit("pass")}
-                disabled={!current}
+                disabled={!current || Boolean(leaving)}
                 aria-label="Pass on this outfit"
                 title="Not today  ·  ←"
               >
@@ -429,7 +436,7 @@ export function SuggestionPanel({ items, onSaveOutfit, onClose }) {
                 type="button"
                 className="deck-action deck-action--like"
                 onClick={() => commit("like")}
-                disabled={!current}
+                disabled={!current || Boolean(leaving)}
                 aria-label="Save this outfit"
                 title="Save it  ·  →"
               >

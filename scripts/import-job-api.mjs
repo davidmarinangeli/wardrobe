@@ -269,8 +269,14 @@ export async function checkSetup(root, setting, mode = "prod") {
 // leaves the face as a tiny fraction of the frame, which is often the real bottleneck for
 // consistent identity across generations — this gives the model far more facial detail to anchor
 // to. Silently absent when the file doesn't exist; callers fall back to the full-body photo alone.
+// Values that turn the face closeup off without deleting the file. Composing from the full-body
+// reference alone is how this worked before the closeup existed, and it stays a supported setup.
+const FACE_REFERENCE_OFF = new Set(["off", "none", "false", "0"]);
+
 export async function loadFaceReference(root, setting) {
-  const facePath = path.resolve(root, setting("WARDROBE_FACE_REFERENCE", "data/model-reference-face.png"));
+  const configured = setting("WARDROBE_FACE_REFERENCE", "data/model-reference-face.png").trim();
+  if (!configured || FACE_REFERENCE_OFF.has(configured.toLowerCase())) return null;
+  const facePath = path.resolve(root, configured);
   try {
     return { data: await readFile(facePath), mime: "image/png", name: "model-face.png" };
   } catch (error) {
@@ -423,10 +429,23 @@ export function resolveModeledModel(provider, tier, setting) {
   };
 }
 
+// "wide-leg", "wide leg" and "Wide Leg" are the same word to a reader and must be the same word to
+// the de-duplication below, or a hyphen is enough to let a tag restate the name.
+function comparableWords(value) {
+  return ` ${String(value).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()} `;
+}
+
 function describeGarment(meta = {}) {
   const label = meta?.name ? meta.name : "garment";
-  const details = Array.isArray(meta?.tags) && meta.tags.length ? ` (${meta.tags.join(", ")})` : "";
-  return `${label}${details}`;
+  const lowered = comparableWords(label);
+  // Tags routinely restate the name — "brown wide-leg cargo pants" carries tags [cargo, wide-leg,
+  // casual, pants]. Stating a fit adjective three times in one sentence reads as emphasis and the
+  // model exaggerates it, so only tags that add something the name doesn't already say survive.
+  const extra = (Array.isArray(meta?.tags) ? meta.tags : []).filter((tag) => {
+    const words = comparableWords(tag);
+    return words.trim() && !lowered.includes(words);
+  });
+  return `${label}${extra.length ? ` (${extra.join(", ")})` : ""}`;
 }
 
 // A flat-lay/product photo's sleeve foreshortens unpredictably, so the model needs an explicit
@@ -478,7 +497,7 @@ export function buildModeledPrompt(garments = [{}], { hasFaceReference = false }
   }
   const garmentStart = nextImage;
   list.forEach((meta, index) => {
-    imageRoles.push(`Image ${garmentStart + index} is the exact ${describeGarment(meta)} to depict — reproduce it pixel-faithful to this photo.`);
+    imageRoles.push(`Image ${garmentStart + index} is the exact ${describeGarment(meta)} to depict — match its colour, material, construction, graphics, and detailing exactly. It is photographed unworn, so the shape it holds there is how it happens to be lying, not how it is shaped on a body.`);
   });
   const garmentEnd = garmentStart + list.length - 1;
   const garmentImagesPhrase = multi ? `Images ${garmentStart} through ${garmentEnd}` : `Image ${garmentStart}`;
@@ -493,12 +512,21 @@ export function buildModeledPrompt(garments = [{}], { hasFaceReference = false }
   const sockNote = list.some(isLikelySocks) && bottomItem && !isLikelyCroppedOrShortBottom(bottomItem)
     ? " Do not cuff, roll up, or shorten the trousers to expose the socks — the trousers keep their natural full length reaching down to the shoe, with the socks staying hidden beneath the hem; only let socks show at the ankle if the bottoms are themselves cropped, ankle-length, or shorts."
     : "";
-  const relationship = `Composite these into one photorealistic scene: the person from Image 1 (identity anchored by Image ${hasFaceReference ? 2 : 1}) wearing ${wearingPhrase}, reproduced pixel-faithful to ${garmentImagesPhrase} — same hem length, same sleeve or pant length, same looseness or tightness, same silhouette, judged against realistic human anatomy rather than an idealized average.${shortSleeveNote}${sockNote} If a garment is cropped, oversized, ankle-length, or any other specific cut in its reference photo, it must remain exactly that cut in the output. When genuinely uncertain about a length, render the shorter, tighter reading rather than a longer, looser one. Never lengthen, shorten, tighten, loosen, or otherwise "correct" a garment's proportions toward a more generic fit.`;
+  // A garment's reference photo carries two different things, and the prompt has to treat them
+  // differently. What the garment IS — colour, material, construction, cut, size — must survive
+  // exactly. The shape it HOLDS in that photo is an artefact of lying on a table: a trouser pressed
+  // flat shows its full circumference as width, a cap resting on a surface collapses its crown and
+  // splays its brim. Asking for a faithful copy of the photo transcribes the tabletop pose onto a
+  // body, which is how a wide-leg trouser arrives looking like a skirt and a cap perches flat on
+  // the head. Fidelity is owed to the garment; the pose is re-derived from how it hangs when worn.
+  const poseNote = ` Keep each garment's identity exact — the colour, material, construction, graphics, cut, and size shown in ${garmentImagesPhrase} — but derive its shape from how that garment would hang, fold, and sit on this person's body, never from the shape it happens to hold in its own photo. Reproduce the garment, not its resting pose.`;
+
+  const relationship = `Composite these into one photorealistic scene: the person from Image 1 (identity anchored by Image ${hasFaceReference ? 2 : 1}) wearing ${wearingPhrase}, judged against realistic human anatomy rather than an idealized average.${poseNote}${shortSleeveNote}${sockNote} Hem length, sleeve length, and pant length stay faithful to the reference photos, and a garment that is cropped, oversized, or ankle-length stays exactly that cut. When genuinely uncertain about a length, render the shorter reading rather than the longer one. Do not resize a garment or restyle it toward a more generic fit — an oversized piece stays oversized, hanging with the volume that garment actually contains and following the body underneath it.`;
 
   const supportingClothes = multi
     ? "use understated neutral supporting clothes only for any part of the body the selected pieces don't already cover"
     : "use understated neutral supporting clothes";
-  const scenario = `Create a professional horizontal 3:2 editorial fashion photograph. Preserve the person's recognizable identity, face, hair, age, ethnicity, skin tone, and body proportions exactly — this must read as the same individual, not a reinterpretation. Preserve every garment's color, material, construction, graphic, logo, and distinctive detail exactly as photographed. Keep ${multi ? "every featured piece" : "the complete featured item"} clearly visible and unobstructed, ${supportingClothes}, realistic anatomy, natural light, authentic fabric drape, a tasteful real-world setting, and leave environmental space around the model. No text, watermark, product mockup, or synthetic appearance.`;
+  const scenario = `Create a professional horizontal 3:2 editorial fashion photograph. Preserve the person's recognizable identity, face, hair, age, ethnicity, skin tone, and body proportions exactly — this must read as the same individual, not a reinterpretation. Preserve every garment's color, material, construction, graphic, logo, and distinctive detail exactly as photographed. Keep ${multi ? "every featured piece" : "the complete featured item"} clearly visible and worn the way that piece is normally worn — a cap sits properly on the head, a garment hangs closed or open as its construction dictates — even where that naturally hides part of it, ${supportingClothes}, realistic anatomy, natural light, authentic fabric drape, a tasteful real-world setting, and leave environmental space around the model. No text, watermark, product mockup, or synthetic appearance.`;
 
   return `Reference images:\n${imageRoles.join("\n")}\n\nRelationship instruction:\n${relationship}\n\nNew scenario:\n${scenario}`;
 }
@@ -753,7 +781,7 @@ function stageState() {
   return { status: "pending", decision: null, attempts: 0, assetUrl: null, failedAssetUrl: null, cleanupPreviewUrl: null, cleanupTolerance: 46, cleanupDiagnostics: null, error: null, prompt: null, updatedAt: null };
 }
 
-export async function openAIEdit({ key, baseUrl, model, prompt, images, size, background, quality }) {
+export async function openAIEdit({ key, baseUrl, model, prompt, images, size, background, quality, inputFidelity }) {
   const form = new FormData();
   form.set("model", model);
   form.set("prompt", prompt);
@@ -761,6 +789,10 @@ export async function openAIEdit({ key, baseUrl, model, prompt, images, size, ba
   form.set("quality", quality || "high");
   form.set("output_format", "png");
   if (background) form.set("background", background);
+  // How closely the output holds to the reference images — the lever for keeping a face and a
+  // garment's construction recognisable rather than reinterpreted. Both routes accept it, so it
+  // must be read here too, not only on the Responses route.
+  if (inputFidelity) form.set("input_fidelity", inputFidelity);
   for (const [index, image] of images.entries()) {
     const normalized = await normalizeImage(image.data);
     form.append("image[]", new Blob([normalized], { type: "image/png" }), image.name?.replace(/\.[^.]+$/, ".png") || `image-${index + 1}.png`);

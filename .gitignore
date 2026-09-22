@@ -17,3 +17,11 @@ public/drapes/
 # poster frames in docs/screenshots/ belong in the repo.
 docs/screenshots/*.gif
 docs/screenshots/*.mov
+
+# JetBrains project files — local IDE state, including machine paths.
+.idea/
+
+# Local model/face reference photos — personal, never committed (the app reads
+# its references from data/, which is ignored above).
+/face-ref.png
+/model-ref.png

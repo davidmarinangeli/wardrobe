@@ -1622,47 +1622,19 @@ button { font: inherit; }
 .primary-button:focus-visible,
 .delete-button:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
 
-.modeled-photo-prompt,
-.variant-add-form {
-  display: grid;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  background: var(--paper-raised);
-  box-shadow: var(--shadow-xs);
-}
-
-.modeled-photo-prompt {
-  gap: 12px;
-  margin-bottom: 26px;
-}
-
-.modeled-photo-prompt.is-processing {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 16px;
-}
-
-.modeled-photo-prompt.is-processing p { margin: 0; color: var(--muted); font-size: 12px; }
-
 .modeled-photo-spinner { flex: none; animation: spin 900ms linear infinite; }
 
 /* ─── Shared spinner keyframe — all spinner classes across the app use this ── */
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.modeled-photo-prompt__title { margin: 0; color: var(--ink-soft); font-size: 13px; font-weight: 500; }
-.modeled-photo-prompt__detail { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
-.modeled-photo-prompt__error { margin: 0; color: var(--error); font-size: 12px; line-height: 1.4; }
-
-.modeled-tier-picker {
+/* Two cards, one choice — how a new way to wear it is made. */
+.variant-method-picker {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
-.modeled-tier-picker--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
-.modeled-tier-picker button {
+.variant-method-picker button {
   display: grid;
   gap: 3px;
   border: 1px solid var(--line);
@@ -1678,40 +1650,24 @@ button { font: inherit; }
     transform var(--dur-press) var(--ease-out);
 }
 
-.modeled-tier-picker button span { font-size: 12px; font-weight: 500; }
-.modeled-tier-picker button small { color: var(--muted); font-size: 10px; line-height: 1.35; }
+.variant-method-picker button span { font-size: 12px; font-weight: 500; }
+.variant-method-picker button small { color: var(--muted); font-size: 10px; line-height: 1.35; }
 
 @media (hover: hover) and (pointer: fine) {
-  .modeled-tier-picker button:hover { border-color: var(--accent-warm); box-shadow: var(--shadow-sm); }
+  .variant-method-picker button:hover { border-color: var(--accent-warm); box-shadow: var(--shadow-sm); }
 }
 
-.modeled-tier-picker button:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
-.modeled-tier-picker button:active { transform: scale(.98); }
+.variant-method-picker button:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
+.variant-method-picker button:active { transform: scale(.98); }
 
-.modeled-tier-picker button.active {
+.variant-method-picker button.active {
   border-color: var(--accent-warm);
   box-shadow: inset 0 0 0 1px var(--accent-warm);
   background: #ffffff;
 }
-.modeled-tier-picker button.active small { color: var(--ink-soft); }
 
-.modeled-tier-picker button:disabled {
-  cursor: not-allowed;
-  opacity: .45;
-  border-color: var(--glass-border);
-  box-shadow: none;
-  transform: none;
-}
-.modeled-tier-picker button:disabled:hover { border-color: var(--glass-border); box-shadow: none; }
+.variant-method-picker button.active small { color: var(--ink-soft); }
 
-.modeled-photo-prompt .primary-button { justify-self: start; }
-
-
-.item-editor {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px 14px;
-}
 
 .viewer-title {
   grid-column: 1 / -1;
@@ -1772,16 +1728,14 @@ button { font: inherit; }
   margin-bottom: 20px;
 }
 
-.field,
-.color-field {
+.field {
   min-width: 0;
   margin: 0;
   border: 0;
   padding: 0;
 }
 
-.field > span,
-.color-field legend {
+.field > span {
   display: block;
   margin-bottom: 8px;
   color: var(--muted);
@@ -1813,9 +1767,6 @@ button { font: inherit; }
   box-shadow: var(--ring-focus);
   outline: none;
 }
-
-.color-field,
-.details-field { grid-column: 1 / -1; }
 
 .colors-editor {
   display: grid;
@@ -2150,9 +2101,6 @@ button { font: inherit; }
   .has-modeled-image .viewer-details.editing { padding: 14px 30px 38px; }
   .viewer-art { flex-basis: min(32vh, 300px); height: min(32vh, 300px); min-height: 210px; }
   .viewer-art.viewer-art-floating { flex-basis: auto; width: 36%; height: 178px; min-height: 0; }
-  .item-editor { grid-template-columns: 1fr; }
-  .color-field,
-  .details-field { grid-column: auto; }
   .colors-editor { grid-template-columns: 1fr; }
   .color-slot + .color-slot {
     border-top: 1px solid var(--line);
@@ -2311,61 +2259,819 @@ button { font: inherit; }
 /* A physical item stays one gallery card; usage modes live in its detail
    sheet. The controls intentionally read like a small segmented shelf so the
    selected mode is obvious on desktop and thumb-friendly on mobile. */
-.variant-picker { border: 0; margin: 24px 0 18px; padding: 0; }
-.variant-picker legend { color: var(--ink-soft); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
-.variant-picker__options { display: grid; gap: 8px; margin-top: 10px; }
-.variant-picker__choice { display: grid; gap: 3px; min-width: 0; text-align: left; background: var(--paper-raised); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; color: var(--ink); cursor: pointer; }
-.variant-picker__choice.active { border-color: var(--accent-warm); box-shadow: 0 0 0 1px var(--accent-warm); }
-.variant-picker__choice small { color: var(--ink-soft); font-size: 12px; }
-.variant-delete {
-  position: relative;
-  isolation: isolate;
+/* ─── Item sheet ─────────────────────────────────────────────────────────────
+   Photo, then name, then ways to wear it, then details. Actions sit on what they
+   act on: generating on the photo, rare and destructive ones behind ⋯, saving in
+   a bar that only exists while there is something to save. */
+
+/* The panel is the rounded shell; only its inner surface scrolls. Keeping the
+   clipping here means the scrollbar and the hero share the shell's corners,
+   while the content keeps the same padding it had when .viewer scrolled. */
+.viewer-overlay .item-sheet {
+  padding: 0;
   overflow: hidden;
-  touch-action: manipulation;
 }
-.variant-delete__content { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 7px; }
-.variant-delete__progress {
+
+.item-sheet__scroll {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  width: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 42px 34px 46px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--wash-3) transparent;
+}
+
+.item-sheet.has-modeled-image > .item-sheet__scroll { padding: 0; }
+
+.item-sheet__scroll::-webkit-scrollbar { width: 8px; }
+.item-sheet__scroll::-webkit-scrollbar-track { background: transparent; margin-block: 12px; }
+.item-sheet__scroll::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: var(--r-full);
+  background: var(--wash-3);
+  background-clip: padding-box;
+}
+.item-sheet__scroll::-webkit-scrollbar-corner { background: transparent; }
+
+.item-sheet .modeled-hero { border-radius: 0; }
+
+@media (max-width: 1180px) {
+  .viewer-overlay .item-sheet:not(.has-modeled-image) > .item-sheet__scroll { padding-inline: 30px; }
+}
+
+@media (max-width: 860px) {
+  .viewer-overlay .item-sheet:not(.has-modeled-image) > .item-sheet__scroll {
+    padding: 24px 22px calc(24px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 520px) {
+  .viewer-overlay .item-sheet:not(.has-modeled-image) > .item-sheet__scroll {
+    padding: max(24px, env(safe-area-inset-top)) 22px max(28px, env(safe-area-inset-bottom));
+  }
+}
+
+/* The cutout's stage. Overflow stays visible: the quality menu opens upward out
+   of the generate button and must not be clipped by the stage's corners. */
+.item-stage {
+  position: relative;
+  flex: 0 0 auto;
+  height: clamp(300px, 46vh, 400px);
+  border-radius: var(--r-lg);
+  background: var(--surface-stage);
+}
+
+.item-stage .viewer-art {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  flex: none;
+  /* The bottom inset leaves the generate button a clear band of stage. */
+  padding: 30px 30px 78px;
+}
+
+/* Where a photo's action sits, on every panel that makes one: centred along
+   the bottom of the media. The slot itself lets pointers through so only the
+   pill or chip inside it takes a tap. */
+.stage-action {
   position: absolute;
-  z-index: 0;
-  inset: 0;
-  background: color-mix(in srgb, var(--error) 18%, transparent);
-  clip-path: inset(0 100% 0 0);
-  pointer-events: none;
-  transition: clip-path var(--dur-pop) var(--ease-out);
-}
-.variant-delete[data-holding="true"] { transform: scale(.97); }
-.variant-delete[data-holding="true"] .variant-delete__progress {
-  clip-path: inset(0 0 0 0);
-  transition: clip-path 2s linear;
-}
-.variant-delete:disabled { opacity: .38; cursor: not-allowed; }
-.variant-picker__choice:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
-.variant-add-form {
-  gap: 14px;
-  margin-top: 12px;
-}
-.variant-add-form.is-processing {
+  right: 0;
+  bottom: 16px;
+  left: 0;
+  z-index: 6;
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 16px;
-}
-.variant-add-form.is-processing p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
-.variant-add-form__composer {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 78px;
-  gap: 16px;
-}
-.variant-add-form__fields { display: grid; min-width: 0; gap: 8px; }
-.variant-add-form input { min-width: 0; }
-.variant-add-form__upload {
-  display: flex;
-  align-items: center;
   justify-content: center;
-  border-left: 1px solid var(--line);
-  padding-left: 16px;
+  pointer-events: none;
 }
-.variant-add-form__submit { justify-self: center; width: min(100%, 250px); }
+
+.stage-action > * { pointer-events: auto; }
+
+/* Above the modeled hero's fade to paper, so it sits on the photo. */
+.modeled-hero .stage-action { bottom: 56px; }
+
+/* The item sheet's hero has its floating cutout in the bottom right. */
+.item-sheet .modeled-hero .stage-action { right: auto; left: 20px; bottom: 64px; }
+
+/* ⋯ and ✕, riding on the photo in both hero treatments. */
+.viewer-toolbar {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 8;
+  display: flex;
+  gap: 8px;
+}
+
+.modeled-hero .viewer-toolbar { top: 20px; right: 20px; }
+
+.viewer-more { position: relative; }
+
+.viewer-toolbar__button {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-full);
+  background: color-mix(in srgb, var(--paper-warm) 82%, transparent);
+  -webkit-backdrop-filter: var(--glass-blur-panel);
+  backdrop-filter: var(--glass-blur-panel);
+  color: var(--ink-soft);
+  box-shadow: var(--glass-edge), var(--shadow-sm);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background var(--dur-pop) var(--ease-out),
+    color var(--dur-pop) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
+}
+
+.viewer-toolbar__button:active { transform: scale(.94); }
+.viewer-toolbar__button:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
+.viewer-toolbar__button[aria-expanded="true"] { background: var(--ink-soft); color: var(--paper-warm); }
+
+/* What is being made, where it will appear — and the glass chip for doing it
+   again. The same surface, so "working" and "redo" read as one family, both
+   quieter than the accent pill that makes the first one. */
+.stage-status,
+.stage-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-full);
+  background: color-mix(in srgb, var(--paper-warm) 88%, transparent);
+  -webkit-backdrop-filter: var(--glass-blur-panel);
+  backdrop-filter: var(--glass-blur-panel);
+  color: var(--ink-soft);
+  box-shadow: var(--shadow-sm);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.stage-chip {
+  min-height: 44px;
+  padding: 0 16px 0 14px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    opacity var(--dur-pop) var(--ease-out) 120ms,
+    background var(--dur-pop) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
+}
+
+.stage-chip:active { transform: scale(.97); }
+.stage-chip:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
+.stage-chip:disabled { opacity: .55; cursor: not-allowed; }
+
+@media (hover: hover) and (pointer: fine) {
+  .stage-chip:hover { background: var(--paper-raised); }
+}
+
+.stage-error { margin: 12px 0 0; color: var(--error); font-size: 12px; line-height: 1.4; }
+
+/* ─── Generate: one action, its quality behind a caret ─── */
+.generate-button { position: relative; display: inline-flex; }
+.generate-button--block { display: flex; width: 100%; }
+
+.generate-button__pill {
+  display: flex;
+  align-items: stretch;
+  min-height: 44px;
+  border: 1px solid var(--accent);
+  border-radius: var(--r-full);
+  background: var(--accent);
+  color: var(--paper);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.generate-button--block .generate-button__pill { flex: 1; min-height: 48px; }
+
+.generate-button__main,
+.generate-button__tier {
+  display: flex;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background var(--dur-pop) var(--ease-out);
+}
+
+.generate-button__main { justify-content: center; gap: 8px; padding: 0 14px 0 16px; font-size: 13px; font-weight: 500; white-space: nowrap; }
+.generate-button--block .generate-button__main { flex: 1; }
+.generate-button__tier { gap: 5px; padding: 0 13px 0 12px; color: color-mix(in srgb, var(--paper) 80%, transparent); font-size: 12px; }
+.generate-button__tier[aria-expanded="true"] { background: color-mix(in srgb, var(--paper) 14%, transparent); color: var(--paper); }
+.generate-button__main:active:not(:disabled),
+.generate-button__tier:active:not(:disabled) { background: color-mix(in srgb, var(--paper) 10%, transparent); }
+.generate-button__main:disabled,
+.generate-button__tier:disabled { opacity: .5; cursor: not-allowed; }
+.generate-button__main:focus-visible,
+.generate-button__tier:focus-visible { outline: 2px solid var(--paper); outline-offset: -5px; }
+.generate-button__divider { width: 1px; margin: 11px 0; background: color-mix(in srgb, var(--paper) 24%, transparent); }
+
+/* The two popovers share one look: raised paper, a hairline, the large shadow. */
+.tier-menu,
+.sheet-menu {
+  position: absolute;
+  z-index: 9;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--paper-raised);
+  box-shadow: var(--shadow-lg);
+  animation: popover-in var(--dur-pop) var(--ease-out);
+}
+
+.tier-menu {
+  bottom: calc(100% + 8px);
+  left: 50%;
+  width: min(300px, calc(100vw - 40px));
+  transform-origin: bottom center;
+  translate: -50% 0;
+}
+
+.generate-button--block .tier-menu { left: 0; right: 0; width: auto; translate: none; }
+
+.tier-menu__title,
+.sheet-menu__label {
+  margin: 0;
+  padding: 8px 10px 4px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 450;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.tier-menu__option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 18px;
+  align-items: center;
+  column-gap: 12px;
+  min-height: 56px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-soft);
+  text-align: left;
+  cursor: pointer;
+}
+
+.tier-menu__option[aria-checked="true"] { background: var(--wash-1); }
+.tier-menu__option:disabled { opacity: .5; cursor: not-allowed; }
+.tier-menu__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tier-menu__text > span { color: var(--ink); font-size: 13px; font-weight: 500; }
+.tier-menu__text small { color: var(--muted); font-size: 11px; line-height: 1.35; }
+.tier-menu__price { font-size: 12px; font-variant-numeric: tabular-nums; }
+.tier-menu__check { display: grid; place-items: center; color: var(--accent-warm); }
+.tier-menu__foot { margin: 0; padding: 8px 10px 6px; color: var(--muted); font-size: 10.5px; line-height: 1.4; }
+
+.sheet-menu {
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(252px, calc(100vw - 48px));
+  transform-origin: top right;
+}
+
+.sheet-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-pop) var(--ease-out), color var(--dur-pop) var(--ease-out);
+}
+
+.sheet-menu__item svg { flex: none; color: var(--muted); }
+.sheet-menu__item.is-danger,
+.sheet-menu__item.is-danger svg { color: var(--error); }
+.sheet-menu__item.is-confirming,
+.sheet-menu__item.is-confirming svg { background: var(--error); color: var(--paper); }
+.sheet-menu__item:disabled { opacity: .6; cursor: progress; }
+.sheet-menu__divider { height: 1px; margin: 6px 4px; background: var(--wash-2); }
+
+.tier-menu__option:focus-visible,
+.sheet-menu__item:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: -2px; }
+
+@media (hover: hover) and (pointer: fine) {
+  .tier-menu__option:hover:not(:disabled) { background: var(--wash-2); }
+  .sheet-menu__item:hover:not(.is-confirming) { background: var(--wash-1); }
+}
+
+@keyframes popover-in {
+  from { opacity: 0; scale: .96; }
+}
+
+/* ─── Name and its line ─── */
+.item-heading { display: grid; gap: 2px; margin-top: 18px; }
+/* The global .viewer-title margin spaces a title from a grid of fields; here
+   the meta line belongs to the title, so it sits right under it. */
+.item-heading .viewer-title { min-height: 44px; margin-bottom: 0; }
+/* No hover on a phone, so the rename affordance can't wait for one. */
+.item-heading .viewer-title svg { opacity: .6; }
+.item-meta { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.4; }
+
+/* ─── Refine: a composer on the photo ───
+   Another go at a model photo is described on the photo it changes, not in a
+   card further down the sheet. The composer grows out of what opened it: its
+   glass surface starts clipped to that chip's footprint —
+   measured into --from-* when it opens — and widens to the full composer,
+   while the contents arrive once the surface has nearly landed. Closing runs
+   the same path back into the chip.
+
+   Only the surface is clipped, never the composer: the quality menu opens
+   upward out of it and must never be cut by a clip mid-animation or after. */
+.refine-composer {
+  --from-top: calc(100% - 44px);
+  --from-right: calc(50% - 70px);
+  --from-bottom: 0px;
+  --from-left: calc(50% - 70px);
+  --from-radius: 22px;
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  left: 14px;
+  z-index: 7;
+  visibility: hidden;
+  transition: visibility 0s linear var(--dur-pop);
+}
+
+.refine-composer[data-open] {
+  visibility: visible;
+  transition: visibility 0s;
+}
+
+.refine-composer__surface {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--paper-warm) 90%, transparent);
+  -webkit-backdrop-filter: var(--glass-blur-panel);
+  backdrop-filter: var(--glass-blur-panel);
+  box-shadow: var(--glass-edge), var(--shadow-md);
+  clip-path: inset(var(--from-top) var(--from-right) var(--from-bottom) var(--from-left) round var(--from-radius));
+  opacity: 0;
+  transition:
+    clip-path var(--dur-pop) var(--ease-out),
+    opacity var(--dur-pop) var(--ease-out);
+}
+
+.refine-composer[data-open] .refine-composer__surface {
+  /* 16px of room past the edge, so the soft shadow is not shaved off. */
+  clip-path: inset(-16px round calc(var(--r-lg) + 16px));
+  opacity: 1;
+  transition:
+    clip-path var(--dur-panel) var(--ease-out),
+    opacity var(--dur-press) var(--ease-out);
+}
+
+/* In after the surface has all but landed, out before it starts folding. */
+.refine-composer__body {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 10px;
+  padding: 10px 12px 12px 14px;
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity var(--dur-press) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
+}
+
+.refine-composer[data-open] .refine-composer__body {
+  opacity: 1;
+  transform: none;
+  transition-duration: var(--dur-pop);
+  transition-delay: 110ms;
+}
+
+.refine-composer__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.refine-composer__label { color: var(--ink); font-size: 13px; font-weight: 500; letter-spacing: var(--track-body); }
+
+/* 44px to the finger, a quiet 30px circle to the eye. */
+.refine-composer__close {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: -6px -8px -6px 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-full);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.refine-composer__close::before {
+  content: "";
+  position: absolute;
+  inset: 7px;
+  border-radius: var(--r-full);
+  background: var(--wash-1);
+  transition: background var(--dur-pop) var(--ease-out);
+}
+
+.refine-composer__close svg { position: relative; }
+.refine-composer__close:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: -4px; }
+
+@media (hover: hover) and (pointer: fine) {
+  .refine-composer__close:hover::before { background: var(--wash-2); }
+  .refine-composer__close:hover { color: var(--ink-soft); }
+}
+
+.refine-composer__input {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--paper-raised);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 13px;
+  transition: border-color var(--dur-pop) var(--ease-out), box-shadow var(--dur-pop) var(--ease-out);
+}
+
+.refine-composer__input:focus { outline: none; border-color: var(--accent-warm); box-shadow: var(--ring-focus); }
+.refine-composer__input:disabled { opacity: .6; }
+
+/* The chip hands over to the composer at once, and comes back only once the
+   composer has mostly folded into it. */
+.stage-chip.is-concealed {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-press) var(--ease-out);
+}
+
+/* Fewer and gentler: it fades in place, nothing grows or rises. */
+@media (prefers-reduced-motion: reduce) {
+  .refine-composer__surface,
+  .refine-composer[data-open] .refine-composer__surface {
+    clip-path: none;
+    transition: opacity var(--dur-pop) var(--ease-out);
+  }
+
+  .refine-composer__body,
+  .refine-composer[data-open] .refine-composer__body {
+    transform: none;
+    transition: opacity var(--dur-pop) var(--ease-out);
+    transition-delay: 0ms;
+  }
+}
+
+/* ─── Ways to wear it ─── */
+.variant-strip { margin-top: 22px; }
+
+.variant-strip__label {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 450;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.variant-strip__row {
+  display: flex;
+  gap: 10px;
+  /* Room for the selected ring, which sits outside the tile. */
+  margin: -2px;
+  padding: 2px 2px 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.variant-strip__row::-webkit-scrollbar { display: none; }
+
+.variant-strip__tile {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 64px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+span.variant-strip__tile { cursor: default; }
+
+.variant-strip__art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-stage);
+  color: var(--muted);
+  overflow: hidden;
+  transition:
+    border-color var(--dur-pop) var(--ease-out),
+    box-shadow var(--dur-pop) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
+}
+
+.variant-strip__art img { width: 100%; height: 100%; padding: 7px; object-fit: contain; }
+button.variant-strip__tile:active .variant-strip__art { transform: scale(.96); }
+.variant-strip__tile.active .variant-strip__art { border-color: var(--accent-warm); box-shadow: 0 0 0 1px var(--accent-warm); }
+.variant-strip__tile.active .variant-strip__name { color: var(--ink); font-weight: 500; }
+.variant-strip__tile:focus-visible { outline: none; }
+.variant-strip__tile:focus-visible .variant-strip__art { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
+.variant-strip__cover { position: absolute; top: 4px; left: 4px; color: var(--accent-warm); }
+
+.variant-strip__name {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 1.25;
+  text-align: center;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.variant-strip__add { color: var(--muted); }
+.variant-strip__add .variant-strip__art { border: 1.5px dashed color-mix(in srgb, var(--line) 60%, var(--muted)); background: transparent; }
+.variant-strip__status { margin: 10px 0 0; }
+
+/* ─── Details, as rows you tap to edit ─── */
+.detail-rows { margin-top: 22px; border-top: 1px solid var(--line); }
+
+.detail-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr) 16px;
+  align-items: center;
+  column-gap: 8px;
+  width: 100%;
+  min-height: 52px;
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 1px solid var(--wash-2);
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.detail-row:focus-visible,
+.detail-row:has(.detail-row__select:focus-visible) { outline: 2px solid var(--accent-warm); outline-offset: 2px; border-radius: var(--r-xs); }
+
+.detail-row__label { color: var(--muted); font-size: 10px; font-weight: 450; letter-spacing: .05em; text-transform: uppercase; }
+.detail-row__value { min-width: 0; font-size: 13px; }
+.detail-row__muted { color: var(--muted); font-size: 12px; }
+.detail-row__caret { color: var(--muted); transition: transform var(--dur-pop) var(--ease-out), color var(--dur-pop) var(--ease-out); }
+.detail-row[aria-expanded="true"] .detail-row__caret { transform: rotate(90deg); color: var(--ink-soft); }
+
+@media (hover: hover) and (pointer: fine) {
+  .detail-row:hover .detail-row__caret { color: var(--ink-soft); }
+}
+
+/* The select fills the row so the whole row opens the native picker. */
+.detail-row__select {
+  width: 100%;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.detail-row__select:focus { outline: none; }
+.detail-row__swatches { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.detail-swatch { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.detail-swatch__dot { width: 16px; height: 16px; border-radius: var(--r-full); box-shadow: inset 0 0 0 1px var(--wash-3); }
+.detail-row__tags { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.detail-row__tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-full);
+  background: var(--wash-1);
+  font-size: 11px;
+}
+
+.detail-row__editor { padding: 16px 0 20px; border-bottom: 1px solid var(--wash-2); }
+
+/* ─── The save bar: only while there is something to save ─── */
+.save-bar {
+  position: sticky;
+  bottom: 12px;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 60px;
+  margin-top: 20px;
+  padding: 8px 8px 8px 18px;
+  border: 1px solid var(--glass-dark-border);
+  border-radius: var(--r-lg);
+  background: var(--glass-dark-solid);
+  color: var(--glass-dark-ink);
+  box-shadow: var(--shadow-lg);
+  animation: save-bar-in var(--dur-panel) var(--ease-out);
+}
+
+.save-bar__label { flex: 1; min-width: 0; font-size: 13px; font-weight: 500; }
+
+.save-bar__discard,
+.save-bar__save {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  border-radius: var(--r-full);
+  font-size: 12px;
+  cursor: pointer;
+  transition: transform var(--dur-press) var(--ease-out);
+}
+
+.save-bar__discard { padding: 0 14px; border: 1px solid var(--glass-dark-border); background: transparent; color: var(--glass-dark-ink); }
+.save-bar__save { padding: 0 16px; border: 0; background: var(--paper); color: var(--ink); font-weight: 500; }
+.save-bar__discard:active,
+.save-bar__save:active { transform: scale(.97); }
+.save-bar__discard:focus-visible,
+.save-bar__save:focus-visible { outline: 2px solid var(--glass-dark-ink); outline-offset: 2px; }
+
+@keyframes save-bar-in {
+  from { opacity: 0; transform: translateY(12px); }
+}
+
+/* ─── Add a way to wear it: its own sheet ─── */
+.add-variant-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.add-variant-scrim { position: absolute; inset: 0; background: var(--scrim); animation: scrim-in var(--dur-panel) var(--ease-out); }
+
+.add-variant-sheet {
+  position: relative;
+  width: 100%;
+  max-height: 92dvh;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 12px 20px calc(24px + env(safe-area-inset-bottom));
+  overflow-y: auto;
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  background: var(--paper-warm);
+  box-shadow: var(--shadow-lg);
+  animation: add-sheet-in var(--dur-panel) var(--ease-drawer);
+}
+
+.add-variant-sheet:focus { outline: none; }
+.add-variant-sheet__grabber { width: 36px; height: 4px; margin: 0 auto; border-radius: var(--r-full); background: var(--line); }
+.add-variant-sheet__head { display: flex; align-items: flex-start; gap: 12px; margin-top: -6px; }
+.add-variant-sheet__head > div { flex: 1; min-width: 0; padding-top: 8px; }
+.add-variant-sheet__head h2 { margin: 0; color: var(--ink); font-size: 17px; font-weight: 500; letter-spacing: -.01em; }
+.add-variant-sheet__head p { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
+
+.add-variant-sheet__close {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-full);
+  background: var(--paper-raised);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.add-variant-sheet__close:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
+
+.add-variant-sheet .variant-method-picker button { gap: 6px; padding: 12px; }
+.add-variant-sheet .variant-method-picker button svg { color: var(--muted); }
+.add-variant-sheet .variant-method-picker button.active svg { color: var(--accent-warm); }
+
+/* Also used by the regenerate panel's note. */
+.sheet-field { display: grid; gap: 6px; }
+.sheet-field > span { color: var(--muted); font-size: 10px; font-weight: 450; letter-spacing: .05em; text-transform: uppercase; }
+.sheet-field > span em { font-style: normal; letter-spacing: 0; text-transform: none; }
+.sheet-field > small { color: var(--muted); font-size: 11px; line-height: 1.4; }
+
+.sheet-field input {
+  min-width: 0;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--paper-raised);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 13px;
+}
+
+.sheet-field input:focus { outline: none; border-color: var(--accent-warm); box-shadow: var(--ring-focus); }
+
+.add-variant-sheet__photo .variant-photo-upload {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.variant-photo-upload__text {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.add-variant-sheet__cost { margin: 0; color: var(--muted); font-size: 11.5px; line-height: 1.45; }
+
+@keyframes add-sheet-in {
+  from { transform: translateY(100%); }
+}
+
+@keyframes scrim-in {
+  from { opacity: 0; }
+}
+
+/* On a desktop the sheet becomes a dialog: a bottom sheet across a 1400px
+   window would be a strip of form stretched past any reading width. */
+@media (min-width: 861px) {
+  .add-variant-layer { align-items: center; }
+  .add-variant-sheet {
+    width: min(440px, calc(100vw - 48px));
+    padding-bottom: 24px;
+    border-radius: var(--r-xl);
+    animation-name: popover-in;
+  }
+  .add-variant-sheet__grabber { display: none; }
+  .add-variant-sheet__head { margin-top: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tier-menu,
+  .sheet-menu,
+  .save-bar,
+  .add-variant-sheet,
+  .add-variant-scrim { animation: none; }
+}
+
 .variant-photo-upload {
   display: grid;
   place-items: center;
@@ -2398,7 +3104,31 @@ button { font: inherit; }
 }
 .variant-photo-upload.has-photo { border-color: var(--accent-warm); }
 .variant-notice { margin: 12px 0 0; color: var(--success); font-size: 11px; line-height: 1.4; }
-.gallery-item__variants { color: var(--ink-soft); }
+/* The peek gesture. `pan-y` hands vertical scrolling back to the page while
+   keeping horizontal movement for the peek — without it a swipe across a card
+   either scrolls the grid or does nothing, depending on the browser. Only
+   applied to cards that actually have something to peek at, so a single-variant
+   card keeps the browser's default touch behaviour. */
+.gallery-item__art[data-peekable] { touch-action: pan-y; }
+
+/* Same vocabulary as .onboarding-dots — short bars, --line at rest, --ink when
+   current — at the smaller scale a card can carry. */
+.gallery-item__peek-dots {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  padding: 7px 0 1px;
+}
+
+.gallery-item__peek-dot {
+  width: 14px;
+  height: 3px;
+  border-radius: var(--r-xs);
+  background: var(--line);
+  transition: background var(--dur-pop) var(--ease-out);
+}
+
+.gallery-item__peek-dot.is-active { background: var(--ink-soft); }
 
 .variant-photo-missing {
   position: absolute;
@@ -2417,11 +3147,4 @@ button { font: inherit; }
   text-align: center;
   white-space: normal;
   pointer-events: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .variant-delete,
-  .variant-delete__progress { transition: none; }
-  .variant-delete[data-holding="true"] { transform: none; }
-  .variant-delete[data-holding="true"] .variant-delete__progress { clip-path: inset(0 0 0 0); }
 }
