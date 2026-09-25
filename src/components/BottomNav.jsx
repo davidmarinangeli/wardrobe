@@ -1,10 +1,10 @@
 import { useLayoutEffect, useRef } from "react";
-import { TShirt, CoatHanger, Images } from "@phosphor-icons/react";
+import { TShirt, SquaresFour, CoatHanger, Images } from "@phosphor-icons/react";
 import { useGlassSurface } from "../hooks/useGlassSurface.js";
 import { GlassFilter } from "./GlassFilter.jsx";
 
 /**
- * The app's three destinations, as a floating glass bar on phones.
+ * The app's four destinations, as a floating glass bar on phones.
  *
  * Navigation only. No action lives in here: an "add" control that adds a
  * garment on Wardrobe, an outfit on Outfits and a pin on Inspo is three
@@ -17,12 +17,13 @@ import { GlassFilter } from "./GlassFilter.jsx";
  * keeps its place there.
  *
  * @param {object} props
- * @param {"wardrobe"|"outfits"|"inspo"} props.view
+ * @param {"wardrobe"|"overview"|"outfits"|"inspo"} props.view
  * @param {(view: string) => void} props.onSelect
  * @param {{current: HTMLElement|null}} [props.navRef]  For useChromeScroll.
  */
 const VIEWS = [
   { id: "wardrobe", label: "Wardrobe", Icon: TShirt },
+  { id: "overview", label: "Overview", Icon: SquaresFour },
   { id: "outfits", label: "Outfits", Icon: CoatHanger },
   { id: "inspo", label: "Inspo", Icon: Images },
 ];
@@ -79,7 +80,7 @@ export function BottomNav({ view, onSelect, navRef: externalRef }) {
         }}
         style={glass.style}
         data-compact="false"
-        aria-label="Switch between wardrobe, outfits, and inspo"
+        aria-label="Switch between wardrobe, overview, outfits, and inspo"
       >
         <span className="bottom-nav__pill" ref={pillRef} aria-hidden="true" />
         {VIEWS.map(({ id, label, Icon }) => (

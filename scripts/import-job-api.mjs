@@ -7,6 +7,7 @@ import { GARMENT_DISAMBIGUATION_PROSE, GARMENT_PART_ID_SET, GARMENT_PART_IDS, GA
 import { MIRROR_MATERIALS, OUTFIT_REGISTERS } from "../shared/style-catalogue.mjs";
 import { NO_JUDGMENT_PROMPT } from "../shared/prompt-guardrails.mjs";
 import { normalizeItemV2 } from "../shared/wardrobe-model.mjs";
+import { mutateLibrary } from "../shared/wardrobe-library.mjs";
 
 const API_ROOT = "/api/import/jobs";
 const ASSET_ROOT = "/api/import/assets";
@@ -1373,31 +1374,32 @@ export function wardrobeImportApi(options = {}) {
       : `garment-${job.stages.garment.attempts}.png`;
     await copyFile(path.join(jobsDir, job.id, garmentSource), path.join(libraryAssetDir, garmentName));
     const metadata = job.metadata || {};
-    const records = await loadImported();
-    const existing = records.find((record) => record.id === id);
-    const record = {
-      id,
-      name: metadata.name || "New piece",
-      part: metadata.part || "upperbody",
-      color: metadata.color || "#d8d0c2",
-      secondaryColor: metadata.secondaryColor || null,
-      palette: [metadata.color, metadata.secondaryColor].filter(Boolean),
-      tags: Array.isArray(metadata.tags) ? metadata.tags : [],
-      image: `${LIBRARY_ASSET_ROOT}/${garmentName}`,
-      thumbnail: `${LIBRARY_ASSET_ROOT}/${garmentName}`,
-      modeledImage: existing?.modeledImage || null,
-      modeledStatus: existing?.modeledStatus || null,
-      modeledError: existing?.modeledError || null,
-      modeledTier: existing?.modeledTier || null,
-      importJobId: job.id,
-      // When the piece entered the wardrobe. Without it there is no honest way
-      // to tell "never worn" from "only just arrived", so the dead-stock signal
-      // stays silent for items that predate this field rather than guessing.
-      createdAt: existing?.createdAt || new Date().toISOString(),
-    };
-    const next = [...records.filter((item) => item.id !== id), normalizeItemV2(record)];
-    await atomicJson(importedFile, next);
-    return record;
+    let savedRecord;
+    await mutateLibrary(dataDir, (records) => {
+      const existing = records.find((record) => record.id === id);
+      const record = {
+        id,
+        name: metadata.name || "New piece",
+        part: metadata.part || "upperbody",
+        color: metadata.color || "#d8d0c2",
+        secondaryColor: metadata.secondaryColor || null,
+        palette: [metadata.color, metadata.secondaryColor].filter(Boolean),
+        // Preserve user-managed item tags when an idempotent import is applied
+        // again, including a bulk tag edit that completed during generation.
+        tags: existing?.tags || (Array.isArray(metadata.tags) ? metadata.tags : []),
+        image: `${LIBRARY_ASSET_ROOT}/${garmentName}`,
+        thumbnail: `${LIBRARY_ASSET_ROOT}/${garmentName}`,
+        modeledImage: existing?.modeledImage || null,
+        modeledStatus: existing?.modeledStatus || null,
+        modeledError: existing?.modeledError || null,
+        modeledTier: existing?.modeledTier || null,
+        importJobId: job.id,
+        createdAt: existing?.createdAt || new Date().toISOString(),
+      };
+      savedRecord = normalizeItemV2(record);
+      return [...records.filter((item) => item.id !== id), savedRecord];
+    });
+    return savedRecord;
   }
 
   async function generateModeledForItem(id, { tier, prompt }) {
@@ -1454,13 +1456,11 @@ export function wardrobeImportApi(options = {}) {
         }
         const modeledName = `${id}-modeled.png`;
         await writeFile(path.join(libraryAssetDir, modeledName), bytes);
-        const records = await loadImported();
-        await atomicJson(importedFile, records.map((record) => record.id === id
+        await mutateLibrary(dataDir, (records) => records.map((record) => record.id === id
           ? { ...record, modeledImage: `${LIBRARY_ASSET_ROOT}/${modeledName}`, modeledStatus: null, modeledError: null, modeledTier: tier }
           : record));
       } catch (error) {
-        const records = await loadImported();
-        await atomicJson(importedFile, records.map((record) => record.id === id
+        await mutateLibrary(dataDir, (records) => records.map((record) => record.id === id
           ? { ...record, modeledStatus: "error", modeledError: error.message }
           : record));
       }
@@ -1576,31 +1576,26 @@ export function wardrobeImportApi(options = {}) {
         if (!ITEM_STATUSES.has(input.status)) {
           return json(res, 400, { error: `status must be one of: ${[...ITEM_STATUSES].join(", ")}` });
         }
-        const records = await loadImported();
-        const index = records.findIndex((record) => record.id === id);
-        if (index < 0) return json(res, 404, { error: "Imported wardrobe item not found" });
-
-        // "active" is the absence of a decision, so it clears the fields rather
-        // than storing the string — an item that was never triaged and one that
-        // was triaged back to active are the same item.
-        const { status: _drop, statusAt: _dropAt, ...rest } = records[index];
-        const updated = input.status === "active"
-          ? rest
-          : { ...rest, status: input.status, statusAt: new Date().toISOString() };
-
-        const next = [...records];
-        next[index] = updated;
-        await atomicJson(importedFile, next);
+        let updated;
+        await mutateLibrary(dataDir, (records) => {
+          const current = records.find((record) => record.id === id);
+          if (!current) throw Object.assign(new Error("Imported wardrobe item not found"), { status: 404 });
+          // "active" is the absence of a decision, so it clears the fields rather
+          // than storing the string.
+          const { status: _drop, statusAt: _dropAt, ...rest } = current;
+          updated = input.status === "active" ? rest : { ...rest, status: input.status, statusAt: new Date().toISOString() };
+          return records.map((record) => record.id === id ? updated : record);
+        });
         return json(res, 200, updated);
       }
 
       const wardrobeDeleteMatch = url.pathname.match(/^\/api\/import\/wardrobe\/(import-[a-f0-9-]{36})$/i);
       if (wardrobeDeleteMatch && req.method === "DELETE") {
         const id = wardrobeDeleteMatch[1];
-        const records = await loadImported();
-        const next = records.filter((record) => record.id !== id);
-        if (next.length === records.length) return json(res, 404, { error: "Imported wardrobe item not found" });
-        await atomicJson(importedFile, next);
+        await mutateLibrary(dataDir, (records) => {
+          if (!records.some((record) => record.id === id)) throw Object.assign(new Error("Imported wardrobe item not found"), { status: 404 });
+          return records.filter((record) => record.id !== id);
+        });
         await Promise.all([
           rm(path.join(libraryAssetDir, `${id}-garment.png`), { force: true }),
           rm(path.join(libraryAssetDir, `${id}-modeled.png`), { force: true }),
@@ -1629,8 +1624,13 @@ export function wardrobeImportApi(options = {}) {
           return json(res, 400, { error: "Premium quality needs PROD mode — the free TEST key has no billing enabled for Nano Banana 2. Switch to PROD to generate this." });
         }
         const prompt = typeof input.prompt === "string" ? input.prompt.trim().slice(0, 1200) : "";
-        const updated = { ...record, modeledStatus: "processing", modeledError: null, modeledTier: tier };
-        await atomicJson(importedFile, records.map((item) => item.id === id ? updated : item));
+        let updated;
+        await mutateLibrary(dataDir, (currentRecords) => {
+          const current = currentRecords.find((item) => item.id === id);
+          if (!current) throw Object.assign(new Error("Imported wardrobe item not found"), { status: 404 });
+          updated = { ...current, modeledStatus: "processing", modeledError: null, modeledTier: tier };
+          return currentRecords.map((item) => item.id === id ? updated : item);
+        });
         void generateModeledForItem(id, { tier, prompt });
         return json(res, 202, updated);
       }

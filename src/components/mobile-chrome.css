@@ -151,6 +151,15 @@
     pointer-events: none;
   }
 
+  /* Selection gets the space directly above the nav; the global tools return
+     as soon as the selection is cleared or the user leaves Overview. */
+  .app-shell .app-top-bar .top-actions[data-overview-selection="true"] {
+    transform: translateY(calc(100% + 26px));
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
   /* With room to sit in, the actions get their labels back. The 860px block in
      styles.css collapses them to 44px icon-only circles purely because the top
      bar had no space — that compensation is obsolete down here, and an unlabelled
@@ -180,7 +189,7 @@
     left: 12px;
     z-index: 30;
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     align-items: center;
     padding: 5px 6px;
     border-radius: var(--r-full);
@@ -209,7 +218,7 @@
   }
 
   /* Compact: past the threshold the labels collapse and the bar contracts on
-     both axes, leaving three centred icons. The horizontal inset is animated
+     both axes, leaving four centred icons. The horizontal inset is animated
      rather than transformed — scaleX would squash the icons — which makes this
      the one place here that animates layout, once per threshold crossing. */
   .bottom-nav[data-compact="true"] {
