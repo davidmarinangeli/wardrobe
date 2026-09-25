@@ -78,7 +78,7 @@ const clearScrim = (overlay) => {
  * @param {() => void} options.onDismiss
  * @returns {{dragHandlers: object}}
  */
-export function useSheetGesture({ sheetRef, overlayRef, scrollRef, enabled = true, onDismiss }) {
+export function useSheetGesture({ sheetRef, overlayRef, scrollRef, enabled = true, handleOnly = false, onDismiss }) {
   const gesture = useRef(null);
   const running = useRef(null);
   const committed = useRef(false);
@@ -237,6 +237,7 @@ export function useSheetGesture({ sheetRef, overlayRef, scrollRef, enabled = tru
       // with a data attribute rather than a class so the hook owes nothing to
       // anyone's stylesheet.
       const fromHandle = !!event.target.closest?.("[data-sheet-grab]");
+      if (handleOnly && !fromHandle) return;
       gesture.current = {
         id: event.pointerId,
         x: event.clientX,

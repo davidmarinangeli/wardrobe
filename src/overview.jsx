@@ -3,13 +3,18 @@ import { Check, MagnifyingGlass, Plus, SpinnerGap, X } from "@phosphor-icons/rea
 import { api } from "./api.js";
 import { GalleryItem } from "./item-editor.jsx";
 import { PageStatus } from "./components/PageStatus.jsx";
+import { CheatSheetsArea } from "./cheat-sheets.jsx";
 import { buildOverviewIndex, buildOverviewSections, commonOverviewTags, filterOverviewIndex, overviewSuggestions } from "../shared/overview-index.mjs";
+import { initialVariantForPiece } from "../shared/wardrobe-model.mjs";
 import "./overview.css";
 
-function TagEditor({ selected, tags, suggestions, inputRef, inputId, listId, disabled, saving, error, status, value, onValue, onSubmit, onRemove }) {
+function TagEditor({ selected, tags, suggestions, inputRef, inputId, listId, disabled, saving, error, status, value, onValue, onSubmit, onRemove, onCreateSheet }) {
   const selectedCount = selected.length;
   return (
     <div className="overview-selection__body">
+      <button type="button" className="overview-selection__create-sheet" onClick={onCreateSheet} disabled={!selectedCount}>
+        <Plus size={16} weight="bold" aria-hidden="true" /> Create cheat sheet
+      </button>
       <div className="overview-selection__summary">
         <strong>{selectedCount} selected</strong>
         <span>{tags.length} {tags.length === 1 ? "tag" : "tags"} in common</span>
@@ -61,7 +66,10 @@ export function Overview({ items, loading = false, error = "", selectedItemId = 
   const [saveError, setSaveError] = useState("");
   const [saveStatus, setSaveStatus] = useState("");
   const [mobileExpanded, setMobileExpanded] = useState(false);
+  const [sectionTab, setSectionTab] = useState("pieces");
+  const [createSheetRequest, setCreateSheetRequest] = useState(null);
   const mobileToggleRef = useRef(null);
+  const cheatSheetTriggerRef = useRef(null);
   const mobileInputRef = useRef(null);
   const mobileGesture = useRef(null);
   const suppressToggleClick = useRef(false);
@@ -152,6 +160,14 @@ export function Overview({ items, loading = false, error = "", selectedItemId = 
   const selectSection = (section) => addSelection(section.entries);
   const selectedCount = selectedIds.size;
 
+  const createCheatSheet = (event) => {
+    cheatSheetTriggerRef.current = event?.currentTarget || null;
+    setCreateSheetRequest({
+      id: crypto.randomUUID(),
+      pieces: selected.map(({ item }) => ({ itemId: item.id, variantId: initialVariantForPiece(item) })),
+    });
+  };
+
   const panel = (mobile = false) => (
     <TagEditor
       selected={selected}
@@ -168,6 +184,7 @@ export function Overview({ items, loading = false, error = "", selectedItemId = 
       onValue={setTagDraft}
       onSubmit={submitTag}
       onRemove={(tag) => void applyTagOperation({ removeTags: [tag.toLocaleLowerCase("en")] })}
+      onCreateSheet={createCheatSheet}
     />
   );
 
@@ -176,6 +193,11 @@ export function Overview({ items, loading = false, error = "", selectedItemId = 
     <main className="overview-page">
       <header className="overview-header">
         <h1 className="overview-title">Overview</h1>
+        <div className="overview-subnav" role="tablist" aria-label="Overview section">
+          <button id="overview-pieces-tab" type="button" role="tab" aria-controls="overview-content" aria-selected={sectionTab === "pieces"} className={sectionTab === "pieces" ? "is-active" : ""} onClick={() => setSectionTab("pieces")}>Pieces</button>
+          <button id="overview-sheets-tab" type="button" role="tab" aria-controls="overview-content" aria-selected={sectionTab === "sheets"} className={sectionTab === "sheets" ? "is-active" : ""} onClick={() => setSectionTab("sheets")}>Cheat sheets</button>
+        </div>
+        {sectionTab === "pieces" && <>
         <div className="overview-search" role="search">
           <MagnifyingGlass size={19} weight="regular" aria-hidden="true" />
           <label className="sr-only" htmlFor="overview-search-input">Search your wardrobe</label>
@@ -207,10 +229,12 @@ export function Overview({ items, loading = false, error = "", selectedItemId = 
           </div>
         )}
         {hiddenSelectedCount > 0 && <p className="overview-hidden-selection" aria-live="polite">{hiddenSelectedCount} selected {hiddenSelectedCount === 1 ? "piece is" : "pieces are"} hidden by current filters.</p>}
+        </>}
       </header>
 
-      <div className="overview-layout">
+      <div id="overview-content" role="tabpanel" aria-labelledby={sectionTab === "sheets" ? "overview-sheets-tab" : "overview-pieces-tab"} className={`overview-layout${sectionTab === "sheets" ? " is-cheat-sheets" : ""}`}>
         <div className="overview-main">
+          {sectionTab !== "sheets" && <>
           <PageStatus loading={loading} error={error} empty={!items.length} emptyMessage="Your active wardrobe is empty." noun="wardrobe" />
           {items.length > 0 && results.length === 0 && (
             <div className="overview-no-results">
@@ -280,12 +304,14 @@ export function Overview({ items, loading = false, error = "", selectedItemId = 
               </div>
             </section>
           ))}
+          </>}
+          <CheatSheetsArea items={items} active={sectionTab === "sheets"} createRequest={createSheetRequest} returnFocusRef={cheatSheetTriggerRef} onSaved={() => setSectionTab("sheets")} />
         </div>
 
-        {selectedCount > 0 && (
-          <aside className="overview-selection overview-selection--desktop" aria-label="Manage selected item tags">
+        {sectionTab === "pieces" && selectedCount > 0 && (
+          <aside className="overview-selection overview-selection--desktop" aria-label="Selected pieces and tags">
             <div className="overview-selection__header">
-              <div><span className="overview-selection__eyebrow">Selection</span><h2>Manage tags</h2></div>
+              <div><span className="overview-selection__eyebrow">Overview</span><h2>Selection</h2></div>
               <button type="button" aria-label="Clear selection" onClick={() => setSelectedIds(new Set())}><X size={17} aria-hidden="true" /></button>
             </div>
             {hiddenSelectedCount > 0 && <p className="overview-selection__hidden">{hiddenSelectedCount} selected {hiddenSelectedCount === 1 ? "piece is" : "pieces are"} hidden by filters.</p>}
@@ -294,15 +320,16 @@ export function Overview({ items, loading = false, error = "", selectedItemId = 
         )}
       </div>
 
-      {selectedCount > 0 && (
-        <section className={`overview-drawer${mobileExpanded ? " is-expanded" : ""}`} aria-label="Manage selected item tags">
+      {sectionTab === "pieces" && selectedCount > 0 && (
+        <section className={`overview-drawer${mobileExpanded ? " is-expanded" : ""}`} aria-label="Selected pieces and tags">
+          <div className="overview-drawer__collapsed-actions">
           <button
             ref={mobileToggleRef}
             type="button"
             className="overview-drawer__toggle"
             aria-expanded={mobileExpanded}
             aria-controls="overview-mobile-panel"
-            aria-label={mobileExpanded ? "Collapse tag manager" : `${selectedCount} selected. Expand tag manager`}
+            aria-label={mobileExpanded ? "Collapse selection" : `${selectedCount} selected. Expand selection`}
             onClick={() => {
               if (suppressToggleClick.current) {
                 suppressToggleClick.current = false;
@@ -342,9 +369,11 @@ export function Overview({ items, loading = false, error = "", selectedItemId = 
           >
             {mobileExpanded ? <span className="overview-drawer__grab" aria-hidden="true" /> : <span>{selectedCount} selected</span>}
           </button>
+          {!mobileExpanded && <button type="button" className="overview-drawer__create-sheet" onClick={createCheatSheet}><Plus size={16} weight="bold" aria-hidden="true" /><span>Create cheat sheet</span></button>}
+          </div>
           <div id="overview-mobile-panel" className="overview-drawer__panel" hidden={!mobileExpanded}>
               <div className="overview-selection__header">
-                <div><span className="overview-selection__eyebrow">Selection</span><h2>Manage tags</h2></div>
+                <div><span className="overview-selection__eyebrow">Overview</span><h2>Selection</h2></div>
                 <button type="button" aria-label="Collapse selection panel" onClick={() => { setMobileExpanded(false); requestAnimationFrame(() => mobileToggleRef.current?.focus()); }}><X size={17} aria-hidden="true" /></button>
               </div>
               {hiddenSelectedCount > 0 && <p className="overview-selection__hidden">{hiddenSelectedCount} selected {hiddenSelectedCount === 1 ? "piece is" : "pieces are"} hidden by filters.</p>}
