@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
 import { createHash } from "node:crypto";
-import { copyFile, mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import sharp from "sharp";
 import { normalizeItemV2, variantIdFor } from "../../../../shared/wardrobe-model.mjs";
+import { mutateLibrary } from "../../../../shared/wardrobe-library.mjs";
 
 const PARTS = new Set(["upperbody", "wholebody_up", "lowerbody", "accessories_up", "shoes"]);
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -119,12 +120,6 @@ async function readJson(file, fallback) {
   catch (error) { if (error.code === "ENOENT") return fallback; throw error; }
 }
 
-async function atomicJson(file, value) {
-  const temporary = `${file}.${process.pid}.tmp`;
-  await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`);
-  await rename(temporary, file);
-}
-
 const options = parseArgs(process.argv.slice(2));
 const repo = path.resolve(options.repo);
 const itemsDir = path.resolve(options.items);
@@ -169,12 +164,11 @@ const libraryFile = path.join(dataDir, "library.json");
 const records = await readJson(libraryFile, []);
 if (!Array.isArray(records)) throw new Error(`${libraryFile} must contain a JSON array`);
 
-const nextRecords = [...records];
+const recordsToWrite = [];
 for (const item of prepared) {
   const assetUrl = `/api/import/library/${item.assetName}`;
   const modeledUrl = item.modeledAssetName ? `/api/import/library/${item.modeledAssetName}` : null;
-  const existingIndex = nextRecords.findIndex((entry) => entry.id === item.id);
-  const existing = existingIndex === -1 ? null : nextRecords[existingIndex];
+  const existing = records.find((entry) => entry.id === item.id) || null;
   const manifestVariant = item.variants[0];
   const variantId = manifestVariant.id || variantIdFor(item.id);
   const existingVariant = existing?.variants?.find((candidate) => candidate.id === variantId);
@@ -213,23 +207,47 @@ for (const item of prepared) {
     createdAt: existing?.createdAt,
     updatedAt: existing?.updatedAt,
   });
-  if (existingIndex === -1) nextRecords.push(record);
-  else nextRecords[existingIndex] = { ...nextRecords[existingIndex], ...record };
+  recordsToWrite.push(record);
 }
 
+const resultingIds = new Set(records.map((record) => record.id));
+for (const record of recordsToWrite) resultingIds.add(record.id);
+let total = resultingIds.size;
 if (!options.dryRun) {
   await mkdir(importedDir, { recursive: true });
   for (const item of prepared) {
     await copyFile(item.source, path.join(importedDir, item.assetName));
     if (item.modeledSource) await copyFile(item.modeledSource, path.join(importedDir, item.modeledAssetName));
   }
-  await atomicJson(libraryFile, nextRecords);
+  const saved = await mutateLibrary(dataDir, (current) => {
+    const next = [...current];
+    for (const incoming of recordsToWrite) {
+      const index = next.findIndex((entry) => entry.id === incoming.id);
+      const existing = index === -1 ? null : next[index];
+      const variants = incoming.variants.map((variant) => {
+        const previous = existing?.variants?.find((candidate) => candidate.id === variant.id);
+        return { ...variant, createdAt: previous?.createdAt || variant.createdAt, updatedAt: previous?.updatedAt || variant.updatedAt };
+      });
+      const record = normalizeItemV2({
+        ...(existing || {}),
+        ...incoming,
+        tags: existing?.tags || incoming.tags,
+        defaultVariantId: existing?.defaultVariantId || incoming.defaultVariantId,
+        createdAt: existing?.createdAt || incoming.createdAt,
+        updatedAt: existing?.updatedAt || incoming.updatedAt,
+        variants,
+      });
+      if (index === -1) next.push(record); else next[index] = record;
+    }
+    return next;
+  });
+  total = saved.length;
 }
 
 console.log(JSON.stringify({
   dryRun: options.dryRun,
   imported: prepared.length,
-  total: nextRecords.length,
+  total,
   library: libraryFile,
   items: prepared.map(({ id, name, part, assetName, modeledAssetName }) => ({ id, name, part, assetName, modeledAssetName })),
 }, null, 2));

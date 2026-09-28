@@ -1,6 +1,7 @@
 import { copyFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { migrateLibrary, migrateOutfits } from "../shared/wardrobe-model.mjs";
+import { mutateLibrary } from "../shared/wardrobe-library.mjs";
 
 async function readArray(file) {
   try {
@@ -38,19 +39,32 @@ export async function migrateDataDirectory(dataDir, { backup = true } = {}) {
   const libraryFile = path.join(dataDir, "library.json");
   const outfitsFile = path.join(dataDir, "outfits.json");
   const library = await readArray(libraryFile);
-  const migratedLibrary = migrateLibrary(library);
-  const migratedOutfits = migrateOutfits(await readArray(outfitsFile), migratedLibrary.items);
-  const changed = migratedLibrary.changed || migratedOutfits.changed;
+  let migratedLibrary = migrateLibrary(library);
+  const originalOutfits = await readArray(outfitsFile);
+  let migratedOutfits = migrateOutfits(originalOutfits, migratedLibrary.items);
+  const expectedChange = migratedLibrary.changed || migratedOutfits.changed;
   let backups = null;
-  if (changed && backup) {
+  if (expectedChange && backup) {
     backups = {
-      library: await backupOnce(libraryFile),
+      library: null,
       outfits: await backupOnce(outfitsFile),
     };
-    if (!backups.library && !backups.outfits) backups = null;
   }
-  if (migratedLibrary.changed) await atomicJson(libraryFile, migratedLibrary.items);
+  if (migratedLibrary.changed) {
+    let libraryBackup = null;
+    const items = await mutateLibrary(dataDir, async (current) => {
+      const latest = migrateLibrary(current);
+      migratedLibrary = latest;
+      if (backup) libraryBackup = await backupOnce(libraryFile);
+      return latest.items;
+    });
+    migratedLibrary = { ...migratedLibrary, items };
+    if (backups) backups.library = libraryBackup;
+  }
+  migratedOutfits = migrateOutfits(originalOutfits, migratedLibrary.items);
   if (migratedOutfits.changed) await atomicJson(outfitsFile, migratedOutfits.outfits);
+  if (backups && !backups.library && !backups.outfits) backups = null;
+  const changed = migratedLibrary.changed || migratedOutfits.changed;
   return {
     changed,
     libraryChanged: migratedLibrary.changed,

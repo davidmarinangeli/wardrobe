@@ -11,6 +11,7 @@ import { wardrobeSetupApi } from "./scripts/setup-api.mjs";
 import { preferencesApi } from "./scripts/preferences-api.mjs";
 import { colorProfileApi } from "./scripts/color-profile-api.mjs";
 import { variantApi } from "./scripts/variant-api.mjs";
+import { cheatSheetsApi } from "./scripts/cheat-sheets-api.mjs";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
@@ -43,6 +44,7 @@ export default defineConfig(({ mode }) => {
       preferencesApi({ env }),
       colorProfileApi({ env }),
       variantApi({ env }),
+      cheatSheetsApi({ env }),
     ],
   };
 });

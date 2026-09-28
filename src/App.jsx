@@ -7,6 +7,7 @@ import { ColorProfileModal, SEASONS, itemMatchesPalette, readColorProfile } from
 import { Outfits } from "./outfits.jsx";
 import { Mirror } from "./mirror.jsx";
 import { Inspo } from "./inspo.jsx";
+import { Overview } from "./overview.jsx";
 import { GalleryItem, ItemViewer } from "./item-editor.jsx";
 import { WARDROBE_TYPES as TYPES, TYPE_MAP } from "./categories.js";
 import { PageShell } from "./components/PageShell.jsx";
@@ -25,6 +26,7 @@ import { resolveOutfitPieces } from "../shared/wardrobe-model.mjs";
 const EMPTY_OUTFIT_INDEX = { outfits: {}, byItem: {} };
 const VIEW_TITLES = {
   wardrobe: "Wardrobe",
+  overview: "Overview",
   outfits: "Outfits",
   inspo: "Inspo",
 };
@@ -101,6 +103,7 @@ export function App() {
   const topActionsRef = useRef(null);
   useChromeScroll(bottomNavRef, topActionsRef);
   const [items, setItems] = useState([]);
+  const [overviewSelectionCount, setOverviewSelectionCount] = useState(0);
   const [activeType, setActiveType] = useState("all");
   const [selectedId, setSelectedId] = useState(null);
   // The card the viewer should grow out of. The element itself, not its
@@ -139,6 +142,10 @@ export function App() {
   const [retiredItems, setRetiredItems] = useState([]);
   const [wear, setWear] = useState(null);
   const [showDeclutter, setShowDeclutter] = useState(false);
+
+  useEffect(() => {
+    if (view !== "overview") setOverviewSelectionCount(0);
+  }, [view]);
 
   useEffect(() => {
     if (view !== "wardrobe") return undefined;
@@ -375,6 +382,26 @@ export function App() {
     persistEdit(updatedItem);
   };
 
+  const applyBulkItemUpdates = useCallback((updatedItems) => {
+    const updates = new Map(updatedItems.map((item) => [item.id, item]));
+    setItems((current) => current.map((item) => updates.has(item.id) ? updates.get(item.id) : item));
+    try {
+      const edits = readEdits();
+      for (const item of updatedItems) {
+        edits[item.id] = {
+          name: item.name || "",
+          part: item.part,
+          color: item.color || null,
+          secondaryColor: item.secondaryColor || null,
+          tags: item.tags || [],
+        };
+      }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(edits));
+    } catch {
+      // The server is authoritative; a full local cache must not leave React stale.
+    }
+  }, []);
+
   const deleteItem = async (id) => {
     if (id.startsWith("import-")) {
       try {
@@ -476,8 +503,9 @@ export function App() {
         barRef={barRef}
       />
       <div className="app-top-bar">
-        <nav className="app-view-switch" aria-label="Switch between wardrobe, outfits, and inspo">
+        <nav className="app-view-switch" aria-label="Switch between wardrobe, overview, outfits, and inspo">
           <button type="button" className={view === "wardrobe" ? "active" : ""} onClick={() => setView("wardrobe")} aria-pressed={view === "wardrobe"}>Wardrobe</button>
+          <button type="button" className={view === "overview" ? "active" : ""} onClick={() => setView("overview")} aria-pressed={view === "overview"}>Overview</button>
           <button type="button" className={view === "outfits" ? "active" : ""} onClick={() => setView("outfits")} aria-pressed={view === "outfits"}>Outfits</button>
           <button type="button" className={view === "inspo" ? "active" : ""} onClick={() => setView("inspo")} aria-pressed={view === "inspo"}>Inspo</button>
         </nav>
@@ -489,7 +517,7 @@ export function App() {
               the second slot swaps between Mirror (Wardrobe/Inspo) and
               Suggest outfit (Outfits) entirely, since those aren't the same
               action wearing a different label. */}
-          <div className="top-actions" ref={topActionsRef} data-hidden="false">
+          <div className="top-actions" ref={topActionsRef} data-hidden="false" data-overview-selection={view === "overview" && overviewSelectionCount > 0 ? "true" : "false"}>
             <WardrobeImportFlow
               onGarmentApproved={addImportedItem}
               externalSetup={aiSetup}
@@ -535,7 +563,17 @@ export function App() {
           largeRef={largeRef}
         />
 
-        {view === "inspo" ? (
+        {view === "overview" ? (
+          <Overview
+            items={items}
+            loading={loading}
+            error={error}
+            selectedItemId={selectedId}
+            onOpenItem={openItem}
+            onItemsUpdated={applyBulkItemUpdates}
+            onSelectionChange={setOverviewSelectionCount}
+          />
+        ) : view === "inspo" ? (
         <Inspo showImporter={showInspoImporter} onImporterClose={() => setShowInspoImporter(false)} />
       ) : view === "outfits" ? (
         <Outfits
