@@ -3,7 +3,6 @@ import { mkdir, readdir, readFile, writeFile, copyFile, stat } from "node:fs/pro
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  atomicJson,
   buildGarmentPrompt,
   buildModeledPrompt,
   chooseChromaKey,
@@ -21,6 +20,7 @@ import {
   removeUnwornGarmentBackground,
 } from "./import-job-api.mjs";
 import { migrateLibrary, normalizeItemV2, normalizeReference, variantIdFor } from "../shared/wardrobe-model.mjs";
+import { mutateLibrary } from "../shared/wardrobe-library.mjs";
 
 // This script reads configuration straight from process.env rather than the app's settings
 // store, so shape it like the setting() lookups the shared helpers expect.
@@ -100,11 +100,7 @@ export async function applyPreparedManifest({ manifestFile, itemsDir, modeledDir
   const importedDir = path.join(dataDir, "imported");
   const libraryFile = path.join(dataDir, "library.json");
   await mkdir(importedDir, { recursive: true });
-  const current = JSON.parse(await readFile(libraryFile, "utf8").catch((error) => error.code === "ENOENT" ? "[]" : Promise.reject(error)));
-  const migrated = migrateLibrary(current).items;
-  const next = [...migrated];
   const prepared = [];
-  const imported = [];
   const importIds = new Set();
   for (const item of accepted) {
     const primary = item.variants?.[0] || item;
@@ -119,8 +115,6 @@ export async function applyPreparedManifest({ manifestFile, itemsDir, modeledDir
     if (importIds.has(importId)) throw new Error(`Duplicate importId "${importId}"`);
     importIds.add(importId);
     const id = `import-${importId}`;
-    const existingIndex = next.findIndex((entry) => entry.id === id);
-    const existingRecord = existingIndex === -1 ? null : next[existingIndex];
     const variants = (item.variants?.length ? item.variants : [{ id: `${safeSlug(item.slug || item.name || "item")}-standard`, name: "Standard", origin: "photo", file: item.file, modeledFile: item.modeledFile, tags: item.tags, sourceRefs: item.sourceRefs }]).map((variant, index) => {
       const variantFile = variant.file || (index === 0 ? item.file : null);
       if (!variantFile) throw new Error(`${item.name || id}: every variant needs a file`);
@@ -154,9 +148,10 @@ export async function applyPreparedManifest({ manifestFile, itemsDir, modeledDir
         await readFile(modeledSource);
       }
     }
-    prepared.push({ item: { ...item, importId }, id, existingIndex, existingRecord, variants, references });
+    prepared.push({ item: { ...item, importId }, id, variants, references });
   }
-  for (const { item, id, existingIndex, existingRecord, variants, references } of prepared) {
+  const recordsToWrite = [];
+  for (const { item, id, variants, references } of prepared) {
     const recordVariants = [];
     for (const variant of variants) {
       const variantSource = path.resolve(itemsDir, variant.file);
@@ -170,16 +165,37 @@ export async function applyPreparedManifest({ manifestFile, itemsDir, modeledDir
         modeledImage = `/api/import/library/${modeledName}`;
       }
       const asset = `/api/import/library/${assetName}`;
-      const previousVariant = existingRecord?.variants?.find((candidate) => candidate.id === variant.id);
-      recordVariants.push(normalizeItemV2({ id, part: item.part, color: item.color, secondaryColor: item.secondaryColor, tags: item.tags, name: item.name, defaultVariantId: variants[0].id, variants: [{ ...variant, createdAt: previousVariant?.createdAt, updatedAt: previousVariant?.updatedAt, image: asset, thumbnail: asset, modeledImage, cutout: { image: asset, thumbnail: asset, revision: variant.assetRevision || 1, status: "current" }, modeledPhoto: modeledImage ? { image: modeledImage, status: "approved", revision: variant.assetRevision || 1 } : null, approvalStatus: "approved" }], references }).variants[0]);
+      recordVariants.push(normalizeItemV2({ id, part: item.part, color: item.color, secondaryColor: item.secondaryColor, tags: item.tags, name: item.name, defaultVariantId: variants[0].id, variants: [{ ...variant, image: asset, thumbnail: asset, modeledImage, cutout: { image: asset, thumbnail: asset, revision: variant.assetRevision || 1, status: "current" }, modeledPhoto: modeledImage ? { image: modeledImage, status: "approved", revision: variant.assetRevision || 1 } : null, approvalStatus: "approved" }], references }).variants[0]);
     }
-    const record = normalizeItemV2({ id, name: item.name, part: item.part, color: item.color, secondaryColor: item.secondaryColor, defaultVariantId: recordVariants[0].id, variants: recordVariants, references, importJobId: id.replace(/^import-/, ""), createdAt: existingRecord?.createdAt, updatedAt: existingRecord?.updatedAt });
-    if (existingIndex === -1) next.push(record); else next[existingIndex] = record;
-    imported.push({ id, name: record.name, variants: record.variants.length });
+    recordsToWrite.push(normalizeItemV2({ id, name: item.name, part: item.part, color: item.color, secondaryColor: item.secondaryColor, tags: item.tags, defaultVariantId: recordVariants[0].id, variants: recordVariants, references, importJobId: id.replace(/^import-/, "") }));
   }
   await mkdir(dataDir, { recursive: true });
-  await atomicJson(libraryFile, next);
-  return { imported, total: next.length, library: libraryFile };
+  const imported = [];
+  let total = 0;
+  await mutateLibrary(dataDir, (current) => {
+    const next = migrateLibrary(current).items;
+    for (const incoming of recordsToWrite) {
+      const index = next.findIndex((entry) => entry.id === incoming.id);
+      const existing = index < 0 ? null : next[index];
+      const variants = incoming.variants.map((variant) => {
+        const previous = existing?.variants?.find((candidate) => candidate.id === variant.id);
+        return { ...variant, createdAt: previous?.createdAt || variant.createdAt, updatedAt: previous?.updatedAt || variant.updatedAt };
+      });
+      const record = normalizeItemV2({
+        ...incoming,
+        tags: existing?.tags || incoming.tags,
+        defaultVariantId: existing?.defaultVariantId || incoming.defaultVariantId,
+        createdAt: existing?.createdAt || incoming.createdAt,
+        updatedAt: existing?.updatedAt || incoming.updatedAt,
+        variants,
+      });
+      if (index < 0) next.push(record); else next[index] = record;
+      imported.push({ id: record.id, name: record.name, variants: record.variants.length });
+    }
+    total = next.length;
+    return next;
+  });
+  return { imported, total, library: libraryFile };
 }
 
 export async function writePreparedManifest({ generated, manifestFile }) {
@@ -332,14 +348,8 @@ async function writeLibraryItem({ libraryAssetDir, id, importId, metadata, garme
   });
 }
 
-async function appendToLibrary(importedFile, records) {
-  let current = [];
-  try {
-    current = JSON.parse(await readFile(importedFile, "utf8"));
-  } catch (error) {
-    if (error.code !== "ENOENT") throw error;
-  }
-  await atomicJson(importedFile, [...current, ...records]);
+async function appendToLibrary(dataDir, records) {
+  await mutateLibrary(dataDir, (current) => [...current, ...records]);
 }
 
 async function main() {
@@ -483,7 +493,7 @@ async function main() {
     records.push(await writeLibraryItem({ libraryAssetDir, id, importId, metadata: item.metadata, garmentBuffer: item.garmentBuffer, modeledBuffer: item.modeledBuffer }));
   }
   await mkdir(dataDir, { recursive: true });
-  await appendToLibrary(importedFile, records);
+  await appendToLibrary(dataDir, records);
 
   console.log(`\nImported ${records.length} item(s) into ${importedFile}.`);
   if (failed.length) {

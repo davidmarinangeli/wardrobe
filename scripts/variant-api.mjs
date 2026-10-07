@@ -39,6 +39,7 @@ import {
   variantIdFor,
 } from "../shared/wardrobe-model.mjs";
 import { migrateDataDirectory } from "./wardrobe-data.mjs";
+import { mutateLibrary } from "../shared/wardrobe-library.mjs";
 
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 
@@ -101,6 +102,41 @@ function replaceItem(items, next) {
   return items.map((item) => item.id === next.id ? normalizeItemV2(next) : item);
 }
 
+function mergeVariantChanges(storedVariants = [], baseVariants = [], incomingVariants = []) {
+  const baseById = new Map(baseVariants.map((variant) => [variant.id, variant]));
+  const incomingById = new Map(incomingVariants.map((variant) => [variant.id, variant]));
+  let merged = [...storedVariants];
+  for (const base of baseVariants) {
+    if (!incomingById.has(base.id)) merged = merged.filter((variant) => variant.id !== base.id);
+  }
+  for (const incoming of incomingVariants) {
+    const base = baseById.get(incoming.id);
+    const index = merged.findIndex((variant) => variant.id === incoming.id);
+    if (!base) {
+      if (index < 0) merged.push(incoming);
+    } else if (JSON.stringify(base) !== JSON.stringify(incoming) && index >= 0) {
+      merged[index] = incoming;
+    }
+  }
+  return merged;
+}
+
+function mergeTagChanges(storedTags = [], baseTags = [], incomingTags = []) {
+  const names = (tags) => new Set(tags.map((tag) => String(tag).trim().toLocaleLowerCase("en")));
+  const base = names(baseTags);
+  const incoming = names(incomingTags);
+  const removed = [...base].filter((tag) => !incoming.has(tag));
+  const added = incomingTags.filter((tag) => !base.has(String(tag).trim().toLocaleLowerCase("en")));
+  const next = storedTags.filter((tag) => !removed.includes(String(tag).trim().toLocaleLowerCase("en")));
+  const present = names(next);
+  for (const tag of added) {
+    const key = String(tag).trim().toLocaleLowerCase("en");
+    if (!present.has(key)) { next.push(tag); present.add(key); }
+  }
+  if (next.length > 24) throw Object.assign(new Error("An item cannot have more than 24 tags"), { status: 400 });
+  return next;
+}
+
 export function variantApi(options = {}) {
   let root;
   let dataDir;
@@ -123,7 +159,79 @@ export function variantApi(options = {}) {
     return value.map((outfit) => migrateOutfit(outfit, items));
   }
 
-  async function saveItems(items) { await atomicJson(libraryFile, items.map((item) => normalizeItemV2(item))); }
+  async function saveItems(items, baseItems = items) {
+    const incomingById = new Map(items.map((item) => [item.id, item]));
+    const baseById = new Map(baseItems.map((item) => [item.id, item]));
+    return mutateLibrary(dataDir, (current) => current.map((stored) => {
+      const incoming = incomingById.get(stored.id);
+      const base = baseById.get(stored.id);
+      // A pipeline may finish after the record was deleted. Never recreate it
+      // from an old snapshot; only existing current records can be patched.
+      if (!incoming || !base) return stored;
+      const changed = {};
+      for (const key of new Set([...Object.keys(base), ...Object.keys(incoming)])) {
+        if (JSON.stringify(base[key]) === JSON.stringify(incoming[key])) continue;
+        changed[key] = key === "variants"
+          ? mergeVariantChanges(stored.variants || [], base.variants || [], incoming.variants || [])
+          : key === "tags"
+            ? mergeTagChanges(stored.tags || [], base.tags || [], incoming.tags || [])
+            : incoming[key];
+      }
+      return Object.keys(changed).length ? normalizeItemV2({ ...stored, ...changed, id: stored.id }) : stored;
+    }));
+  }
+
+  async function bulkTags(req, res) {
+    const input = await body(req);
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      throw Object.assign(new Error("Expected a JSON object"), { status: 400 });
+    }
+    const keys = Object.keys(input);
+    if (keys.some((key) => !["itemIds", "addTags", "removeTags"].includes(key))) {
+      throw Object.assign(new Error("Only itemIds, addTags, and removeTags are accepted"), { status: 400 });
+    }
+    if (!Array.isArray(input.itemIds) || !input.itemIds.length || input.itemIds.some((id) => typeof id !== "string" || !SAFE_ID.test(id))) {
+      throw Object.assign(new Error("itemIds must be a non-empty array of valid ids"), { status: 400 });
+    }
+    if (new Set(input.itemIds).size !== input.itemIds.length) throw Object.assign(new Error("itemIds cannot contain duplicates"), { status: 400 });
+    const normalizeTags = (value, label) => {
+      if (value === undefined) return [];
+      if (!Array.isArray(value) || value.some((tag) => typeof tag !== "string" || !tag.trim() || tag.trim().length > 40)) {
+        throw Object.assign(new Error(`${label} must contain non-empty tags up to 40 characters`), { status: 400 });
+      }
+      const result = value.map((tag) => tag.trim().toLocaleLowerCase("en"));
+      if (new Set(result).size !== result.length) throw Object.assign(new Error(`${label} cannot contain duplicate tags`), { status: 400 });
+      return result;
+    };
+    const addTags = normalizeTags(input.addTags, "addTags");
+    const removeTags = normalizeTags(input.removeTags, "removeTags");
+    if (!addTags.length && !removeTags.length) throw Object.assign(new Error("Add or remove at least one tag"), { status: 400 });
+    if (addTags.some((tag) => removeTags.includes(tag))) throw Object.assign(new Error("The same tag cannot be added and removed together"), { status: 400 });
+
+    let updatedItems = [];
+    await mutateLibrary(dataDir, (records) => {
+      const byId = new Map(records.map((item) => [item.id, item]));
+      const missing = input.itemIds.filter((id) => !byId.has(id));
+      if (missing.length) throw Object.assign(new Error(`Wardrobe item not found: ${missing.join(", ")}`), { status: 404 });
+      const updatedById = new Map();
+      for (const id of input.itemIds) {
+        const current = byId.get(id);
+        const currentTags = Array.isArray(current.tags) ? current.tags : [];
+        const removed = new Set(removeTags);
+        const tags = currentTags.filter((tag) => !removed.has(String(tag).trim().toLocaleLowerCase("en")));
+        const present = new Set(tags.map((tag) => String(tag).trim().toLocaleLowerCase("en")));
+        for (const tag of addTags) {
+          if (!present.has(tag)) { tags.push(tag); present.add(tag); }
+        }
+        if (tags.length > 24) throw Object.assign(new Error(`${current.name || "An item"} would exceed the 24-tag limit`), { status: 400 });
+        const unchanged = tags.length === currentTags.length && tags.every((tag, index) => tag === currentTags[index]);
+        updatedById.set(id, unchanged ? current : normalizeItemV2({ ...current, tags }));
+      }
+      updatedItems = input.itemIds.map((id) => updatedById.get(id));
+      return records.map((item) => updatedById.get(item.id) || item);
+    });
+    return json(res, 200, { items: updatedItems });
+  }
   async function saveOutfits(outfits) { await atomicJson(outfitsFile, outfits); }
 
   async function writeAsset(bytes, basename) {
@@ -253,6 +361,7 @@ export function variantApi(options = {}) {
         const modeledName = `${itemId}-${variantId}-modeled.png`.replace(/[^a-zA-Z0-9._-]/g, "-");
         await writeFile(path.join(libraryAssetDir, modeledName), bytes);
         const fresh = await loadItems();
+        const base = structuredClone(fresh);
         const current = findItem(fresh, itemId);
         const target = findVariant(current, variantId);
         const modeledPhoto = { ...(target.modeledPhoto || {}), image: `/api/import/library/${modeledName}`, status: "approved", error: null, tier, revision: (target.modeledPhoto?.revision || 0) + 1, sourceRevision: Math.max(target.assetRevision || 1, referenceRevision || 1) };
@@ -261,16 +370,17 @@ export function variantApi(options = {}) {
         target.modeledStatus = "approved";
         target.modeledError = null;
         target.modeledTier = tier;
-        await saveItems(fresh);
+        await saveItems(fresh, base);
       } catch (error) {
         try {
           const fresh = await loadItems();
+          const base = structuredClone(fresh);
           const item = findItem(fresh, itemId);
           const variant = findVariant(item, variantId);
           variant.modeledStatus = "error";
           variant.modeledError = error.message;
           variant.modeledPhoto = { ...(variant.modeledPhoto || {}), status: "error", error: error.message };
-          await saveItems(fresh);
+          await saveItems(fresh, base);
         } catch { /* preserve original generation error */ }
       }
     })().finally(() => running.delete(lock));
@@ -354,7 +464,7 @@ export function variantApi(options = {}) {
           modeledPhoto: { status: "processing", error: null, tier: input.tier },
         };
         const withCutout = { ...current, variants: current.variants.map((variant) => variant.id === variantId ? { ...variant, ...enriched } : variant) };
-        await saveItems(replaceItem(fresh, withCutout));
+        await saveItems(replaceItem(fresh, withCutout), fresh);
 
         await generateVariant(itemId, variantId, { tier: input.tier, prompt: input.description });
         const completedItems = await loadItems();
@@ -362,13 +472,14 @@ export function variantApi(options = {}) {
         const completedVariant = findVariant(completedItem, variantId);
         if (completedVariant.modeledStatus !== "approved") throw new Error(completedVariant.modeledError || "Could not generate the modeled photo");
         const completed = { ...completedItem, variants: completedItem.variants.map((variant) => variant.id === variantId ? { ...variant, processingStatus: "approved", processingStage: null, processingError: null } : variant) };
-        await saveItems(replaceItem(completedItems, completed));
+        await saveItems(replaceItem(completedItems, completed), completedItems);
       } catch (error) {
         try {
           const fresh = await loadItems();
+          const base = structuredClone(fresh);
           const current = findItem(fresh, itemId);
           const failed = { ...current, variants: current.variants.map((variant) => variant.id === variantId ? { ...variant, processingStatus: "error", processingStage: null, processingError: error.message } : variant) };
-          await saveItems(replaceItem(fresh, failed));
+          await saveItems(replaceItem(fresh, failed), base);
         } catch { /* preserve the pipeline error */ }
       }
     })().finally(() => runningPipelines.delete(lock));
@@ -380,6 +491,10 @@ export function variantApi(options = {}) {
     const url = new URL(req.url, "http://localhost");
     if (!url.pathname.startsWith("/api/wardrobe/items/")) return next();
     try {
+      if (url.pathname === "/api/wardrobe/items/bulk-tags") {
+        if (req.method !== "PATCH") return json(res, 405, { error: "Method not allowed" });
+        return await bulkTags(req, res);
+      }
       const route = parseVariantRoute(url.pathname);
       if (!route) return json(res, 404, { error: "Not found" });
       if (route.variantId) clientId(route.variantId, "Variant");
@@ -390,8 +505,8 @@ export function variantApi(options = {}) {
       if (!route.variantId && !route.action && !route.referenceId && req.method === "PATCH") {
         const input = await body(req);
         const updated = normalizeItemV2({ ...item, ...input, id: item.id, variants: item.variants, references: item.references });
-        await saveItems(replaceItem(items, updated));
-        return json(res, 200, normalizeItemV2(updated));
+        const saved = await saveItems(replaceItem(items, updated), items);
+        return json(res, 200, saved.find((candidate) => candidate.id === item.id));
       }
 
       if (!route.variantId && route.referenceId && req.method === "PATCH") {
@@ -410,16 +525,16 @@ export function variantApi(options = {}) {
           updatedReference.revision = old.revision + 1;
         }
         const updated = markReferenceChangeStale({ ...item, references: item.references.map((reference, i) => i === index ? updatedReference : reference) }, [old, updatedReference]);
-        await saveItems(replaceItem(items, updated));
-        return json(res, 200, normalizeItemV2(updated));
+        const saved = await saveItems(replaceItem(items, updated), items);
+        return json(res, 200, saved.find((candidate) => candidate.id === item.id));
       }
 
       if (!route.variantId && route.referenceId && req.method === "DELETE") {
         const reference = item.references.find((candidate) => candidate.id === route.referenceId);
         if (!reference) return json(res, 404, { error: "Reference not found" });
         const updated = markReferenceChangeStale({ ...item, references: item.references.filter((candidate) => candidate.id !== route.referenceId) }, reference);
-        await saveItems(replaceItem(items, updated));
-        return json(res, 200, normalizeItemV2(updated));
+        const saved = await saveItems(replaceItem(items, updated), items);
+        return json(res, 200, saved.find((candidate) => candidate.id === item.id));
       }
 
       if (route.referencesCollection && !route.referenceId && req.method === "POST") {
@@ -436,7 +551,7 @@ export function variantApi(options = {}) {
         const reference = normalizeReference({ ...input, id: referenceId, scope, variantId: scope === "variant" ? requestedVariantId : null, asset: null, revision: 1 }, index, item.id);
         if (imageData) reference.asset = await writeAsset(imageData, `reference-${randomUUID()}.png`);
         const updated = markReferenceChangeStale({ ...item, references: [...item.references, reference] }, reference);
-        await saveItems(replaceItem(items, updated));
+        await saveItems(replaceItem(items, updated), items);
         return json(res, 201, reference);
       }
 
@@ -476,9 +591,9 @@ export function variantApi(options = {}) {
           processingError: null,
         }, item.id, item.variants.length);
         const updated = { ...item, variants: [...item.variants, variant] };
-        await saveItems(replaceItem(items, updated));
+        const saved = await saveItems(replaceItem(items, updated), items);
         void processVariant(item.id, variant.id, { imageData, requestedName, description, sourceVariantId, tier });
-        return json(res, 202, { ...normalizeItemV2(updated), createdVariantId: variant.id });
+        return json(res, 202, { ...saved.find((candidate) => candidate.id === item.id), createdVariantId: variant.id });
       }
 
       if (route.variantId && !route.action && !route.referenceId && req.method === "PATCH") {
@@ -495,8 +610,8 @@ export function variantApi(options = {}) {
           updatedVariant.modeledStatus = updatedVariant.modeledPhoto?.image ? "stale" : updatedVariant.modeledStatus;
         }
         const updated = { ...item, variants: item.variants.map((variant, index) => index === targetIndex ? updatedVariant : variant) };
-        await saveItems(replaceItem(items, updated));
-        return json(res, 200, normalizeItemV2(updated));
+        const saved = await saveItems(replaceItem(items, updated), items);
+        return json(res, 200, saved.find((candidate) => candidate.id === item.id));
       }
 
       if (route.variantId && !route.action && !route.referenceId && req.method === "DELETE") {
@@ -529,9 +644,9 @@ export function variantApi(options = {}) {
             };
           })
           : outfits;
-        await saveItems(replaceItem(items, updated));
+        const saved = await saveItems(replaceItem(items, updated), items);
         if (replacementId && nextOutfits.some((outfit, index) => JSON.stringify(outfit) !== JSON.stringify(outfits[index]))) await saveOutfits(nextOutfits);
-        return json(res, 200, { deleted: true, id: variant.id, item: normalizeItemV2(updated) });
+        return json(res, 200, { deleted: true, id: variant.id, item: saved.find((candidate) => candidate.id === item.id) });
       }
 
       if ((route.variantId && route.action === "default" || route.action === "default-variant") && !route.referenceId && ["PUT", "PATCH", "POST"].includes(req.method)) {
@@ -540,8 +655,8 @@ export function variantApi(options = {}) {
         if (!defaultId) throw Object.assign(new Error("variantId is required"), { status: 400 });
         findVariant(item, defaultId);
         const updated = { ...item, defaultVariantId: defaultId };
-        await saveItems(replaceItem(items, updated));
-        return json(res, 200, normalizeItemV2(updated));
+        const saved = await saveItems(replaceItem(items, updated), items);
+        return json(res, 200, saved.find((candidate) => candidate.id === item.id));
       }
 
       if (route.variantId && route.action === "modeled" && !route.referenceId && req.method === "POST") {
@@ -556,9 +671,9 @@ export function variantApi(options = {}) {
           : input.tier === "premium" ? "premium" : "standard";
         if (tier === "premium" && !isPremiumAllowed(setup.provider, setup.mode)) return json(res, 400, { error: "Premium quality needs PROD mode" });
         const updated = { ...item, variants: item.variants.map((candidate) => candidate.id === variant.id ? { ...candidate, modeledStatus: "processing", modeledError: null, modeledTier: tier, modeledPhoto: { ...(candidate.modeledPhoto || {}), status: "processing", error: null, tier } } : candidate) };
-        await saveItems(replaceItem(items, updated));
+        const saved = await saveItems(replaceItem(items, updated), items);
         void generateVariant(item.id, variant.id, { tier, prompt: typeof input.prompt === "string" ? input.prompt.trim().slice(0, 1200) : "" });
-        return json(res, 202, normalizeItemV2(updated));
+        return json(res, 202, saved.find((candidate) => candidate.id === item.id));
       }
 
       return json(res, 404, { error: "Not found" });
