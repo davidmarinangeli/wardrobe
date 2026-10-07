@@ -1,7 +1,8 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
-import { AI_PROVIDERS, resolveApiKey, resolveProvider } from "./import-job-api.mjs";
+import { AI_PROVIDERS, atomicJson, resolveApiKey, resolveProvider } from "./import-job-api.mjs";
+import { prepareArchiveDirectory, preserveOriginal } from "./archive-store.mjs";
 
 const WRITABLE_KEYS = new Set(["AI_PROVIDER", "OPENAI_API_KEY", "OPENROUTER_API_KEY", "GEMINI_API_KEY_TEST", "GEMINI_API_KEY_PROD", "MINIMAX_API_KEY"]);
 const ENV_LINE = /^([A-Z0-9_]+)=/;
@@ -68,6 +69,7 @@ export function configuredProviders(setting) {
 
 export function wardrobeSetupApi(options = {}) {
   let root;
+  let dataDir;
   const setting = (name, fallback = "") => options.env?.[name] || process.env[name] || fallback;
 
   async function saveEnvValues(values) {
@@ -113,12 +115,24 @@ export function wardrobeSetupApi(options = {}) {
         if (!match) throw Object.assign(new Error("A PNG or JPG image is required"), { status: 400 });
         const bytes = Buffer.from(match[1], "base64");
         if (!bytes.length) throw Object.assign(new Error("Image payload is empty"), { status: 400 });
+        const original = await preserveOriginal({ dataDir, bytes, mime: raw.slice(5, raw.indexOf(";")), filename: `${kind}-reference-upload` });
         const normalized = await sharp(bytes).rotate().toColorspace("srgb").png().toBuffer();
         const settingKey = kind === "face" ? "WARDROBE_FACE_REFERENCE" : "WARDROBE_MODEL_REFERENCE";
-        const fallback = kind === "face" ? "data/model-reference-face.png" : "data/model-reference.png";
-        const targetPath = path.resolve(root, setting(settingKey, fallback));
-        await mkdir(path.dirname(targetPath), { recursive: true });
-        await writeFile(targetPath, normalized);
+        const canonicalPath = path.join(dataDir, kind === "face" ? "model-reference-face.png" : "model-reference.png");
+        const configuredReference = setting(settingKey).trim();
+        const targetPath = configuredReference ? path.resolve(root, configuredReference) : canonicalPath;
+        await mkdir(path.dirname(canonicalPath), { recursive: true });
+        await writeFile(canonicalPath, normalized);
+        if (targetPath !== canonicalPath) {
+          await mkdir(path.dirname(targetPath), { recursive: true });
+          await writeFile(targetPath, normalized);
+        }
+        const metadataFile = path.join(dataDir, "archive-metadata.json");
+        let archiveMetadata;
+        try { archiveMetadata = JSON.parse(await readFile(metadataFile, "utf8")); }
+        catch (error) { if (error.code !== "ENOENT") throw error; archiveMetadata = { schemaVersion: 1, archiveGeneration: 1, referenceSources: {} }; }
+        archiveMetadata.referenceSources = { ...(archiveMetadata.referenceSources || {}), [kind]: original.path };
+        await atomicJson(metadataFile, archiveMetadata);
         return json(res, 200, { saved: true, kind });
       }
       return json(res, 404, { error: "Not found" });
@@ -131,7 +145,11 @@ export function wardrobeSetupApi(options = {}) {
   return {
     name: "wardrobe-setup-api",
     apply: "serve",
-    configResolved(config) { root = config.root; },
+    async configResolved(config) {
+      root = config.root;
+      dataDir = path.resolve(root, setting("WARDROBE_DATA_DIR", "data"));
+      await prepareArchiveDirectory({ root, dataDir, setting });
+    },
     configureServer(server) { server.middlewares.use(handler); },
     configurePreviewServer(server) { server.middlewares.use(handler); },
   };

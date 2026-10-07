@@ -3,7 +3,7 @@ import { Broom, Gear, Lightbulb, Palette } from "@phosphor-icons/react";
 import { WardrobeImportFlow } from "./import-flow.jsx";
 import { api } from "./api.js";
 import { buildOutfitIndex } from "../shared/outfit-index.mjs";
-import { ColorProfileModal, SEASONS, itemMatchesPalette, readColorProfile } from "./color-profile.jsx";
+import { ColorProfileModal, SEASONS, itemMatchesPalette } from "./color-profile.jsx";
 import { Outfits } from "./outfits.jsx";
 import { Mirror } from "./mirror.jsx";
 import { Inspo } from "./inspo.jsx";
@@ -20,8 +20,9 @@ import { BottomNav } from "./components/BottomNav.jsx";
 import { MobileCompactBar, MobileHeadRow, useMobileHeaderScroll } from "./components/MobileHeader.jsx";
 import { useChromeScroll } from "./hooks/useChromeScroll.js";
 import "./components/mobile-chrome.css";
-import { DISMISS_KEY as ONBOARDING_DISMISS_KEY, Onboarding, RESUME_KEY as ONBOARDING_RESUME_KEY, SWITCHED_KEY as PROVIDER_SWITCHED_KEY } from "./onboarding.jsx";
+import { Onboarding, RESUME_KEY as ONBOARDING_RESUME_KEY, SWITCHED_KEY as PROVIDER_SWITCHED_KEY } from "./onboarding.jsx";
 import { resolveOutfitPieces } from "../shared/wardrobe-model.mjs";
+import { ensureBrowserStateReady, updateBrowserState, useBrowserState } from "./browser-state.js";
 
 const EMPTY_OUTFIT_INDEX = { outfits: {}, byItem: {} };
 const VIEW_TITLES = {
@@ -30,51 +31,6 @@ const VIEW_TITLES = {
   outfits: "Outfits",
   inspo: "Inspo",
 };
-
-const STORAGE_KEY = "open-wardrobe-edits-v1";
-const DELETED_STORAGE_KEY = "open-wardrobe-deleted-v1";
-
-function readEdits() {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-  } catch {
-    return {};
-  }
-}
-
-
-function persistEdit(item) {
-  const edits = readEdits();
-  edits[item.id] = {
-    name: item.name || "",
-    part: item.part,
-    color: item.color || null,
-    secondaryColor: item.secondaryColor || null,
-    tags: item.tags || [],
-  };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(edits));
-}
-
-function removePersistedEdit(id) {
-  const edits = readEdits();
-  delete edits[id];
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(edits));
-}
-
-function readDeletedItems() {
-  try {
-    const value = JSON.parse(localStorage.getItem(DELETED_STORAGE_KEY) || "[]");
-    return new Set(Array.isArray(value) ? value : []);
-  } catch {
-    return new Set();
-  }
-}
-
-function persistDeletedItem(id) {
-  const deleted = readDeletedItems();
-  deleted.add(id);
-  localStorage.setItem(DELETED_STORAGE_KEY, JSON.stringify([...deleted]));
-}
 
 // A developer setting, findable but quiet: a small dot on the gear button
 // reporting the current Gemini mode, nothing more. The actual switch lives in
@@ -121,7 +77,9 @@ export function App() {
   }, []);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [colorProfile, setColorProfile] = useState(() => readColorProfile());
+  const [colorProfile, setColorProfile] = useState(null);
+  const browserStateSnapshot = useBrowserState();
+  const browserState = browserStateSnapshot.state;
   const [showColorQuiz, setShowColorQuiz] = useState(false);
   const [onlyMatches, setOnlyMatches] = useState(false);
   const [aiSetup, setAiSetup] = useState(null);
@@ -142,6 +100,7 @@ export function App() {
   const [retiredItems, setRetiredItems] = useState([]);
   const [wear, setWear] = useState(null);
   const [showDeclutter, setShowDeclutter] = useState(false);
+  const observedArchiveGeneration = useRef(null);
 
   useEffect(() => {
     if (view !== "overview") setOverviewSelectionCount(0);
@@ -190,9 +149,9 @@ export function App() {
     }
     if (aiSetup.ready) return;
     const resuming = sessionStorage.getItem(ONBOARDING_RESUME_KEY) === "1";
-    const dismissed = localStorage.getItem(ONBOARDING_DISMISS_KEY) === "1";
+    const dismissed = browserState?.onboardingDismissed === true;
     if (resuming || (!dismissed && items.length === 0)) setShowOnboarding(true);
-  }, [aiSetup, loading, items.length]);
+  }, [aiSetup, loading, items.length, browserState]);
 
   const setAiMode = useCallback(async (mode) => {
     const response = await fetch("/api/import/mode", {
@@ -206,28 +165,23 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/import/wardrobe", { cache: "no-store" })
-      .then((response) => {
-        if (!response.ok) throw new Error("Could not load the wardrobe.");
-        return response.json();
-      })
-      .then((loadedItems) => {
-        const edits = readEdits();
-        const deleted = readDeletedItems();
-        const visibleItems = loadedItems
-          .filter((item) => !deleted.has(item.id))
-          .map((item) => ({ ...item, ...(edits[item.id] || {}) }));
-        // No status at all is the same fact as "active": an item that was never
-        // triaged and one triaged back are indistinguishable, by design.
-        setItems(visibleItems.filter((item) => !item.status || item.status === "active"));
-        setRetiredItems(visibleItems.filter((item) => item.status && item.status !== "active"));
-      })
+    let cancelled = false;
+    (async () => {
+      await ensureBrowserStateReady();
+      if (cancelled) return;
+      const loadedItems = await api("/api/import/wardrobe", { cache: "no-store" });
+      if (cancelled) return;
+      setItems(loadedItems.filter((item) => !item.status || item.status === "active"));
+      setRetiredItems(loadedItems.filter((item) => item.status && item.status !== "active"));
+    })()
       .catch((requestError) => setError(requestError.message))
-      .finally(() => setLoading(false));
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, []);
 
   // Sync color profile from server database on mount
   useEffect(() => {
+    if (!browserState) return undefined;
     fetch("/api/color-profile/status", { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
@@ -240,13 +194,37 @@ export function App() {
             palette: Array.isArray(data.profile.palette) && data.profile.palette.length ? data.profile.palette : (resolvedSeason.palette || []),
           };
           setColorProfile(fullProfile);
-          try {
-            localStorage.setItem("open-wardrobe-color-profile-v1", JSON.stringify(fullProfile));
-          } catch {}
-        }
+        } else setColorProfile(null);
       })
       .catch(() => {});
-  }, []);
+    return undefined;
+  }, [browserState?.revision, browserState?.archiveGeneration]);
+
+  useEffect(() => {
+    const generation = browserState?.archiveGeneration;
+    if (!generation) return undefined;
+    if (observedArchiveGeneration.current === null) {
+      observedArchiveGeneration.current = generation;
+      return undefined;
+    }
+    if (observedArchiveGeneration.current === generation) return undefined;
+    observedArchiveGeneration.current = generation;
+    let cancelled = false;
+    Promise.all([
+      api("/api/import/wardrobe", { cache: "no-store" }),
+      api("/api/outfits/index", { cache: "no-store" }),
+      api("/api/preferences/wear", { cache: "no-store" }),
+    ]).then(([loadedItems, outfitPayload, wearProfile]) => {
+      if (cancelled) return;
+      setItems(loadedItems.filter((item) => !item.status || item.status === "active"));
+      setRetiredItems(loadedItems.filter((item) => item.status && item.status !== "active"));
+      setOutfitIndex(buildOutfitIndex(outfitPayload.outfits));
+      setWear(wearProfile);
+      setSelectedId(null);
+      setOpenOutfitId(null);
+    }).catch((requestError) => { if (!cancelled) setError(requestError.message); });
+    return () => { cancelled = true; };
+  }, [browserState?.archiveGeneration]);
 
   const selectedItem = items.find((item) => item.id === selectedId) || null;
 
@@ -379,44 +357,32 @@ export function App() {
       return;
     }
     setItems((current) => current.map((item) => item.id === updatedItem.id ? updatedItem : item));
-    persistEdit(updatedItem);
   };
 
   const applyBulkItemUpdates = useCallback((updatedItems) => {
     const updates = new Map(updatedItems.map((item) => [item.id, item]));
     setItems((current) => current.map((item) => updates.has(item.id) ? updates.get(item.id) : item));
-    try {
-      const edits = readEdits();
-      for (const item of updatedItems) {
-        edits[item.id] = {
-          name: item.name || "",
-          part: item.part,
-          color: item.color || null,
-          secondaryColor: item.secondaryColor || null,
-          tags: item.tags || [],
-        };
-      }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(edits));
-    } catch {
-      // The server is authoritative; a full local cache must not leave React stale.
-    }
   }, []);
 
   const deleteItem = async (id) => {
-    if (id.startsWith("import-")) {
-      try {
-        const response = await fetch(`/api/import/wardrobe/${id}`, { method: "DELETE" });
-        if (!response.ok && response.status !== 404) throw new Error("Could not delete the imported item.");
-      } catch (requestError) {
-        setError(requestError.message);
-        return;
-      }
+    try {
+      await api(`/api/wardrobe/items/${encodeURIComponent(id)}`, { method: "DELETE" });
+    } catch (requestError) {
+      setError(requestError.message);
+      return;
     }
     setItems((current) => current.filter((item) => item.id !== id));
-    removePersistedEdit(id);
-    persistDeletedItem(id);
     setSelectedId(null);
   };
+
+  const dismissOnboarding = useCallback(async () => {
+    try {
+      await updateBrowserState("onboardingDismissed", true);
+      setShowOnboarding(false);
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  }, []);
 
   /**
    * Move a piece between the wardrobe and a pile. Never deletes: the photos stay
@@ -439,7 +405,7 @@ export function App() {
     const active = !updated.status || updated.status === "active";
     // Local edits are an overlay the server knows nothing about, so they have to
     // be re-applied here or a rename would silently revert on the way to a pile.
-    const merged = { ...updated, ...(readEdits()[id] || {}) };
+    const merged = updated;
 
     setItems((current) => {
       const without = current.filter((item) => item.id !== id);
@@ -591,6 +557,7 @@ export function App() {
           onCloseSuggestions={() => setShowOutfitSuggestions(false)}
           openOutfitId={openOutfitId}
           onOutfitOpened={() => setOpenOutfitId(null)}
+          archiveGeneration={browserState?.archiveGeneration}
         />
       ) : (
         <PageShell
@@ -676,7 +643,7 @@ export function App() {
           setup={aiSetup}
           onSetupChange={setAiSetup}
           onModeChange={setAiMode}
-          onClose={() => setShowOnboarding(false)}
+          onClose={dismissOnboarding}
         />
       )}
     </div>

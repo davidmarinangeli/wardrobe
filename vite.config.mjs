@@ -12,6 +12,7 @@ import { preferencesApi } from "./scripts/preferences-api.mjs";
 import { colorProfileApi } from "./scripts/color-profile-api.mjs";
 import { variantApi } from "./scripts/variant-api.mjs";
 import { cheatSheetsApi } from "./scripts/cheat-sheets-api.mjs";
+import { browserStateApi } from "./scripts/browser-state-api.mjs";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
@@ -45,6 +46,7 @@ export default defineConfig(({ mode }) => {
       colorProfileApi({ env }),
       variantApi({ env }),
       cheatSheetsApi({ env }),
+      browserStateApi({ env }),
     ],
   };
 });

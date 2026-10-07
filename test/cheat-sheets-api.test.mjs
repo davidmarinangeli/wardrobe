@@ -12,6 +12,8 @@ import { cheatSheetsApi, cheatSheetSourceFingerprint } from "../scripts/cheat-sh
 import { atomicJson } from "../scripts/import-job-api.mjs";
 import { buildCheatSheetLayout } from "../shared/cheat-sheet-layout.mjs";
 import { cheatSheetSourceFingerprint as clientSourceFingerprint } from "../src/cheat-sheet-renderer.js";
+import { buildArchiveInventory, validateArchive } from "../scripts/archive-store.mjs";
+import { archivePathFromAsset } from "../shared/portable-assets.mjs";
 
 if (!globalThis.crypto) Object.defineProperty(globalThis, "crypto", { value: webcrypto });
 
@@ -44,12 +46,12 @@ const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 async function beautifyFixture(t, generateImage, extraOptions = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "wardrobe-beautify-"));
   t.after(() => rm(root, { recursive: true, force: true }));
-  await mkdir(path.join(root, "imported"));
+  await mkdir(path.join(root, "imported", "nested"), { recursive: true });
   const cutout = await sharp({ create: { width: 20, height: 30, channels: 4, background: "#406090" } }).png().toBuffer();
-  await writeFile(path.join(root, "imported", "shirt.png"), cutout);
+  await writeFile(path.join(root, "imported", "nested", "shirt.png"), cutout);
   const item = {
     id: "shirt", name: "Blue shirt", part: "upperbody", defaultVariantId: "standard", references: [],
-    variants: [{ id: "standard", name: "Standard", approvalStatus: "approved", assetRevision: 1, cutout: { image: "/api/import/library/shirt.png", status: "current", revision: 1 } }],
+    variants: [{ id: "standard", name: "Standard", approvalStatus: "approved", assetRevision: 1, cutout: { image: "/api/import/library/nested/shirt.png", status: "current", revision: 1 } }],
   };
   await writeFile(path.join(root, "library.json"), JSON.stringify([item]));
   const pieces = [{ itemId: "shirt", variantId: "standard" }];
@@ -83,7 +85,7 @@ async function waitForStatus(middleware, id, status) {
 
 test("cheat sheet API composes, revisions, downloads and deletes local sheets", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "wardrobe-cheat-sheets-"));
-  const imported = path.join(root, "imported");
+  const imported = path.join(root, "imported", "nested");
   await mkdir(imported, { recursive: true });
   let cutout = await sharp({ create: { width: 24, height: 36, channels: 4, background: { r: 40, g: 90, b: 140, alpha: 1 } } }).png().toBuffer();
   await writeFile(path.join(imported, "shirt.png"), cutout);
@@ -96,10 +98,10 @@ test("cheat sheet API composes, revisions, downloads and deletes local sheets", 
     variants: [{
       id: "shirt-default",
       name: "Standard",
-      image: "/api/import/library/shirt.png",
+      image: "/api/import/library/nested/shirt.png",
       approvalStatus: "approved",
       assetRevision: 7,
-      cutout: { image: "/api/import/library/shirt.png", status: "current", revision: 3 },
+      cutout: { image: "/api/import/library/nested/shirt.png", status: "current", revision: 3 },
     }],
     references: [],
   };
@@ -486,4 +488,24 @@ test("deleting a beautified sheet removes both versions and thumbnails", async (
   assert.equal((await request(middleware, finished.aiImage)).status, 404);
   assert.equal((await request(middleware, finished.originalImage)).status, 404);
   assert.deepEqual(await readdir(path.join(root, "cheat-sheets-assets")), []);
+});
+
+test("archive validation inventories every cheat sheet image and catches missing AI thumbnails", async (t) => {
+  const generated = await sharp({ create: { width: 12, height: 15, channels: 3, background: "#777" } }).png().toBuffer();
+  const { middleware, sheet, root } = await beautifyFixture(t, async () => generated);
+  await request(middleware, `/api/cheat-sheets/${sheet.id}/beautify`, "POST", { expectedRevision: 1 });
+  const finished = await waitForStatus(middleware, sheet.id, "ready");
+
+  const inventory = await buildArchiveInventory(root);
+  for (const field of ["originalImage", "thumbnailImage", "aiImage", "aiThumbnailImage"]) {
+    const archivePath = archivePathFromAsset(finished[field]);
+    assert.ok(inventory.files.some((entry) => entry.path === archivePath), `${field} is inventoried`);
+  }
+  assert.equal((await validateArchive(root, inventory)).valid, true);
+
+  const missingPath = archivePathFromAsset(finished.aiThumbnailImage);
+  await rm(path.join(root, ...missingPath.split("/")));
+  const incomplete = await validateArchive(root, await buildArchiveInventory(root));
+  assert.equal(incomplete.valid, false);
+  assert.ok(incomplete.errors.some((error) => error.includes(`Missing referenced media: ${missingPath}`)));
 });

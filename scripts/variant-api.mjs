@@ -40,6 +40,11 @@ import {
 } from "../shared/wardrobe-model.mjs";
 import { migrateDataDirectory } from "./wardrobe-data.mjs";
 import { mutateLibrary } from "../shared/wardrobe-library.mjs";
+import { catalogForHttp } from "../shared/portable-assets.mjs";
+import { mimeForExtension, preserveOriginal, resolveArchiveFile } from "./archive-store.mjs";
+import { readReferenceBytes } from "./archive-store.mjs";
+import { migrateCatalogAssetPaths } from "./archive-store.mjs";
+import { markBrowserStateFields } from "./browser-state-api.mjs";
 
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 
@@ -67,7 +72,7 @@ function json(res, status, value) {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
-  res.end(JSON.stringify(value));
+  res.end(JSON.stringify(catalogForHttp(value)));
 }
 
 async function body(req, limit = 32 * 1024 * 1024) {
@@ -90,6 +95,10 @@ function decodeImage(value) {
   const bytes = Buffer.from(match[1], "base64");
   if (!bytes.length) throw Object.assign(new Error("Image payload is empty"), { status: 400 });
   return bytes;
+}
+
+function imageMime(value) {
+  return typeof value === "string" ? value.match(/^data:([^;]+);base64,/i)?.[1] || "image/png" : "image/png";
 }
 
 export function parseVariantRoute(pathname) {
@@ -209,6 +218,7 @@ export function variantApi(options = {}) {
     if (addTags.some((tag) => removeTags.includes(tag))) throw Object.assign(new Error("The same tag cannot be added and removed together"), { status: 400 });
 
     let updatedItems = [];
+    await markBrowserStateFields(dataDir, ["itemEdits"]);
     await mutateLibrary(dataDir, (records) => {
       const byId = new Map(records.map((item) => [item.id, item]));
       const missing = input.itemIds.filter((id) => !byId.has(id));
@@ -317,10 +327,10 @@ export function variantApi(options = {}) {
         const variant = findVariant(item, variantId);
         const image = variantApprovedImage(item, variantId);
         if (!image) throw Object.assign(new Error("This variant has no approved cutout yet"), { status: 409 });
-        const garmentName = path.basename(new URL(image, "http://localhost").pathname);
         let garment;
         try {
-          garment = { data: await readFile(path.join(libraryAssetDir, garmentName)), mime: "image/png", name: `${variant.id}.png` };
+          const file = await resolveArchiveFile(dataDir, image);
+          garment = { data: await readFile(file), mime: mimeForExtension(path.extname(file).toLowerCase()), name: `${variant.id}${path.extname(file) || ".png"}` };
         } catch (error) {
           if (error.code === "ENOENT") throw Object.assign(new Error("This variant has no approved cutout yet"), { status: 409 });
           throw error;
@@ -330,8 +340,8 @@ export function variantApi(options = {}) {
         const { key, keyName } = resolveApiKey(setting, provider, mode);
         if (!key) throw new Error(`${keyName} is not configured for ${mode.toUpperCase()} mode`);
         if (tier === "premium" && !isPremiumAllowed(provider, mode)) throw new Error("Premium quality needs PROD mode");
-        const modelPath = path.resolve(root, setting("WARDROBE_MODEL_REFERENCE", "data/model-reference.png"));
-        const model = { data: await readFile(modelPath), mime: "image/png", name: "model.png" };
+        const model = await readReferenceBytes({ root, dataDir, setting, kind: "full" });
+        if (!model) throw new Error(`Model reference not found at ${setting("WARDROBE_MODEL_REFERENCE", "data/model-reference.png")}.`);
         const face = await loadFaceReference(root, setting);
         const refs = face ? [model, face] : [model];
         // Distinctive references are evidence for this usage mode, not extra
@@ -346,8 +356,9 @@ export function variantApi(options = {}) {
           const referenceImage = reference.asset || reference.crop || reference.original;
           if (!referenceImage) continue;
           try {
-            const name = path.basename(new URL(referenceImage, "http://localhost").pathname);
-            refs.push({ data: await readFile(path.join(libraryAssetDir, name)), mime: "image/png", name });
+            const file = await resolveArchiveFile(dataDir, referenceImage);
+            const name = path.basename(file);
+            refs.push({ data: await readFile(file), mime: mimeForExtension(path.extname(file).toLowerCase()), name });
           } catch { /* references are advisory; the cutout remains mandatory */ }
         }
         const basePrompt = buildModeledPrompt([{ name: `${item.name} — ${variant.name}`, tags: [...(item.tags || []), ...(variant.tags || []), variant.description].filter(Boolean), part: item.part }], { hasFaceReference: Boolean(face) });
@@ -413,8 +424,8 @@ export function variantApi(options = {}) {
         } else {
           const sourceImage = variantApprovedImage(initialItem, sourceVariant?.id);
           if (!sourceImage) throw new Error("The source variant has no approved cutout");
-          const sourceName = path.basename(new URL(sourceImage, "http://localhost").pathname);
-          source = await readFile(path.join(libraryAssetDir, sourceName));
+          const file = await resolveArchiveFile(dataDir, sourceImage);
+          source = await readFile(file);
           metadata = normalizeMetadata({
             name: input.requestedName || initialItem.name,
             part: initialItem.part,
@@ -499,12 +510,24 @@ export function variantApi(options = {}) {
       if (!route) return json(res, 404, { error: "Not found" });
       if (route.variantId) clientId(route.variantId, "Variant");
       if (route.referenceId) clientId(route.referenceId, "Reference");
+      if (!route.variantId && !route.action && !route.referenceId && req.method === "DELETE") {
+        await markBrowserStateFields(dataDir, ["deletedIds"]);
+        let deleted = false;
+        await mutateLibrary(dataDir, (records) => {
+          const next = records.filter((record) => record.id !== route.itemId);
+          deleted = next.length !== records.length;
+          return next;
+        });
+        if (!deleted) return json(res, 404, { error: "Wardrobe item not found" });
+        return json(res, 200, { deleted: true, id: route.itemId });
+      }
       const items = await loadItems();
       const item = findItem(items, route.itemId);
 
       if (!route.variantId && !route.action && !route.referenceId && req.method === "PATCH") {
         const input = await body(req);
         const updated = normalizeItemV2({ ...item, ...input, id: item.id, variants: item.variants, references: item.references });
+        await markBrowserStateFields(dataDir, ["itemEdits"]);
         const saved = await saveItems(replaceItem(items, updated), items);
         return json(res, 200, saved.find((candidate) => candidate.id === item.id));
       }
@@ -521,6 +544,8 @@ export function variantApi(options = {}) {
         const updatedReference = normalizeReference({ ...old, ...input, id: old.id, scope, variantId: scope === "variant" ? requestedVariantId : null, revision: old.revision }, index, item.id);
         const imageData = decodeImage(input.imageDataUrl);
         if (imageData) {
+          const original = await preserveOriginal({ dataDir, bytes: imageData, mime: imageMime(input.imageDataUrl), filename: input.filename || `${route.referenceId}-reference` });
+          updatedReference.original = original.path;
           updatedReference.asset = await writeAsset(imageData, `reference-${randomUUID()}.png`);
           updatedReference.revision = old.revision + 1;
         }
@@ -549,7 +574,11 @@ export function variantApi(options = {}) {
         if (scope === "variant" && !requestedVariantId) throw Object.assign(new Error("A variant-scoped reference requires variantId"), { status: 400 });
         if (requestedVariantId) findVariant(item, requestedVariantId);
         const reference = normalizeReference({ ...input, id: referenceId, scope, variantId: scope === "variant" ? requestedVariantId : null, asset: null, revision: 1 }, index, item.id);
-        if (imageData) reference.asset = await writeAsset(imageData, `reference-${randomUUID()}.png`);
+        if (imageData) {
+          const original = await preserveOriginal({ dataDir, bytes: imageData, mime: imageMime(input.imageDataUrl), filename: input.filename || `${referenceId}-reference` });
+          reference.original = original.path;
+          reference.asset = await writeAsset(imageData, `reference-${randomUUID()}.png`);
+        }
         const updated = markReferenceChangeStale({ ...item, references: [...item.references, reference] }, reference);
         await saveItems(replaceItem(items, updated), items);
         return json(res, 201, reference);
@@ -562,6 +591,7 @@ export function variantApi(options = {}) {
       if (route.variantsCollection && !route.referenceId && req.method === "POST") {
         const input = await body(req);
         const imageData = decodeImage(input.imageDataUrl);
+        const original = imageData ? await preserveOriginal({ dataDir, bytes: imageData, mime: imageMime(input.imageDataUrl), filename: input.filename || `${item.id}-variant-source` }) : null;
         const requestedName = typeof input.name === "string" ? input.name.trim().slice(0, 120) : "";
         const description = typeof input.description === "string" ? input.description.trim().slice(0, 500) : "";
         if (!imageData && !requestedName && !description) throw Object.assign(new Error("Add a description or choose a photo for the variant"), { status: 400 });
@@ -583,7 +613,7 @@ export function variantApi(options = {}) {
           name: requestedName || `Variant ${item.variants.length + 1}`,
           description,
           origin: imageData ? "photo" : "generated",
-          sourceRefs: input.sourceRefs || (sourceVariant ? [sourceVariant.id] : []),
+          sourceRefs: input.sourceRefs || (original ? [original.path] : sourceVariant ? [sourceVariant.id] : []),
           image: null,
           approvalStatus: "pending",
           processingStatus: "processing",
@@ -604,6 +634,8 @@ export function variantApi(options = {}) {
         const imageData = decodeImage(input.imageDataUrl);
         const updatedVariant = normalizeVariant({ ...old, ...input, id: old.id }, item.id, targetIndex);
         if (imageData) {
+          const original = await preserveOriginal({ dataDir, bytes: imageData, mime: imageMime(input.imageDataUrl), filename: input.filename || `${item.id}-${old.id}-source` });
+          updatedVariant.sourceRefs = [...new Set([...(updatedVariant.sourceRefs || []), original.path])];
           const asset = await writeAsset(imageData, `${item.id}-${old.id}-garment-${Date.now()}.png`.replace(/[^a-zA-Z0-9._-]/g, "-"));
           updatedVariant.image = asset; updatedVariant.thumbnail = asset; updatedVariant.cutout = { image: asset, thumbnail: asset, revision: (old.cutout?.revision || 0) + 1, status: "current" };
           updatedVariant.modeledPhoto = updatedVariant.modeledPhoto?.image ? { ...updatedVariant.modeledPhoto, status: "stale" } : updatedVariant.modeledPhoto;
@@ -694,6 +726,7 @@ export function variantApi(options = {}) {
       libraryAssetDir = path.join(dataDir, "imported");
       await mkdir(libraryAssetDir, { recursive: true });
       await migrateDataDirectory(dataDir);
+      await migrateCatalogAssetPaths(dataDir, atomicJson, mutateLibrary);
     },
     configureServer(server) { server.middlewares.use(handler); },
     configurePreviewServer(server) { server.middlewares.use(handler); },

@@ -6,6 +6,8 @@ import { atomicJson } from "./import-job-api.mjs";
 import { detectAndCreateWishlistItems, wishlistPaths } from "./wishlist-api.mjs";
 import { GARMENT_PART_IDS } from "../shared/garments.mjs";
 import { recordSignal } from "./preferences-api.mjs";
+import { catalogForHttp } from "../shared/portable-assets.mjs";
+import { mimeForExtension, preserveOriginal, resolveArchiveFile } from "./archive-store.mjs";
 
 const INSPO_ASSET_ROOT = "/api/inspo/assets";
 const VALID_PARTS = new Set([...GARMENT_PART_IDS, "full_look"]);
@@ -14,7 +16,7 @@ function json(res, status, value) {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
-  res.end(JSON.stringify(value));
+  res.end(JSON.stringify(catalogForHttp(value)));
 }
 
 async function body(req, limit = 50 * 1024 * 1024) {
@@ -34,7 +36,7 @@ function decodeBase64Image(raw) {
   const match = raw.match(/^data:([^;]+);base64,(.+)$/s);
   const data = Buffer.from(match ? match[2] : raw, "base64");
   if (!data.length) throw Object.assign(new Error("Image payload is empty"), { status: 400 });
-  return data;
+  return { data, mime: match?.[1] || "image/png" };
 }
 
 async function fetchUrl(url) {
@@ -49,7 +51,7 @@ async function fetchUrl(url) {
   if (!contentType.startsWith("image/")) {
     throw new Error(`URL did not return an image (got ${contentType}): ${url}`);
   }
-  return Buffer.from(await response.arrayBuffer());
+  return { data: Buffer.from(await response.arrayBuffer()), mime: contentType.split(";")[0] };
 }
 
 async function savePinImage(assetDir, id, bytes) {
@@ -63,11 +65,13 @@ async function savePinImage(assetDir, id, bytes) {
   return `${INSPO_ASSET_ROOT}/${filename}`;
 }
 
-function newPin(id, imageUrl, sourceUrl = null) {
+function newPin(id, imageUrl, sourceUrl = null, sourceOriginal = null, sourceFilename = null) {
   const now = new Date().toISOString();
   return {
     id,
     sourceUrl,
+    sourceOriginal,
+    sourceFilename,
     image: imageUrl,
     category: null,
     name: "",
@@ -101,11 +105,10 @@ export function inspoApi(options = {}) {
         const pin = pins.find((p) => p.id === id);
         if (!pin) throw new Error("Pin not found");
 
-        const filename = path.basename(pin.image);
-        const imageBytes = await readFile(path.join(inspoAssetDir, filename));
+        const imageBytes = await readFile(await resolveArchiveFile(dataDir, pin.image));
         const { wishlistFile, wishlistAssetDir } = wishlistPaths(root, setting);
         const { created, aggregate } = await detectAndCreateWishlistItems({
-          imageBytes, sourcePinId: pin.id, sourceUrl: pin.sourceUrl, setting, dataDir, wishlistFile, wishlistAssetDir,
+          imageBytes, sourcePinId: pin.id, sourceUrl: pin.sourceUrl, sourceOriginal: pin.sourceOriginal, setting, dataDir, wishlistFile, wishlistAssetDir,
         });
 
         const fresh = await loadPins();
@@ -154,22 +157,24 @@ export function inspoApi(options = {}) {
         for (const entry of entries) {
           const id = `inspo-${randomUUID()}`;
           try {
-            let bytes;
+            let source;
             let sourceUrl = null;
 
             if (entry.url) {
               sourceUrl = entry.url;
-              bytes = await fetchUrl(entry.url);
+              source = await fetchUrl(entry.url);
             } else if (entry.imageDataUrl || entry.imageBase64) {
               const raw = entry.imageDataUrl || entry.imageBase64;
-              bytes = decodeBase64Image(raw);
+              source = decodeBase64Image(raw);
             } else {
               errors.push({ input: entry, error: "Each entry needs a url or imageDataUrl" });
               continue;
             }
 
-            const imageUrl = await savePinImage(inspoAssetDir, id, bytes);
-            const pin = newPin(id, imageUrl, sourceUrl);
+            const sourceFilename = typeof entry.filename === "string" ? path.basename(entry.filename) : sourceUrl ? path.basename(new URL(sourceUrl).pathname) : "inspiration-upload";
+            const original = await preserveOriginal({ dataDir, bytes: source.data, mime: source.mime, filename: sourceFilename });
+            const imageUrl = await savePinImage(inspoAssetDir, id, source.data);
+            const pin = newPin(id, imageUrl, sourceUrl, original.path, sourceFilename);
             const pins = await loadPins();
             await atomicJson(inspoFile, [...pins, pin]);
             // An aesthetic reference the user chose to keep.
@@ -223,22 +228,21 @@ export function inspoApi(options = {}) {
         const pins = await loadPins();
         const pin = pins.find((p) => p.id === id);
         if (!pin) return json(res, 404, { error: "Pin not found" });
+        let imageFile = null;
+        if (pin.image) {
+          try { imageFile = await resolveArchiveFile(dataDir, pin.image); }
+          catch (error) { if (error.code !== "ENOENT") throw error; }
+        }
         const remaining = pins.filter((p) => p.id !== id);
         await atomicJson(inspoFile, remaining);
-        if (pin.image) {
-          const filename = path.basename(pin.image);
-          await rm(path.join(inspoAssetDir, filename), { force: true });
-        }
+        if (imageFile) await rm(imageFile, { force: true });
         return json(res, 200, { deleted: true, id });
       }
 
       // GET /api/inspo/assets/:file
-      const assetMatch = url.pathname.match(/^\/api\/inspo\/assets\/([\w.-]+)$/i);
-      if (assetMatch && req.method === "GET") {
-        const file = path.join(inspoAssetDir, path.basename(assetMatch[1]));
-        const ext = path.extname(file).toLowerCase();
-        const mime = ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" : "image/png";
-        res.setHeader("Content-Type", mime);
+      if (url.pathname.startsWith(`${INSPO_ASSET_ROOT}/`) && req.method === "GET") {
+        const file = await resolveArchiveFile(dataDir, url.pathname);
+        res.setHeader("Content-Type", mimeForExtension(path.extname(file).toLowerCase()));
         res.setHeader("Cache-Control", "no-store");
         return res.end(await readFile(file));
       }

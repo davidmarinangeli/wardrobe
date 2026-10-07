@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readdir, readFile, writeFile, copyFile, stat } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile, copyFile, stat, mkdtemp, rm, realpath } from "node:fs/promises";
 import path from "node:path";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 import {
   buildGarmentPrompt,
@@ -21,12 +22,13 @@ import {
 } from "./import-job-api.mjs";
 import { migrateLibrary, normalizeItemV2, normalizeReference, variantIdFor } from "../shared/wardrobe-model.mjs";
 import { mutateLibrary } from "../shared/wardrobe-library.mjs";
+import { preserveOriginal, prepareArchiveDirectory, readReferenceBytes } from "./archive-store.mjs";
 
 // This script reads configuration straight from process.env rather than the app's settings
 // store, so shape it like the setting() lookups the shared helpers expect.
 const envSetting = (name, fallback = "") => process.env[name] || fallback;
 
-const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff", ".gif", ".avif"]);
+const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff", ".gif", ".avif", ".bmp", ".heic", ".heif"]);
 const SKIPPED_EXTENSIONS = new Set([".heic", ".heif"]);
 function printHelp() {
   console.log(`Bulk-import clothes from a folder of photos into this Wardrobe.
@@ -92,7 +94,7 @@ function validateManifestId(id, label) {
   return id;
 }
 
-export async function applyPreparedManifest({ manifestFile, itemsDir, modeledDir, dataDir }) {
+export async function applyPreparedManifest({ manifestFile, itemsDir, modeledDir, dataDir, root = process.cwd(), setting = envSetting }) {
   const manifest = JSON.parse(await readFile(manifestFile, "utf8"));
   if (manifest.version !== 2 || !Array.isArray(manifest.items)) throw new Error("Manifest must be a v2 object with an items array");
   const accepted = manifest.items.filter((item) => item.status === "accepted");
@@ -148,7 +150,29 @@ export async function applyPreparedManifest({ manifestFile, itemsDir, modeledDir
         await readFile(modeledSource);
       }
     }
-    prepared.push({ item: { ...item, importId }, id, variants, references });
+    const originalSources = [];
+    for (const declared of Array.isArray(item.originalSources) ? item.originalSources : []) {
+      if (!declared || typeof declared.path !== "string") throw new Error(`${item.name || id}: original source declaration is invalid`);
+      if (path.isAbsolute(declared.path)) throw new Error(`${item.name || id}: original source path must be relative to the manifest directory`);
+      const manifestDir = path.dirname(path.resolve(manifestFile));
+      const source = path.resolve(manifestDir, declared.path);
+      if (!source.startsWith(`${manifestDir}${path.sep}`)) throw new Error(`${item.name || id}: original source path escapes the manifest directory`);
+      const [manifestRoot, sourceReal] = await Promise.all([realpath(manifestDir), realpath(source)]);
+      if (!sourceReal.startsWith(`${manifestRoot}${path.sep}`)) throw new Error(`${item.name || id}: original source resolves outside the manifest directory`);
+      const bytes = await readFile(source);
+      const digest = createHash("sha256").update(bytes).digest("hex");
+      if (bytes.length !== declared.size || digest !== declared.sha256) throw new Error(`${item.name || id}: original source checksum mismatch`);
+      originalSources.push({ bytes, filename: declared.filename || path.basename(source) });
+    }
+    if (item.originalSources !== undefined && (!Array.isArray(item.originalSources) || item.originalSources.length === 0)) throw new Error(`${item.name || id}: declared original sources are missing`);
+    prepared.push({ item: { ...item, importId }, id, variants, references, originalSources, unavailableOriginals: !item.originalSources?.length ? (item.sourceRefs || []) : [] });
+  }
+  await prepareArchiveDirectory({ root, dataDir, setting });
+  for (const entry of prepared) {
+    const archived = await Promise.all(entry.originalSources.map((source) => preserveOriginal({ dataDir, bytes: source.bytes, filename: source.filename })));
+    const archivedPaths = archived.map((source) => source.path);
+    entry.item.sourceOriginals = archivedPaths;
+    entry.references = entry.references.map((reference) => ({ ...reference, original: archivedPaths[0] || reference.original, asset: reference.asset && archivedPaths[0] ? archivedPaths[0] : reference.asset }));
   }
   const recordsToWrite = [];
   for (const { item, id, variants, references } of prepared) {
@@ -167,7 +191,7 @@ export async function applyPreparedManifest({ manifestFile, itemsDir, modeledDir
       const asset = `/api/import/library/${assetName}`;
       recordVariants.push(normalizeItemV2({ id, part: item.part, color: item.color, secondaryColor: item.secondaryColor, tags: item.tags, name: item.name, defaultVariantId: variants[0].id, variants: [{ ...variant, image: asset, thumbnail: asset, modeledImage, cutout: { image: asset, thumbnail: asset, revision: variant.assetRevision || 1, status: "current" }, modeledPhoto: modeledImage ? { image: modeledImage, status: "approved", revision: variant.assetRevision || 1 } : null, approvalStatus: "approved" }], references }).variants[0]);
     }
-    recordsToWrite.push(normalizeItemV2({ id, name: item.name, part: item.part, color: item.color, secondaryColor: item.secondaryColor, tags: item.tags, defaultVariantId: recordVariants[0].id, variants: recordVariants, references, importJobId: id.replace(/^import-/, "") }));
+    recordsToWrite.push(normalizeItemV2({ id, name: item.name, part: item.part, color: item.color, secondaryColor: item.secondaryColor, tags: item.tags, defaultVariantId: recordVariants[0].id, variants: recordVariants, references, sourceRefs: item.sourceRefs || [], sourceOriginals: item.sourceOriginals || [], importJobId: id.replace(/^import-/, "") }));
   }
   await mkdir(dataDir, { recursive: true });
   const imported = [];
@@ -195,7 +219,7 @@ export async function applyPreparedManifest({ manifestFile, itemsDir, modeledDir
     total = next.length;
     return next;
   });
-  return { imported, total, library: libraryFile };
+  return { imported, total, library: libraryFile, unavailableOriginals: prepared.flatMap(({ item, unavailableOriginals }) => unavailableOriginals.map((source) => ({ item: item.name, source }))) };
 }
 
 export async function writePreparedManifest({ generated, manifestFile }) {
@@ -215,6 +239,7 @@ export async function writePreparedManifest({ generated, manifestFile }) {
   const items = [];
   const usedSlugs = new Set();
   for (const entry of entries) {
+    const sourceOriginals = Array.isArray(entry.sourceOriginals) ? entry.sourceOriginals : [];
     const baseSlug = safeSlug(entry.metadata.name);
     let slug = baseSlug;
     let suffix = 2;
@@ -234,9 +259,10 @@ export async function writePreparedManifest({ generated, manifestFile }) {
       secondaryColor: entry.metadata.secondaryColor,
       tags: entry.metadata.tags,
       status: "accepted",
-      sourceRefs: entry.sourceFiles,
+      sourceRefs: entry.sourceFiles || [],
+      ...(sourceOriginals.length ? { originalSources: sourceOriginals.map((source) => ({ ...source, path: source.manifestPath || source.path })) } : {}),
       variants: [{ id: `${slug}-standard`, name: "Standard", description: "Source presentation", origin: "photo", file, modeledFile, tags: entry.metadata.tags, sourceRefs: entry.sourceFiles, approvalStatus: "approved", assetRevision: 1 }],
-      references: entry.sourceFiles.map((source, index) => ({ id: `${slug}-reference-${index + 1}`, original: source, role: "view", scope: "item", label: source, distinctive: false, revision: 1 })),
+      references: sourceOriginals.map((source, index) => ({ id: `${slug}-reference-${index + 1}`, original: source.manifestPath || source.path, role: "view", scope: "item", label: source.filename, distinctive: false, revision: 1 })),
     });
   }
   await writeFile(manifestFile, `${JSON.stringify({ version: 2, status: "prepared", createdAt: new Date().toISOString(), items }, null, 2)}\n`);
@@ -262,15 +288,16 @@ function createLimiter(concurrency) {
 async function discoverImages(inputDir) {
   const entries = await readdir(inputDir, { withFileTypes: true });
   const skipped = entries.filter((entry) => entry.isFile() && SKIPPED_EXTENSIONS.has(path.extname(entry.name).toLowerCase()));
-  if (skipped.length) console.warn(`Skipping ${skipped.length} HEIC/HEIF photo(s) — convert to JPEG or PNG first.`);
+  if (skipped.length) console.warn(`${skipped.length} HEIC/HEIF source photo(s) will be preserved byte-for-byte; this runtime may not decode them for AI.`);
   return entries
     .filter((entry) => entry.isFile() && IMAGE_EXTENSIONS.has(path.extname(entry.name).toLowerCase()))
     .map((entry) => path.join(inputDir, entry.name))
     .sort();
 }
 
-async function detectPhotoItems({ provider, key, baseUrl, filePath }) {
+async function detectPhotoItems({ provider, key, baseUrl, filePath, originalDataDir }) {
   const raw = await readFile(filePath);
+  const sourceOriginal = await preserveOriginal({ dataDir: originalDataDir, bytes: raw, filename: path.basename(filePath) });
   const normalized = await normalizeImage(raw);
   const detected = provider === "gemini"
     ? await geminiAnalyze({ key, model: process.env.GEMINI_VISION_MODEL || "gemini-3.6-flash", image: normalized, mime: "image/png" })
@@ -279,7 +306,7 @@ async function detectPhotoItems({ provider, key, baseUrl, filePath }) {
   for (const rawItem of detected) {
     const metadata = normalizeMetadata(rawItem);
     const crop = await cropDetectedItem(normalized, metadata.boundingBox);
-    items.push({ sourceFile: path.basename(filePath), metadata, crop });
+    items.push({ sourceFile: path.basename(filePath), sourceOriginal, metadata, crop });
   }
   return items;
 }
@@ -303,10 +330,10 @@ async function generateGarmentCutout({ provider, key, baseUrl, item }) {
   return removeChromaBackground(rawBytes, actualChromaKey);
 }
 
-async function generateModeledPhoto({ provider, key, baseUrl, garmentBuffer, modelBuffer, faceBuffer, metadata }) {
-  const model = { data: modelBuffer, mime: "image/png", name: "model.png" };
+async function generateModeledPhoto({ provider, key, baseUrl, garmentBuffer, modelBuffer, modelMime = "image/png", faceBuffer, faceMime = "image/png", metadata }) {
+  const model = { data: modelBuffer, mime: modelMime, name: "model.png" };
   const garment = { data: garmentBuffer, mime: "image/png", name: "garment.png" };
-  const face = faceBuffer ? { data: faceBuffer, mime: "image/png", name: "model-face.png" } : null;
+  const face = faceBuffer ? { data: faceBuffer, mime: faceMime, name: "model-face.png" } : null;
   const referenceImages = face ? [model, face] : [model];
   const prompt = buildModeledPrompt([{ name: metadata?.name, tags: metadata?.tags }], { hasFaceReference: Boolean(face) });
   if (provider === "gemini") {
@@ -318,7 +345,7 @@ async function generateModeledPhoto({ provider, key, baseUrl, garmentBuffer, mod
   return openAIImage({ ...openAIImageOptions(envSetting), key, baseUrl, model: process.env.OPENAI_MODELED_MODEL || process.env.OPENAI_IMAGE_MODEL || "gpt-image-2", quality: process.env.OPENAI_IMAGE_QUALITY || "high", size: "1536x1024", images: [...referenceImages, garment], prompt });
 }
 
-async function writeLibraryItem({ libraryAssetDir, id, importId, metadata, garmentBuffer, modeledBuffer }) {
+async function writeLibraryItem({ libraryAssetDir, id, importId, metadata, garmentBuffer, modeledBuffer, sourceOriginal }) {
   await mkdir(libraryAssetDir, { recursive: true });
   const garmentName = `${id}-garment.png`;
   await writeFile(path.join(libraryAssetDir, garmentName), garmentBuffer);
@@ -343,6 +370,10 @@ async function writeLibraryItem({ libraryAssetDir, id, importId, metadata, garme
     thumbnail: image,
     modeledImage,
     importJobId: importId,
+    sourceOriginal: sourceOriginal?.path || null,
+    sourceOriginals: sourceOriginal ? [sourceOriginal.path] : [],
+    sourceRefs: sourceOriginal ? [sourceOriginal.filename] : [],
+    references: sourceOriginal ? [{ id: `${id}-source`, original: sourceOriginal.path, asset: sourceOriginal.path, role: "view", scope: "item", label: sourceOriginal.filename || "Original source photo", distinctive: false, revision: 1 }] : [],
     defaultVariantId: variantId,
     variants: [{ id: variantId, name: "Standard", origin: "photo", image, thumbnail: image, modeledImage, tags: metadata.tags, approvalStatus: "approved", assetRevision: 1 }],
   });
@@ -370,14 +401,16 @@ async function main() {
       itemsDir: path.resolve(args.items || path.join(manifestRoot, "items")),
       modeledDir: args.modeled ? path.resolve(args.modeled) : path.join(manifestRoot, "modeled"),
       dataDir,
+      root,
+      setting: envSetting,
     });
     console.log(JSON.stringify({ mode: "apply", ...result }, null, 2));
     return;
   }
   const libraryAssetDir = path.join(dataDir, "imported");
   const importedFile = path.join(dataDir, "library.json");
-  const modelReferencePath = path.resolve(root, process.env.WARDROBE_MODEL_REFERENCE || "data/model-reference.png");
-  const faceReferencePath = path.resolve(root, process.env.WARDROBE_FACE_REFERENCE || "data/model-reference-face.png");
+  const manifestFile = args.prepare ? path.resolve(args.manifest || path.join(path.resolve(args.input), "wardrobe-manifest-v2.json")) : null;
+  const manifestDir = manifestFile ? path.dirname(manifestFile) : null;
 
   const provider = ["openai", "openrouter", "gemini"].includes(process.env.AI_PROVIDER) ? process.env.AI_PROVIDER : "openai";
   const keyName = provider === "gemini" ? "GEMINI_API_KEY" : provider === "openrouter" ? "OPENROUTER_API_KEY" : "OPENAI_API_KEY";
@@ -404,6 +437,14 @@ async function main() {
   }
   if (args.limit) files = files.slice(0, args.limit);
 
+  if (!args.prepare && !args.dryRun) await prepareArchiveDirectory({ root, dataDir, setting: envSetting });
+  const sourceWorkspace = args.prepare
+    ? path.join(manifestDir, `.${path.basename(manifestFile)}.sources`)
+    : args.dryRun
+      ? await mkdtemp(path.join(os.tmpdir(), "wardrobe-dryrun-"))
+      : dataDir;
+  const sourceArchiveDir = args.prepare ? sourceWorkspace : args.dryRun ? path.join(sourceWorkspace, "archive") : dataDir;
+
   console.log(`Found ${files.length} photo(s) in ${inputDir}. Using ${provider} for detection and generation.`);
 
   const limit = createLimiter(Math.max(1, args.concurrency || 3));
@@ -412,7 +453,7 @@ async function main() {
   let processedPhotos = 0;
   await Promise.all(files.map((filePath) => limit(async () => {
     try {
-      const items = await detectPhotoItems({ provider, key, baseUrl, filePath });
+      const items = await detectPhotoItems({ provider, key, baseUrl, filePath, originalDataDir: sourceArchiveDir });
       allItems.push(...createIndependentCandidates(items));
       processedPhotos += 1;
       console.log(`[${processedPhotos}/${files.length}] ${path.basename(filePath)} — detected ${items.length} item(s)`);
@@ -424,23 +465,26 @@ async function main() {
 
   if (!allItems.length) {
     console.error("No clothing items were detected in any photo.");
+    if (args.dryRun) await rm(sourceWorkspace, { recursive: true, force: true });
     process.exit(1);
   }
   console.log(`\nDetected ${allItems.length} independent item(s) across ${files.length} photo(s).`);
 
   let modelBuffer = null;
   let faceBuffer = null;
+  let modelMime = "image/png";
+  let faceMime = "image/png";
   if (!args.noModeled) {
-    try {
-      modelBuffer = await readFile(modelReferencePath);
-    } catch {
-      console.log(`No model reference found at ${modelReferencePath} — skipping modeled photos, cutouts only.`);
-    }
+    const modelReference = await readReferenceBytes({ root, dataDir, setting: envSetting, kind: "full" });
+    if (modelReference) { modelBuffer = modelReference.data; modelMime = modelReference.mime; }
+    else console.log(`No model reference found at ${process.env.WARDROBE_MODEL_REFERENCE || "data/model-reference.png"} — skipping modeled photos, cutouts only.`);
     if (modelBuffer) {
-      try {
-        faceBuffer = await readFile(faceReferencePath);
-        console.log(`Using face closeup at ${faceReferencePath} for extra identity consistency.`);
-      } catch {
+      const faceReference = await readReferenceBytes({ root, dataDir, setting: envSetting, kind: "face" });
+      if (faceReference) {
+        faceBuffer = faceReference.data;
+        faceMime = faceReference.mime;
+        console.log(`Using face closeup at ${faceReference.path} for extra identity consistency.`);
+      } else {
         // Optional — falls back to the full-body reference alone.
       }
     }
@@ -456,14 +500,18 @@ async function main() {
       let modeledBuffer = null;
       if (modelBuffer) {
         try {
-          modeledBuffer = await generateModeledPhoto({ provider, key, baseUrl, garmentBuffer, modelBuffer, faceBuffer, metadata: item.metadata });
+          modeledBuffer = await generateModeledPhoto({ provider, key, baseUrl, garmentBuffer, modelBuffer, modelMime, faceBuffer, faceMime, metadata: item.metadata });
         } catch (error) {
           console.warn(`  Modeled photo failed for "${item.metadata.name}": ${error.message} (keeping the cutout)`);
         }
       }
       processedItems += 1;
       console.log(`[${processedItems}/${allItems.length}] Generated "${item.metadata.name}" (from ${sourceFiles.join(", ")})`);
-      generated.push({ importId: item.importId, metadata: item.metadata, garmentBuffer, modeledBuffer, sourceFiles });
+      const originalSource = {
+        ...item.sourceOriginal,
+        manifestPath: args.prepare ? path.relative(manifestDir, path.join(sourceArchiveDir, item.sourceOriginal.path)) : null,
+      };
+      generated.push({ importId: item.importId, metadata: item.metadata, garmentBuffer, modeledBuffer, sourceFiles, sourceOriginals: [originalSource] });
     } catch (error) {
       processedItems += 1;
       console.warn(`[${processedItems}/${allItems.length}] Failed "${item.metadata.name}": ${error.message}`);
@@ -474,7 +522,6 @@ async function main() {
   console.log(`\n${generated.length} item(s) generated, ${failed.length} failed.`);
 
   if (args.prepare) {
-    const manifestFile = path.resolve(args.manifest || path.join(inputDir, "wardrobe-manifest-v2.json"));
     const prepared = await writePreparedManifest({ generated, manifestFile });
     console.log(JSON.stringify({ mode: "prepare", ...prepared, failed: failed.map((item) => ({ name: item.metadata.name, sourceFiles: item.sourceFiles, error: item.error })) }, null, 2));
     return;
@@ -483,6 +530,7 @@ async function main() {
   if (args.dryRun) {
     console.log("\nDry run — nothing written. Would have imported:");
     generated.forEach((item) => console.log(`  - ${item.metadata.name} (${item.metadata.part}, ${item.metadata.color}) from ${item.sourceFiles.join(", ")}`));
+    await rm(sourceWorkspace, { recursive: true, force: true });
     return;
   }
 
@@ -490,7 +538,7 @@ async function main() {
   for (const item of generated) {
     const importId = item.importId || randomUUID();
     const id = `import-${importId}`;
-    records.push(await writeLibraryItem({ libraryAssetDir, id, importId, metadata: item.metadata, garmentBuffer: item.garmentBuffer, modeledBuffer: item.modeledBuffer }));
+    records.push(await writeLibraryItem({ libraryAssetDir, id, importId, metadata: item.metadata, garmentBuffer: item.garmentBuffer, modeledBuffer: item.modeledBuffer, sourceOriginal: item.sourceOriginals?.[0] }));
   }
   await mkdir(dataDir, { recursive: true });
   await appendToLibrary(dataDir, records);

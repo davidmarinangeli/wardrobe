@@ -261,7 +261,7 @@ function CheatSheetEditor({ items, entry, onClose, onSaved, onSheetUpdate, premi
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
   const [visualViewport, setVisualViewport] = useState(null);
   const isPhone = useIsPhone();
-  const { tier, tiers, chooseTier } = useRememberedTier(provider, premiumAllowed);
+  const { tier, tiers, chooseTier, tierReady, tierStateError } = useRememberedTier(provider, premiumAllowed);
   const titleInputRef = useRef(null);
   const closeKeepRef = useRef(null);
   const closeButtonRef = useRef(null);
@@ -658,12 +658,13 @@ function CheatSheetEditor({ items, entry, onClose, onSaved, onSheetUpdate, premi
                       label={dirty || !savedSheet ? "Save & beautify" : savedSheet.aiImage ? "Generate another finish" : "Beautify"}
                       busy={busy || beautifying}
                       busyLabel={beautifying ? "Beautifying…" : saving ? "Saving…" : deleting ? "Deleting…" : "Starting…"}
-                      disabled={controlsDisabled || !beautifyPrompt.trim() || (dirty || !savedSheet ? !canSave : !savedSheet.originalImage)}
+                      disabled={!tierReady || controlsDisabled || !beautifyPrompt.trim() || (dirty || !savedSheet ? !canSave : !savedSheet.originalImage)}
                       onGenerate={beautify}
                       tier={tier}
                       tiers={tiers}
                       onTierChange={chooseTier}
                       premiumAllowed={premiumAllowed}
+                      tierStateError={tierStateError}
                     />
                     <small>The original is kept. Uses your configured AI provider.</small>
                     {savedSheet?.beautifyStatus === "error" && <p className="cheat-message--error" role="alert">{savedSheet.beautifyError}</p>}

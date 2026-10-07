@@ -5,7 +5,7 @@ description: Curate complete outfits from the local Wardrobe database and genera
 
 # Generate Outfits
 
-Create a complete local outfit collection from `data/library.json`: select strong combinations, generate a square modeled image for each, verify every result, and save the finished manifest and images under `data/`.
+Create a complete outfit collection from `library.json` and `outfits.json` under the configured `WARDROBE_DATA_DIR` (default `data`): select strong combinations, generate a square modeled image for each, verify every result, and save the finished manifest and images in that archive.
 
 ## Begin with the count
 
@@ -18,7 +18,7 @@ Do the workflow end to end after receiving the count. Do not stop after returnin
 ## Requirements
 
 - Read and follow the built-in `imagegen` skill before generating images.
-- Require `data/library.json`, enough tops and bottoms for the requested count, and a local identity reference at `data/model-reference.png` or `WARDROBE_MODEL_REFERENCE`.
+- Require `library.json` in the configured archive, enough tops and bottoms for the requested count, and an identity reference at `<archive>/model-reference.png` or `WARDROBE_MODEL_REFERENCE`.
 - Keep every source garment and identity image local and unchanged.
 - Never add `data/`, the identity reference, garment images, or generated photos to Git.
 - Use only wardrobe items that exist in the current database and whose local assets resolve successfully.
@@ -32,7 +32,7 @@ Assign each worker a disjoint set of outfit IDs plus the exact identity and garm
 
 ## 1. Inspect the wardrobe
 
-Read `data/library.json`. Resolve `/api/import/library/FILENAME` assets to `data/imported/FILENAME`. Group items by:
+Resolve the archive as `path.resolve(repo, WARDROBE_DATA_DIR || 'data')` and read its `library.json`. Resolve local catalog assets relative to that directory: `/api/import/library/...` and `imported/...` point under `imported/`; `/api/archive/assets/...` maps to the matching archive-relative path. Preserve every subfolder segment and resolve the full path, never just the basename. Group items by:
 
 - `upperbody` — tops
 - `wholebody_up` — jackets and outer layers
@@ -120,14 +120,14 @@ Regenerate identity drift, missing or redesigned garments, fake closures or text
 
 After all requested outfits pass:
 
-1. Create `data/outfit-images/` if needed.
-2. Copy each accepted PNG to `data/outfit-images/OUTFIT-ID.png`.
-3. Set every accepted manifest image to `/api/import/outfits/OUTFIT-ID.png` only if the app exposes that endpoint; otherwise keep the repository-relative `outfit-images/OUTFIT-ID.png` path.
-4. Atomically write the exact requested collection to `data/outfits.json`.
+1. Resolve the configured archive directory and create its `outfit-images/` folder if needed.
+2. Copy each accepted PNG to `<archive>/outfit-images/OUTFIT-ID.png`.
+3. Store the portable relative asset path `outfit-images/OUTFIT-ID.png` in the outfit record. The web API serves it through `/api/archive/assets/outfit-images/OUTFIT-ID.png`.
+4. Atomically write the exact requested collection to `<archive>/outfits.json`.
 5. Reopen every copied file and verify that the count of images, unique outfit IDs, and accepted manifest records all equal the number the user requested.
 
 Do not claim the current gallery displays outfits unless the app has an outfit route. The completed local assets and manifest are still the deliverable.
 
 ## Finish
 
-Report the requested and completed count, output paths, any regenerated failures, and the styling mix. Display up to 12 modeled outfits in chat and point the user to the local folder for the rest.
+Report the requested and completed count, output paths, any regenerated failures, and the styling mix. Display up to 12 modeled outfits in chat and point the user to the configured archive folder for the rest.

@@ -23,6 +23,8 @@ import {
   resolveOpenAICompatibleBaseUrl,
   resolveProvider,
 } from "./import-job-api.mjs";
+import { mimeForExtension, prepareArchiveDirectory, readReferenceBytes, resolveArchiveFile } from "./archive-store.mjs";
+import { normalizeItemV2, resolveOutfitPieces, variantApprovedImage } from "../shared/wardrobe-model.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -71,17 +73,18 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) return printHelp();
 
-  const dataDir = path.join(ROOT, envSetting("WARDROBE_DATA_DIR", "data"));
+  const dataDir = path.resolve(ROOT, envSetting("WARDROBE_DATA_DIR", "data"));
   const outfitsFile = path.join(dataDir, "outfits.json");
   const libraryFile = path.join(dataDir, "library.json");
   const outfitAssetDir = path.join(dataDir, "outfits-assets");
-  const libraryAssetDir = path.join(dataDir, "imported");
 
   await mkdir(outfitAssetDir, { recursive: true });
 
   const outfits = JSON.parse(await readFile(outfitsFile, "utf8"));
   const library = JSON.parse(await readFile(libraryFile, "utf8"));
   const recordsById = new Map(library.map((r) => [r.id, r]));
+  const normalizedLibrary = library.map((record) => normalizeItemV2(record)).filter(Boolean);
+  const normalizedById = new Map(normalizedLibrary.map((record) => [record.id, record]));
 
   const provider = args.provider || resolveProvider(envSetting).provider;
   const mode = (await readAiMode(dataDir)) || "prod";
@@ -92,15 +95,14 @@ async function main() {
     process.exit(1);
   }
 
-  const modelPath = path.resolve(ROOT, envSetting("WARDROBE_MODEL_REFERENCE", "data/model-reference.png"));
-  const modelData = await readFile(modelPath).catch(() => null);
-  if (!modelData && !args.dryRun) {
-    console.error(`Error: Model reference photo not found at ${modelPath}`);
+  if (!args.dryRun) await prepareArchiveDirectory({ root: ROOT, dataDir, setting: envSetting });
+  const model = await readReferenceBytes({ root: ROOT, dataDir, setting: envSetting, kind: "full" });
+  if (!model && !args.dryRun) {
+    console.error(`Error: Model reference photo not found at ${envSetting("WARDROBE_MODEL_REFERENCE", "data/model-reference.png")}`);
     process.exit(1);
   }
 
   const face = await loadFaceReference(ROOT, envSetting);
-  const model = modelData ? { data: modelData, mime: "image/png", name: "model.png" } : null;
   const referenceImages = face ? [model, face].filter(Boolean) : [model].filter(Boolean);
 
   const resolved = resolveModeledModel(provider, args.tier, envSetting);
@@ -146,17 +148,21 @@ async function main() {
     console.log(`[${i + 1}/${targets.length}] Generating "${outfit.name}" (${outfit.id})...`);
 
     try {
-      const outfitRecords = outfit.itemIds.map((itemId) => recordsById.get(itemId)).filter(Boolean);
+      const outfitPieces = resolveOutfitPieces(outfit, normalizedLibrary);
+      const outfitRecords = outfitPieces;
       const hasFullLengthBottom = outfitRecords.some((r) => isLikelyBottom(r) && !isLikelySocks(r) && !isLikelyCroppedOrShortBottom(r));
 
       const garments = [];
       const garmentMeta = [];
-      for (const itemId of outfit.itemIds) {
-        const record = recordsById.get(itemId);
+      for (const piece of outfitPieces) {
+        const record = normalizedById.get(piece.id);
         if (hasFullLengthBottom && isLikelySocks(record)) continue;
         try {
-          const data = await readFile(path.join(libraryAssetDir, `${itemId}-garment.png`));
-          garments.push({ data, mime: "image/png", name: `${itemId}.png` });
+          const asset = record && variantApprovedImage(record, piece.variantId);
+          if (!asset) continue;
+          const file = await resolveArchiveFile(dataDir, asset);
+          const data = await readFile(file);
+          garments.push({ data, mime: mimeForExtension(path.extname(file).toLowerCase()), name: `${piece.id}-${piece.variantId || "standard"}${path.extname(file) || ".png"}` });
           garmentMeta.push({ name: record?.name, tags: record?.tags, part: record?.part });
         } catch (err) {
           if (err.code !== "ENOENT") throw err;

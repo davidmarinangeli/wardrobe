@@ -591,13 +591,11 @@ export function Onboarding({ setup, onSetupChange, onModeChange, onClose }) {
   }, []);
 
   const dismiss = useCallback(() => {
-    localStorage.setItem(DISMISS_KEY, "1");
-    onClose();
+    return onClose();
   }, [onClose]);
 
   const finish = useCallback(() => {
-    localStorage.setItem(DISMISS_KEY, "1");
-    onClose();
+    return onClose();
   }, [onClose]);
 
   return (

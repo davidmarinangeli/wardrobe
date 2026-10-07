@@ -2,10 +2,12 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { atomicJson, buildModeledPrompt, checkSetup, computeIdentityProfile, geminiAnalyzeOutfitStyle, geminiEdit, isLikelyBottom, isLikelyCroppedOrShortBottom, isLikelySocks, isPremiumAllowed, loadFaceReference, miniMaxEdit, openAIAnalyzeOutfitStyle, openAIImage, openAIImageOptions, openRouterEdit, readAiMode, resolveApiKey, resolveModeledModel, resolveOpenAICompatibleBaseUrl, resolveProvider } from "./import-job-api.mjs";
+import { mimeForExtension, readReferenceBytes, resolveArchiveFile } from "./archive-store.mjs";
 
 import { recordSignal } from "./preferences-api.mjs";
 import { summarizeOutfits } from "../shared/outfit-index.mjs";
 import { migrateOutfit, normalizeItemV2, validateOutfitPieces, variantApprovedImage } from "../shared/wardrobe-model.mjs";
+import { catalogForHttp } from "../shared/portable-assets.mjs";
 
 const OUTFIT_ASSET_ROOT = "/api/outfits/assets";
 
@@ -13,7 +15,7 @@ function json(res, status, value) {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
-  res.end(JSON.stringify(value));
+  res.end(JSON.stringify(catalogForHttp(value)));
 }
 
 async function body(req, limit = 256 * 1024) {
@@ -93,15 +95,15 @@ export function outfitsApi(options = {}) {
       const variant = record.variants.find((candidate) => candidate.id === piece.variantId);
       const image = variant && variantApprovedImage(record, piece.variantId);
       if (!image) throw Object.assign(new Error(`Variant ${piece.variantId} of ${piece.itemId} has no approved cutout yet`), { status: 409 });
-      const filename = path.basename(new URL(image, "http://localhost").pathname);
       let data;
       try {
-        data = await readFile(path.join(libraryAssetDir, filename));
+        const file = await resolveArchiveFile(dataDir, image);
+        data = await readFile(file);
+        garments.push({ data, mime: mimeForExtension(path.extname(file).toLowerCase()), name: `${piece.itemId}-${piece.variantId || "standard"}${path.extname(file) || ".png"}` });
       } catch (error) {
         if (error.code === "ENOENT") throw Object.assign(new Error(`Variant ${piece.variantId} of ${piece.itemId} has no approved cutout yet`), { status: 409 });
         throw error;
       }
-      garments.push({ data, mime: "image/png", name: `${piece.itemId}-${piece.variantId || "standard"}.png` });
       garmentMeta.push({ name: `${record.name} — ${variant.name}`, tags: [...(record.tags || []), ...(variant.tags || []), variant.description].filter(Boolean), part: record.part });
     }
     if (!garments.length) throw Object.assign(new Error("None of this outfit's pieces have a garment image to work from"), { status: 409 });
@@ -124,15 +126,8 @@ export function outfitsApi(options = {}) {
         if (tier === "premium" && !isPremiumAllowed(provider, mode)) {
           throw new Error("Premium quality needs PROD mode — the free TEST key has no billing enabled for Nano Banana 2. Switch to PROD to generate this.");
         }
-        const modelPath = path.resolve(root, setting("WARDROBE_MODEL_REFERENCE", "data/model-reference.png"));
-        let modelData;
-        try {
-          modelData = await readFile(modelPath);
-        } catch (error) {
-          if (error.code === "ENOENT") throw new Error(`Model reference not found at ${modelPath}. Set WARDROBE_MODEL_REFERENCE or add data/model-reference.png.`);
-          throw error;
-        }
-        const model = { data: modelData, mime: "image/png", name: "model.png" };
+        const model = await readReferenceBytes({ root, dataDir, setting, kind: "full" });
+        if (!model) throw new Error(`Model reference not found at ${setting("WARDROBE_MODEL_REFERENCE", "data/model-reference.png")}. Set WARDROBE_MODEL_REFERENCE or add data/model-reference.png.`);
         const face = await loadFaceReference(root, setting);
         const referenceImages = face ? [model, face] : [model];
         const basePrompt = options.modeledPrompt || buildModeledPrompt(garmentMeta, { hasFaceReference: Boolean(face) });
@@ -279,10 +274,10 @@ export function outfitsApi(options = {}) {
         void generateModeledForOutfit(id, { tier, prompt });
         return json(res, 202, updated);
       }
-      const assetMatch = url.pathname.match(/^\/api\/outfits\/assets\/([\w.-]+)$/i);
+      const assetMatch = url.pathname.match(/^\/api\/outfits\/assets\/(.+)$/i);
       if (assetMatch && req.method === "GET") {
-        const file = path.join(outfitAssetDir, path.basename(assetMatch[1]));
-        res.setHeader("Content-Type", "image/png");
+        const file = await resolveArchiveFile(dataDir, url.pathname);
+        res.setHeader("Content-Type", mimeForExtension(path.extname(file).toLowerCase()));
         res.setHeader("Cache-Control", "no-store");
         return res.end(await readFile(file));
       }

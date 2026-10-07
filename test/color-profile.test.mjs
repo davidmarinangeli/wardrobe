@@ -3,6 +3,7 @@ import test from "node:test";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { colorProfileSaveDisabled } from "../src/color-profile-actions.js";
 import {
   SEASONS,
   getSeasonAsset,
@@ -73,6 +74,14 @@ test("itemMatchesPalette matches garments within Euclidean threshold", () => {
 
   // Secondary color matching
   assert.equal(itemMatchesPalette({ color: "#FFB27A", secondaryColor: "#1B3F8B" }, profile), true);
+});
+
+test("color profile save requires loaded, error-free shared browser state", () => {
+  const resultSeason = "autumn-deep";
+  assert.equal(colorProfileSaveDisabled({ browserStateReady: false, saving: false, resultSeason }), true);
+  assert.equal(colorProfileSaveDisabled({ browserStateReady: true, saving: true, resultSeason }), true);
+  assert.equal(colorProfileSaveDisabled({ browserStateReady: true, saving: false, resultSeason: null }), true);
+  assert.equal(colorProfileSaveDisabled({ browserStateReady: true, saving: false, resultSeason }), false);
 });
 
 test("color-profile-api enforces no-judgment guardrail", async () => {

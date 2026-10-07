@@ -201,7 +201,8 @@ export function SuggestionPanel({ items, onSaveOutfit, onClose }) {
     setGenerating(true);
     setError("");
     try {
-      const colorProfile = JSON.parse(localStorage.getItem("open-wardrobe-color-profile-v1") || "null");
+      const colorStatus = await api("/api/color-profile/status");
+      const colorProfile = colorStatus.hasProfile ? colorStatus.profile : null;
       const result = await api("/api/suggestions/generate", {
         method: "POST",
         body: JSON.stringify({ occasion, colorProfile }),

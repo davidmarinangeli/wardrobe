@@ -88,6 +88,45 @@ export async function recordSignal(dataDir, input) {
   });
 }
 
+/**
+ * Appends a signal that is part of a user-visible transaction. Unlike
+ * recordSignal, this path must fail loudly and must never reinterpret a broken
+ * history file as an empty one. The idempotency key lets a caller retry after
+ * its second durable write failed without duplicating the signal.
+ */
+export async function recordSignalStrict(dataDir, input, idempotencyKey) {
+  const signal = normalizeSignal(input);
+  if (!signal || typeof idempotencyKey !== "string" || !idempotencyKey || idempotencyKey.length > 500) {
+    throw new Error("A valid signal and idempotency key are required");
+  }
+
+  return enqueueWrite(dataDir, async () => {
+    let store;
+    try {
+      const parsed = JSON.parse(await readFile(preferencesFile(dataDir), "utf8"));
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)
+        || !Array.isArray(parsed.signals)
+        || !parsed.signals.every((entry) => entry && typeof entry === "object" && !Array.isArray(entry))) {
+        throw new Error("Preference history is invalid; it was left untouched");
+      }
+      store = { version: PREFERENCES_VERSION, signals: parsed.signals };
+    } catch (error) {
+      if (error.code === "ENOENT") store = { version: PREFERENCES_VERSION, signals: [] };
+      else if (error.message === "Preference history is invalid; it was left untouched") throw error;
+      else if (error instanceof SyntaxError) throw new Error("Preference history is invalid; it was left untouched");
+      else throw error;
+    }
+
+    const previous = store.signals.find((entry) => entry.idempotencyKey === idempotencyKey);
+    if (previous) return previous;
+
+    const durableSignal = { ...signal, idempotencyKey };
+    const signals = [...store.signals, durableSignal].slice(-MAX_SIGNALS);
+    await atomicJson(preferencesFile(dataDir), { version: PREFERENCES_VERSION, signals });
+    return durableSignal;
+  });
+}
+
 async function readJsonArray(dataDir, file) {
   try {
     const parsed = JSON.parse(await readFile(path.join(dataDir, file), "utf8"));

@@ -1,7 +1,5 @@
-import { useCallback, useState } from "react";
-import { api } from "../api.js";
-
-const KEY = "open-wardrobe-worn-today-v1";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { updateWornTodayMembership, useBrowserState } from "../browser-state.js";
 
 /** Local midnight, so "today" means the user's today and not UTC's. */
 function today() {
@@ -9,52 +7,33 @@ function today() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
-function read() {
-  try {
-    const stored = JSON.parse(localStorage.getItem(KEY) || "{}");
-    // Only today's entry survives a read: yesterday's checkmarks are not state,
-    // they are clutter, and keeping them would make the button lie every morning.
-    return stored.day === today() ? new Set(stored.ids || []) : new Set();
-  } catch {
-    return new Set();
-  }
-}
-
-/**
- * Which outfits the user has already logged as worn today.
- *
- * The server is the record — every wear is a signal in the append-only log, and
- * deriveWearStats collapses repeats of the same combination on the same day. This
- * only remembers which buttons should already look pressed, which is why a stale
- * or missing value is harmless: the worst case is a second tap that derivation
- * discards. It is per-browser for the same reason it is allowed to be wrong —
- * logging on a phone leaves the laptop's checkmark unfilled, and nothing about
- * the underlying data is affected.
- */
+/** The wear signal is history; browser state keeps today's cross-browser checkmarks. */
 export function useWornToday() {
-  const [worn, setWorn] = useState(read);
+  const [error, setError] = useState("");
+  const browserState = useBrowserState();
+  const pending = useRef(new Set());
+  const worn = useMemo(() => browserState.state?.wornToday.day === today()
+    ? new Set(browserState.state.wornToday.ids)
+    : new Set(), [browserState.state?.wornToday]);
 
   const logWear = useCallback(async (outfit) => {
-    if (!outfit?.itemIds?.length) return;
-
-    setWorn((current) => {
-      const next = new Set(current).add(outfit.id);
-      try { localStorage.setItem(KEY, JSON.stringify({ day: today(), ids: [...next] })); } catch { /* private mode */ }
-      return next;
-    });
-
+    if (!browserState.ready || !outfit?.itemIds?.length || pending.current.has(outfit.id)) return;
+    if (browserState.state?.wornToday.day === today() && browserState.state.wornToday.ids.includes(outfit.id)) return;
+    pending.current.add(outfit.id);
+    setError("");
     try {
-      await api("/api/preferences/signal", {
-        method: "POST",
-        body: JSON.stringify({ type: "outfit_worn", itemIds: outfit.itemIds, name: outfit.name, source: "outfits" }),
-      });
-    } catch {
-      // Deliberately silent, and deliberately not rolled back. recordSignal's own
-      // contract is that recording a preference never fails the action the user
-      // asked for; a wear they logged is not worth an error dialog, and undoing
-      // the checkmark would tell them their tap did nothing when it may well have.
+      await updateWornTodayMembership(outfit.id, today(), true, { itemIds: outfit.itemIds, name: outfit.name });
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      pending.current.delete(outfit.id);
     }
-  }, []);
+  }, [browserState.ready, browserState.state]);
 
-  return { isWornToday: useCallback((id) => worn.has(id), [worn]), logWear };
+  return {
+    isWornToday: useCallback((id) => worn.has(id), [worn]),
+    logWear,
+    error: error || browserState.error?.message || "",
+    ready: browserState.ready,
+  };
 }

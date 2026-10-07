@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowSquareOut, Copy, HandHeart, Tag, ArrowCounterClockwise, Check } from "@phosphor-icons/react";
 import { OptimizedImage } from "./OptimizedImage.jsx";
 import { ViewerPanel } from "./components/ViewerPanel.jsx";
@@ -8,14 +8,8 @@ import { GARMENT_PART_MAP } from "../shared/garments.mjs";
 // can name a colour the same way the server does rather than keeping a second,
 // slightly different list of colour names that would eventually disagree.
 import { classifyColor } from "../scripts/style-rules.mjs";
+import { updateBrowserSet, useBrowserState } from "./browser-state.js";
 import "./declutter.css";
-
-const KEPT_KEY = "open-wardrobe-declutter-kept-v1";
-
-function readKept() {
-  try { return new Set(JSON.parse(localStorage.getItem(KEPT_KEY) || "[]")); }
-  catch { return new Set(); }
-}
 
 /** The listing text, in the order a marketplace form asks for it. */
 export function listingText(item) {
@@ -104,7 +98,7 @@ function LockedState({ wear, itemsById, onGoToOutfits }) {
 }
 
 /** One candidate at a time. Keep is a decision, not a skip. */
-function TriageDeck({ candidates, itemsById, onDecide }) {
+function TriageDeck({ candidates, itemsById, onDecide, busy = false }) {
   if (!candidates.length) {
     return (
       <div className="declutter-empty">
@@ -134,13 +128,13 @@ function TriageDeck({ candidates, itemsById, onDecide }) {
       </div>
 
       <div className="declutter-actions">
-        <button type="button" className="secondary-button" onClick={() => onDecide(current.id, "keep")}>
+        <button type="button" className="secondary-button" disabled={busy} onClick={() => onDecide(current.id, "keep")}>
           <Check size={15} weight="regular" aria-hidden="true" /> Keep
         </button>
-        <button type="button" className="secondary-button" onClick={() => onDecide(current.id, "sell")}>
+        <button type="button" className="secondary-button" disabled={busy} onClick={() => onDecide(current.id, "sell")}>
           <Tag size={15} weight="regular" aria-hidden="true" /> Sell
         </button>
-        <button type="button" className="secondary-button" onClick={() => onDecide(current.id, "donate")}>
+        <button type="button" className="secondary-button" disabled={busy} onClick={() => onDecide(current.id, "donate")}>
           <HandHeart size={15} weight="regular" aria-hidden="true" /> Donate
         </button>
       </div>
@@ -218,21 +212,29 @@ export function DeclutterPanel({ wear, itemsById, retiredItems, onSetStatus, onC
   useViewerKeyboard(onClose, closeRef);
 
   const [tab, setTab] = useState("review");
-  const [kept, setKept] = useState(readKept);
+  const [stateError, setStateError] = useState("");
+  const [savingKeep, setSavingKeep] = useState(false);
+  const browserState = useBrowserState();
+  const kept = useMemo(() => new Set(browserState.state?.declutterKeptIds || []), [browserState.state?.declutterKeptIds]);
 
   const decide = useCallback(async (id, decision) => {
     if (decision === "keep") {
       // A kept piece is a judgement the user already made; asking again next
       // session would be the app forgetting, not being thorough.
-      setKept((current) => {
-        const next = new Set(current).add(id);
-        try { localStorage.setItem(KEPT_KEY, JSON.stringify([...next])); } catch { /* private mode */ }
-        return next;
-      });
+      if (!browserState.ready) return;
+      setSavingKeep(true);
+      setStateError("");
+      try {
+        await updateBrowserSet("declutterKeptIds", id, true);
+      } catch (error) {
+        setStateError(error.message);
+      } finally {
+        setSavingKeep(false);
+      }
       return;
     }
     await onSetStatus(id, decision);
-  }, [onSetStatus]);
+  }, [browserState.ready, onSetStatus]);
 
   const candidates = useMemo(
     () => (wear?.candidates || []).filter((entry) => !kept.has(entry.id)),
@@ -252,6 +254,8 @@ export function DeclutterPanel({ wear, itemsById, retiredItems, onSetStatus, onC
       entryClassName="declutter-entry"
     >
       <div className="declutter-body">
+        {(stateError || browserState.error?.message) && <p className="declutter-note" role="alert">{stateError || browserState.error.message}</p>}
+        {!browserState.ready && !browserState.error && <p className="declutter-note">Syncing your saved decisions…</p>}
         {!wear && <p className="declutter-note">Loading…</p>}
 
         {wear && (hasPiles || wear.unlocked) && (
@@ -267,7 +271,7 @@ export function DeclutterPanel({ wear, itemsById, retiredItems, onSetStatus, onC
 
         {!wear ? null : tab === "review" ? (
           wear.unlocked
-            ? <TriageDeck candidates={candidates} itemsById={itemsById} onDecide={decide} />
+            ? <TriageDeck candidates={candidates} itemsById={itemsById} onDecide={decide} busy={savingKeep || !browserState.ready} />
             : <LockedState wear={wear} itemsById={itemsById} onGoToOutfits={onGoToOutfits} />
         ) : (
           <div className="declutter-piles">

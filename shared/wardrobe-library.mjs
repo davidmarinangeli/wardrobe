@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { catalogForDisk } from "./portable-assets.mjs";
 
 const queues = new Map();
 const LOCK_STALE_AFTER_MS = 3 * 60_000;
@@ -20,7 +21,7 @@ async function atomicWrite(file, value) {
   await mkdir(path.dirname(file), { recursive: true });
   const temporary = `${file}.${process.pid}.${randomUUID()}.tmp`;
   try {
-    await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { flag: "wx" });
+    await writeFile(temporary, `${JSON.stringify(catalogForDisk(value), null, 2)}\n`, { flag: "wx" });
     await rename(temporary, file);
   } finally {
     await rm(temporary, { force: true });

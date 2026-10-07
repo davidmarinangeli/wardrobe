@@ -7,9 +7,27 @@ import process from "node:process";
 import sharp from "sharp";
 import { normalizeItemV2, variantIdFor } from "../../../../shared/wardrobe-model.mjs";
 import { mutateLibrary } from "../../../../shared/wardrobe-library.mjs";
+import { safeArchivePath } from "../../../../shared/portable-assets.mjs";
+import { prepareArchiveDirectory, preserveOriginal, resolveArchiveFile } from "../../../../scripts/archive-store.mjs";
 
 const PARTS = new Set(["upperbody", "wholebody_up", "lowerbody", "accessories_up", "shoes"]);
 const HEX = /^#[0-9a-f]{6}$/i;
+const ARCHIVE_SETTINGS = new Set(["WARDROBE_DATA_DIR", "WARDROBE_MODEL_REFERENCE", "WARDROBE_FACE_REFERENCE"]);
+
+async function readArchiveSettings(repo) {
+  const settings = Object.fromEntries([...ARCHIVE_SETTINGS].map((name) => [name, process.env[name] || ""]));
+  let envText = "";
+  try { envText = await readFile(path.join(repo, ".env"), "utf8"); }
+  catch (error) { if (error.code !== "ENOENT") throw error; }
+  for (const line of envText.split(/\r?\n/)) {
+    const match = line.match(/^\s*(WARDROBE_DATA_DIR|WARDROBE_MODEL_REFERENCE|WARDROBE_FACE_REFERENCE)\s*=\s*(.*?)\s*$/);
+    if (!match || settings[match[1]]) continue;
+    let value = match[2];
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
+    settings[match[1]] = value;
+  }
+  return settings;
+}
 
 function usage(message) {
   if (message) console.error(`Error: ${message}\n`);
@@ -68,6 +86,9 @@ function normalizeItem(item, index) {
     ? item.tags.filter((tag) => typeof tag === "string").map((tag) => tag.trim().toLowerCase()).filter(Boolean).slice(0, 12)
     : [];
   const importId = item.importId === undefined ? null : validateManifestId(item.importId, "Import");
+  if (item.originalSources !== undefined && (!Array.isArray(item.originalSources) || !item.originalSources.length)) {
+    throw new Error(slug + ": originalSources must declare at least one captured source");
+  }
   const variants = (item.variants?.length
     ? item.variants
     : [{ id: `${slug}-standard`, name: "Standard", file: item.file || `${slug}.png`, modeledFile: item.modeledFile, origin: "photo" }])
@@ -93,6 +114,7 @@ function normalizeItem(item, index) {
     tags,
     sourceRefs: Array.isArray(item.sourceRefs) ? item.sourceRefs : [],
     references: Array.isArray(item.references) ? item.references : [],
+    originalSources: Array.isArray(item.originalSources) ? item.originalSources : [],
     assetRevision: item.assetRevision,
   };
 }
@@ -129,6 +151,10 @@ const packageFile = path.join(repo, "package.json");
 const packageJson = await readJson(packageFile, null);
 if (!packageJson || packageJson.name !== "wardrobe") throw new Error(`Not a Wardrobe repository: ${repo}`);
 
+const archiveSettings = await readArchiveSettings(repo);
+const setting = (name, fallback = "") => archiveSettings[name] || fallback;
+const dataDir = path.resolve(repo, archiveSettings.WARDROBE_DATA_DIR || "data");
+
 const manifest = await readJson(manifestFile, null);
 if (!manifest || !Array.isArray(manifest.items)) throw new Error("Manifest must contain an items array");
 const accepted = manifest.items.map(normalizeItem).filter(Boolean);
@@ -158,7 +184,58 @@ for (const item of accepted) {
   prepared.push({ ...item, importId, id, bytes, source, assetName: `${id}-garment.png`, modeledSource, modeledAssetName });
 }
 
-const dataDir = path.join(repo, "data");
+for (const item of prepared) {
+  item.archivedOriginals = [];
+  const sourceByPath = new Map();
+  for (const declared of item.originalSources) {
+    if (!declared || typeof declared.path !== "string" || !Number.isInteger(declared.size) || !/^[a-f0-9]{64}$/i.test(declared.sha256 || "")) {
+      throw new Error(item.slug + ": captured original metadata is incomplete");
+    }
+    const relative = safeArchivePath(declared.path);
+    if (!relative.startsWith("originals/")) throw new Error(item.slug + ": captured originals must be inside originals/");
+    const sourceFile = await resolveArchiveFile(dataDir, relative);
+    const sourceBytes = await readFile(sourceFile);
+    const digest = createHash("sha256").update(sourceBytes).digest("hex");
+    if (sourceBytes.length !== declared.size || digest !== declared.sha256.toLowerCase()) {
+      throw new Error(item.slug + ": captured original checksum mismatch for " + (declared.sourceRef || relative));
+    }
+    sourceByPath.set(relative, { ...declared, path: relative, bytes: sourceBytes });
+    if (typeof declared.sourceRef === "string") sourceByPath.set(declared.sourceRef, sourceByPath.get(relative));
+  }
+  const uniqueSources = [...new Set(sourceByPath.values())];
+  for (const source of uniqueSources) {
+    const saved = options.dryRun
+      ? { path: source.path, size: source.size, sha256: source.sha256, mime: source.mime, filename: source.filename }
+      : await preserveOriginal({ dataDir, bytes: source.bytes, filename: source.filename || path.basename(source.path) });
+    item.archivedOriginals.push({ ...source, ...saved });
+  }
+  const pathBySource = new Map();
+  for (const source of item.archivedOriginals) {
+    pathBySource.set(source.path, source);
+    if (typeof source.sourceRef === "string") pathBySource.set(source.sourceRef, source);
+  }
+  item.importReferences = item.references.map((reference) => {
+    const captured = pathBySource.get(reference.original);
+    return captured
+      ? { ...reference, original: captured.path, ...(reference.asset ? { asset: captured.path } : {}), label: reference.label || captured.filename || captured.sourceRef }
+      : reference;
+  });
+  for (const source of item.archivedOriginals) {
+    if (item.importReferences.some((reference) => reference.original === source.path)) continue;
+    item.importReferences.push({
+      id: item.slug + "-source-" + (item.importReferences.length + 1),
+      original: source.path,
+      asset: source.path,
+      role: "view",
+      scope: "item",
+      label: source.filename || source.sourceRef || "Original source photo",
+      distinctive: false,
+      revision: 1,
+    });
+  }
+}
+if (!options.dryRun) await prepareArchiveDirectory({ root: repo, dataDir, setting });
+
 const importedDir = path.join(dataDir, "imported");
 const libraryFile = path.join(dataDir, "library.json");
 const records = await readJson(libraryFile, []);
@@ -202,7 +279,8 @@ for (const item of prepared) {
     thumbnail: assetUrl,
     defaultVariantId: existing?.defaultVariantId || variantId,
     variants: [variant],
-    references: item.references || [],
+    references: item.importReferences || item.references || [],
+    sourceOriginals: item.archivedOriginals.map((source) => source.path),
     importJobId: item.importId,
     createdAt: existing?.createdAt,
     updatedAt: existing?.updatedAt,
@@ -250,4 +328,8 @@ console.log(JSON.stringify({
   total,
   library: libraryFile,
   items: prepared.map(({ id, name, part, assetName, modeledAssetName }) => ({ id, name, part, assetName, modeledAssetName })),
+  unavailableOriginals: prepared.flatMap((item) => item.archivedOriginals.length ? [] : [
+    ...item.sourceRefs,
+    ...item.references.map((reference) => reference.original).filter((original) => typeof original === "string"),
+  ]),
 }, null, 2));

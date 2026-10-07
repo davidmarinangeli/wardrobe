@@ -165,6 +165,8 @@ test("bulk importer contains no cross-detection deduplication path", async () =>
 test("web importer still creates one job for each detection", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "wardrobe-web-import-jobs-"));
   await writeFile(path.join(root, "model.png"), PNG);
+  const sourceJpeg = await sharp({ create: { width: 9, height: 12, channels: 3, background: "#345678" } }).jpeg().toBuffer();
+  const sourceDigest = createHash("sha256").update(sourceJpeg).digest("hex");
   const plugin = wardrobeImportApi({ env: { OPENAI_API_KEY: "test-key", WARDROBE_MODEL_REFERENCE: "model.png" } });
   await plugin.configResolved({ root });
   let handler;
@@ -172,12 +174,16 @@ test("web importer still creates one job for each detection", async () => {
   assert.ok(handler);
 
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () => Response.json({ output_text: JSON.stringify({ items: [
-    { ...metadata("First shirt"), secondaryColor: null, worn: false, rotationDegrees: 0, boundingBox: { x: 0, y: 0, width: 500, height: 1000 } },
-    { ...metadata("Second shirt"), secondaryColor: null, worn: false, rotationDegrees: 0, boundingBox: { x: 500, y: 0, width: 500, height: 1000 } },
-  ] }) });
+  globalThis.fetch = async () => {
+    const originalPath = path.join(root, "data", "originals", `${sourceDigest}.jpg`);
+    assert.deepEqual(await readFile(originalPath), sourceJpeg, "raw upload must be durable before the mocked AI request starts");
+    return Response.json({ output_text: JSON.stringify({ items: [
+      { ...metadata("First shirt"), secondaryColor: null, worn: false, rotationDegrees: 0, boundingBox: { x: 0, y: 0, width: 500, height: 1000 } },
+      { ...metadata("Second shirt"), secondaryColor: null, worn: false, rotationDegrees: 0, boundingBox: { x: 500, y: 0, width: 500, height: 1000 } },
+    ] }) });
+  };
   try {
-    const request = Readable.from([Buffer.from(JSON.stringify({ imageDataUrl: `data:image/png;base64,${PNG.toString("base64")}` }))]);
+    const request = Readable.from([Buffer.from(JSON.stringify({ filename: "portrait.jpg", imageDataUrl: `data:image/jpeg;base64,${sourceJpeg.toString("base64")}` }))]);
     request.method = "POST";
     request.url = "/api/import/jobs";
     const response = { statusCode: 200, body: "", setHeader() {}, end(value) { this.body = value; } };
@@ -187,6 +193,10 @@ test("web importer still creates one job for each detection", async () => {
     assert.equal(result.jobs.length, 2);
     assert.deepEqual(result.jobs.map((job) => job.metadata.name), ["First shirt", "Second shirt"]);
     assert.notEqual(result.jobs[0].id, result.jobs[1].id);
+    assert.deepEqual(result.jobs.map((job) => job.originalAssetUrl), [
+      `/api/archive/assets/originals/${sourceDigest}.jpg`,
+      `/api/archive/assets/originals/${sourceDigest}.jpg`,
+    ]);
   } finally {
     globalThis.fetch = originalFetch;
   }
