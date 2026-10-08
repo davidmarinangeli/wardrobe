@@ -22,6 +22,7 @@ import {
 } from "./import-job-api.mjs";
 import { migrateLibrary, normalizeItemV2, normalizeReference, variantIdFor } from "../shared/wardrobe-model.mjs";
 import { mutateLibrary } from "../shared/wardrobe-library.mjs";
+import { withArchiveWriteLease } from "./archive-coordinator.mjs";
 import { preserveOriginal, prepareArchiveDirectory, readReferenceBytes } from "./archive-store.mjs";
 
 // This script reads configuration straight from process.env rather than the app's settings
@@ -94,9 +95,15 @@ function validateManifestId(id, label) {
   return id;
 }
 
-export async function applyPreparedManifest({ manifestFile, itemsDir, modeledDir, dataDir, root = process.cwd(), setting = envSetting }) {
+async function applyPreparedManifestUnderLease({ manifestFile, itemsDir, modeledDir, dataDir, root = process.cwd(), setting = envSetting }) {
   const manifest = JSON.parse(await readFile(manifestFile, "utf8"));
   if (manifest.version !== 2 || !Array.isArray(manifest.items)) throw new Error("Manifest must be a v2 object with an items array");
+  const currentGeneration = await archiveGeneration(dataDir);
+  if (Number.isSafeInteger(manifest.provenanceGeneration)) {
+    if (manifest.provenanceGeneration !== currentGeneration) throw new Error("Prepared manifest is stale: the archive generation changed after preparation");
+  } else if (currentGeneration > 1) {
+    throw new Error("Prepared manifest has no archive-generation provenance and cannot be applied after an archive restore");
+  }
   const accepted = manifest.items.filter((item) => item.status === "accepted");
   if (!accepted.length) throw new Error("Manifest contains no accepted items");
   const importedDir = path.join(dataDir, "imported");
@@ -222,7 +229,23 @@ export async function applyPreparedManifest({ manifestFile, itemsDir, modeledDir
   return { imported, total, library: libraryFile, unavailableOriginals: prepared.flatMap(({ item, unavailableOriginals }) => unavailableOriginals.map((source) => ({ item: item.name, source }))) };
 }
 
-export async function writePreparedManifest({ generated, manifestFile }) {
+export async function applyPreparedManifest(options) {
+  if (!options?.dataDir) throw new TypeError("dataDir is required to apply a prepared archive manifest");
+  return withArchiveWriteLease(options.dataDir, () => applyPreparedManifestUnderLease(options));
+}
+
+async function archiveGeneration(dataDir) {
+  let generation = 0;
+  for (const name of ["archive-metadata.json", "browser-state.json"]) {
+    try {
+      const value = JSON.parse(await readFile(path.join(dataDir, name), "utf8"));
+      if (Number.isSafeInteger(value.archiveGeneration) && value.archiveGeneration > generation) generation = value.archiveGeneration;
+    } catch (error) { if (error.code !== "ENOENT" && !(error instanceof SyntaxError)) throw error; }
+  }
+  return generation;
+}
+
+export async function writePreparedManifest({ generated, manifestFile, provenanceGeneration = null }) {
   const manifestDir = path.dirname(path.resolve(manifestFile));
   const itemsDir = path.join(manifestDir, "items");
   const modeledDir = path.join(manifestDir, "modeled");
@@ -265,7 +288,7 @@ export async function writePreparedManifest({ generated, manifestFile }) {
       references: sourceOriginals.map((source, index) => ({ id: `${slug}-reference-${index + 1}`, original: source.manifestPath || source.path, role: "view", scope: "item", label: source.filename, distinctive: false, revision: 1 })),
     });
   }
-  await writeFile(manifestFile, `${JSON.stringify({ version: 2, status: "prepared", createdAt: new Date().toISOString(), items }, null, 2)}\n`);
+  await writeFile(manifestFile, `${JSON.stringify({ version: 2, status: "prepared", createdAt: new Date().toISOString(), ...(Number.isSafeInteger(provenanceGeneration) ? { provenanceGeneration } : {}), items }, null, 2)}\n`);
   return { manifestFile: path.resolve(manifestFile), itemsDir, modeledDir, count: items.length };
 }
 
@@ -407,6 +430,12 @@ async function main() {
     console.log(JSON.stringify({ mode: "apply", ...result }, null, 2));
     return;
   }
+  const provenanceGeneration = args.prepare
+    ? await withArchiveWriteLease(dataDir, async () => {
+      await prepareArchiveDirectory({ root, dataDir, setting: envSetting });
+      return archiveGeneration(dataDir);
+    })
+    : await archiveGeneration(dataDir);
   const libraryAssetDir = path.join(dataDir, "imported");
   const importedFile = path.join(dataDir, "library.json");
   const manifestFile = args.prepare ? path.resolve(args.manifest || path.join(path.resolve(args.input), "wardrobe-manifest-v2.json")) : null;
@@ -522,7 +551,7 @@ async function main() {
   console.log(`\n${generated.length} item(s) generated, ${failed.length} failed.`);
 
   if (args.prepare) {
-    const prepared = await writePreparedManifest({ generated, manifestFile });
+    const prepared = await writePreparedManifest({ generated, manifestFile, provenanceGeneration });
     console.log(JSON.stringify({ mode: "prepare", ...prepared, failed: failed.map((item) => ({ name: item.metadata.name, sourceFiles: item.sourceFiles, error: item.error })) }, null, 2));
     return;
   }
@@ -552,7 +581,8 @@ async function main() {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch((error) => {
+  const dataDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", process.env.WARDROBE_DATA_DIR || "data");
+  withArchiveWriteLease(dataDir, () => main()).catch((error) => {
     console.error(error.stack || error.message);
     process.exit(1);
   });

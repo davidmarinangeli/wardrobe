@@ -140,6 +140,10 @@ export function createBrowserStateClient({ request = api, getWindow = () => type
     };
     target.addEventListener("focus", refreshIfVisible);
     target.document?.addEventListener?.("visibilitychange", refreshIfVisible);
+    // Browsers do not receive storage events for the server archive. Polling
+    // its sealed revision/generation lets another open tab notice a restore
+    // even when it stays focused the whole time.
+    target.setInterval?.(refreshIfVisible, 15_000);
     listenersInstalled = true;
   }
 

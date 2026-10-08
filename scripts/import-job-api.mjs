@@ -9,8 +9,9 @@ import { NO_JUDGMENT_PROMPT } from "../shared/prompt-guardrails.mjs";
 import { normalizeItemV2 } from "../shared/wardrobe-model.mjs";
 import { mutateLibrary } from "../shared/wardrobe-library.mjs";
 import { catalogForDisk, catalogForHttp } from "../shared/portable-assets.mjs";
-import { migrateCatalogAssetPaths, prepareArchiveDirectory, preserveOriginal, readReferenceBytes, resolveArchiveFile, mimeForExtension } from "./archive-store.mjs";
+import { inspectArchiveCatalogs, migrateCatalogAssetPaths, prepareArchiveDirectory, preserveOriginal, readReferenceBytes, reportSkippedArchiveStartup, resolveArchiveFile, mimeForExtension } from "./archive-store.mjs";
 import { markBrowserStateFields } from "./browser-state-api.mjs";
+import { createArchiveRequestHandler, trackArchivePromise, withArchiveWriteLease } from "./archive-coordinator.mjs";
 
 const API_ROOT = "/api/import/jobs";
 const ASSET_ROOT = "/api/import/assets";
@@ -1347,7 +1348,42 @@ export function wardrobeImportApi(options = {}) {
     catch (error) { if (error.code === "ENOENT") return []; throw error; }
   }
 
+  async function archiveGeneration() {
+    let generation = 0;
+    for (const name of ["archive-metadata.json", "browser-state.json"]) {
+      try {
+        const value = JSON.parse(await readFile(path.join(dataDir, name), "utf8"));
+        if (Number.isSafeInteger(value.archiveGeneration) && value.archiveGeneration > generation) generation = value.archiveGeneration;
+      } catch (error) { if (error.code !== "ENOENT" && !(error instanceof SyntaxError)) throw error; }
+    }
+    return generation;
+  }
+
+  async function assertJobGeneration(job) {
+    const current = await archiveGeneration();
+    if (Number.isSafeInteger(job?.provenanceGeneration)) {
+      if (job.provenanceGeneration !== current) throw Object.assign(new Error("This import belongs to an older archive. Start it again from the current wardrobe."), { code: "archive_generation_changed", status: 409 });
+    } else if (current > 1) {
+      throw Object.assign(new Error("This import has no archive-generation provenance and cannot be approved after an archive restore."), { code: "archive_generation_changed", status: 409 });
+    }
+    return current;
+  }
+
+  async function quarantineStaleJob(job) {
+    job.status = "stale";
+    job.staleReason = "archive_generation_changed";
+    for (const stage of Object.values(job.stages || {})) {
+      if (["processing", "queued", "pending", "review"].includes(stage.status)) {
+        stage.status = "failed";
+        stage.decision = null;
+        stage.error = "This import belongs to an older archive. Start it again from the current wardrobe.";
+      }
+    }
+    await saveJob(job);
+  }
+
   async function persistImported(job) {
+    await assertJobGeneration(job);
     const id = `import-${job.id}`;
     await mkdir(libraryAssetDir, { recursive: true });
     const garmentName = `${id}-garment.png`;
@@ -1394,7 +1430,7 @@ export function wardrobeImportApi(options = {}) {
 
   async function generateModeledForItem(id, { tier, prompt }) {
     if (runningModeled.has(id)) return runningModeled.get(id);
-    const task = (async () => {
+    const task = trackArchivePromise(dataDir, async () => {
       try {
         const provider = activeProvider();
         const mode = await currentMode();
@@ -1447,7 +1483,7 @@ export function wardrobeImportApi(options = {}) {
           ? { ...record, modeledStatus: "error", modeledError: error.message }
           : record));
       }
-    })().finally(() => runningModeled.delete(id));
+    }).finally(() => runningModeled.delete(id));
     runningModeled.set(id, task);
     return task;
   }
@@ -1455,8 +1491,11 @@ export function wardrobeImportApi(options = {}) {
   async function generate(job, stageName) {
     const lock = `${job.id}:${stageName}`;
     if (running.has(lock)) return running.get(lock);
-    const task = (async () => {
+    const task = trackArchivePromise(dataDir, async () => {
       const current = await loadJob(job.id);
+      if (!current) return;
+      try { await assertJobGeneration(current); }
+      catch (error) { await quarantineStaleJob(current); return; }
       const stage = current.stages[stageName];
       stage.status = "processing"; stage.decision = null; stage.error = null; stage.attempts += 1; stage.updatedAt = new Date().toISOString();
       await saveJob(current);
@@ -1509,6 +1548,7 @@ export function wardrobeImportApi(options = {}) {
         }
         await writeFile(output, bytes);
         const fresh = await loadJob(current.id);
+        await assertJobGeneration(fresh);
         fresh.stages[stageName].status = "review";
         fresh.stages[stageName].assetUrl = `${ASSET_ROOT}/${fresh.id}/${path.basename(output)}`;
         fresh.stages[stageName].failedAssetUrl = null;
@@ -1520,11 +1560,15 @@ export function wardrobeImportApi(options = {}) {
       } catch (error) {
         const fresh = await loadJob(current.id);
         fresh.stages[stageName].status = "failed"; fresh.stages[stageName].error = error.message; fresh.stages[stageName].updatedAt = new Date().toISOString();
+        if (error.code === "archive_generation_changed") {
+          fresh.status = "stale";
+          fresh.staleReason = error.code;
+        }
         if (typeof failedAssetUrl === "string") fresh.stages[stageName].failedAssetUrl = failedAssetUrl;
         if (chromaKeyUsed) fresh.stages[stageName].chromaKey = chromaKeyUsed;
         await saveJob(fresh);
       }
-    })().finally(() => running.delete(lock));
+    }).finally(() => running.delete(lock));
     running.set(lock, task);
     return task;
   }
@@ -1653,6 +1697,7 @@ export function wardrobeImportApi(options = {}) {
         }
         const input = await body(req);
         const image = decodeImage(input);
+        const provenanceGeneration = await archiveGeneration();
         const preserved = await preserveOriginal({ dataDir, bytes: image.data, mime: image.mime, filename: typeof input.filename === "string" ? input.filename : typeof input.sourceName === "string" ? input.sourceName : "upload" });
         const normalizedImage = await normalizeImage(image.data);
         const { key } = resolveApiKey(setting, provider, setup.mode);
@@ -1677,7 +1722,7 @@ export function wardrobeImportApi(options = {}) {
           await writeFile(path.join(dir, cropFile), croppedImage);
           const now = new Date().toISOString();
           const cropStage = { ...stageState(), status: "review", assetUrl: `${ASSET_ROOT}/${id}/${cropFile}`, updatedAt: now };
-          const job = { id, status: "active", metadata, stages: { crop: cropStage, garment: stageState() }, createdAt: now, updatedAt: now, internal: { originalFile, cropFile, originalMime: "image/png", sourceOriginal: preserved.path, sourceFilename: preserved.filename } };
+          const job = { id, status: "active", provenanceGeneration, metadata, stages: { crop: cropStage, garment: stageState() }, createdAt: now, updatedAt: now, internal: { originalFile, cropFile, originalMime: "image/png", sourceOriginal: preserved.path, sourceFilename: preserved.filename } };
           job.originalAssetUrl = `/api/archive/assets/${preserved.path}`;
           await saveJob(job); jobs.push(publicJob(job));
         }
@@ -1739,6 +1784,7 @@ export function wardrobeImportApi(options = {}) {
       const stageMatch = action.match(/^stages\/(crop|garment)\/(approve|reject|regenerate)$/);
       if (stageMatch && req.method === "POST") {
         const [, stageName, decision] = stageMatch;
+        await assertJobGeneration(job);
         if (!STAGES.has(stageName)) throw Object.assign(new Error("Invalid stage"), { status: 400 });
         if (decision === "regenerate") {
           if (stageName === "crop") throw Object.assign(new Error("Upload the image again to create new crops"), { status: 400 });
@@ -1794,39 +1840,54 @@ export function wardrobeImportApi(options = {}) {
       jobsDir = path.join(dataDir, "jobs");
       importedFile = path.join(dataDir, "library.json");
       libraryAssetDir = path.join(dataDir, "imported");
-      await prepareArchiveDirectory({ root, dataDir, setting });
-      await mkdir(jobsDir, { recursive: true });
-      await mkdir(libraryAssetDir, { recursive: true });
-      const ids = await readdir(jobsDir).catch(() => []);
-      for (const id of ids) {
-        const job = await loadJob(id);
-        if (!job) continue;
-        if (job.status === "complete") {
-          try {
-            await persistImported(job);
-            await rm(path.join(jobsDir, job.id), { recursive: true, force: true });
-          } catch (error) {
-            job.status = "active";
-            job.stages.garment.status = "review";
-            job.stages.garment.decision = null;
-            job.stages.garment.error = null;
-            await saveJob(job);
+      const resume = [];
+      await withArchiveWriteLease(dataDir, async () => {
+        const preflight = await inspectArchiveCatalogs(dataDir);
+        if (!preflight.valid) {
+          reportSkippedArchiveStartup("import-job startup replay", preflight);
+          return;
+        }
+        await prepareArchiveDirectory({ root, dataDir, setting });
+        await mkdir(jobsDir, { recursive: true });
+        await mkdir(libraryAssetDir, { recursive: true });
+        const ids = await readdir(jobsDir).catch(() => []);
+        for (const id of ids) {
+          const job = await loadJob(id);
+          if (!job) continue;
+          try { await assertJobGeneration(job); }
+          catch (error) {
+            if (error.code !== "archive_generation_changed") throw error;
+            await quarantineStaleJob(job);
+            continue;
           }
-          continue;
+          if (job.status === "complete") {
+            try {
+              await persistImported(job);
+              await rm(path.join(jobsDir, job.id), { recursive: true, force: true });
+            } catch (error) {
+              job.status = "active";
+              job.stages.garment.status = "review";
+              job.stages.garment.decision = null;
+              job.stages.garment.error = null;
+              await saveJob(job);
+            }
+            continue;
+          }
+          if (job.stages.crop?.status === "rejected" || job.stages.garment.status === "rejected") {
+            await rm(path.join(jobsDir, job.id), { recursive: true, force: true });
+            continue;
+          }
+          if (job.stages.crop && job.stages.crop.status !== "approved") continue;
+          if (["processing", "queued"].includes(job.stages.garment.status)) {
+            job.stages.garment.status = "pending";
+            await saveJob(job);
+            resume.push(job);
+          }
         }
-        if (job.stages.crop?.status === "rejected" || job.stages.garment.status === "rejected") {
-          await rm(path.join(jobsDir, job.id), { recursive: true, force: true });
-          continue;
-        }
-        if (job.stages.crop && job.stages.crop.status !== "approved") continue;
-        if (["processing", "queued"].includes(job.stages.garment.status)) {
-          job.stages.garment.status = "pending";
-          await saveJob(job);
-          void generate(job, "garment");
-        }
-      }
+      });
+      for (const job of resume) void generate(job, "garment").catch(() => {});
     },
-    configureServer(server) { server.middlewares.use(handler); },
-    configurePreviewServer(server) { server.middlewares.use(handler); },
+    configureServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },
+    configurePreviewServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },
   };
 }

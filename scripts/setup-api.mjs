@@ -1,8 +1,9 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createArchiveRequestHandler } from "./archive-coordinator.mjs";
 import path from "node:path";
 import sharp from "sharp";
 import { AI_PROVIDERS, atomicJson, resolveApiKey, resolveProvider } from "./import-job-api.mjs";
-import { prepareArchiveDirectory, preserveOriginal } from "./archive-store.mjs";
+import { ArchiveCatalogPreflightError, prepareArchiveDirectory, preserveOriginal, reportSkippedArchiveStartup } from "./archive-store.mjs";
 
 const WRITABLE_KEYS = new Set(["AI_PROVIDER", "OPENAI_API_KEY", "OPENROUTER_API_KEY", "GEMINI_API_KEY_TEST", "GEMINI_API_KEY_PROD", "MINIMAX_API_KEY"]);
 const ENV_LINE = /^([A-Z0-9_]+)=/;
@@ -148,9 +149,13 @@ export function wardrobeSetupApi(options = {}) {
     async configResolved(config) {
       root = config.root;
       dataDir = path.resolve(root, setting("WARDROBE_DATA_DIR", "data"));
-      await prepareArchiveDirectory({ root, dataDir, setting });
+      try { await prepareArchiveDirectory({ root, dataDir, setting }); }
+      catch (error) {
+        if (!(error instanceof ArchiveCatalogPreflightError)) throw error;
+        reportSkippedArchiveStartup("setup reference/default preparation", { valid: false, invalidCatalogs: error.catalogs });
+      }
     },
-    configureServer(server) { server.middlewares.use(handler); },
-    configurePreviewServer(server) { server.middlewares.use(handler); },
+    configureServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },
+    configurePreviewServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },
   };
 }

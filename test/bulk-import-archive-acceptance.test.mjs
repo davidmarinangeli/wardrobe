@@ -93,7 +93,8 @@ test("bulk prepare carries sidecar originals through source deletion, apply, and
   const archivedSource = imported[0].sourceOriginals[0];
   assert.deepEqual(await readFile(await resolveArchiveFile(dataDir, archivedSource)), source);
   const inventory = await buildArchiveInventory(dataDir);
-  assert.equal((await validateArchive(dataDir, inventory)).valid, true);
+  const validation = await validateArchive(dataDir, inventory);
+  assert.equal(validation.valid, true, JSON.stringify(validation.errors));
 
   await runBulk(env, ["--apply", "--manifest", manifestFile]);
   assert.deepEqual(await readFile(path.join(dataDir, "library.json")), firstLibrary, "reapplying remains idempotent after the input photo is gone");

@@ -121,7 +121,7 @@ function scatteredPieces(outfitId, pieces) {
       maxHeight: isFull ? "82%" : "68%",
       maxWidth: "68%",
     };
-    return <img key={item.id} className="outfit-card-hover-piece outfit-card-solo-piece" src={item.image || item.thumbnail} alt="" style={style} />;
+    return <OptimizedImage key={item.id} className="outfit-card-hover-piece outfit-card-solo-piece" src={item.image || item.thumbnail} alt="" style={style} />;
   }
   const seenByPart = {};
   return pieces.map((item) => {
@@ -133,7 +133,7 @@ function scatteredPieces(outfitId, pieces) {
     if (slot.bottom != null) style.bottom = slot.bottom;
     if (slot.left != null) style.left = slot.left;
     if (slot.right != null) style.right = slot.right;
-    return <img key={item.id} className="outfit-card-hover-piece" src={item.image || item.thumbnail} alt="" style={style} />;
+    return <OptimizedImage key={item.id} className="outfit-card-hover-piece" src={item.image || item.thumbnail} alt="" style={style} />;
   });
 }
 

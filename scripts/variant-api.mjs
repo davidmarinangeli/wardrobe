@@ -41,10 +41,11 @@ import {
 import { migrateDataDirectory } from "./wardrobe-data.mjs";
 import { mutateLibrary } from "../shared/wardrobe-library.mjs";
 import { catalogForHttp } from "../shared/portable-assets.mjs";
-import { mimeForExtension, preserveOriginal, resolveArchiveFile } from "./archive-store.mjs";
+import { inspectArchiveCatalogs, mimeForExtension, preserveOriginal, reportSkippedArchiveStartup, resolveArchiveFile } from "./archive-store.mjs";
 import { readReferenceBytes } from "./archive-store.mjs";
 import { migrateCatalogAssetPaths } from "./archive-store.mjs";
 import { markBrowserStateFields } from "./browser-state-api.mjs";
+import { createArchiveRequestHandler, ensureArchiveRecovered, trackArchivePromise, withArchiveWriteLease } from "./archive-coordinator.mjs";
 
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 
@@ -320,7 +321,7 @@ export function variantApi(options = {}) {
   async function generateVariant(itemId, variantId, { tier, prompt }) {
     const lock = `${itemId}:${variantId}`;
     if (running.has(lock)) return running.get(lock);
-    const task = (async () => {
+    const task = trackArchivePromise(dataDir, async () => {
       try {
         const items = await loadItems();
         const item = findItem(items, itemId);
@@ -394,7 +395,7 @@ export function variantApi(options = {}) {
           await saveItems(fresh, base);
         } catch { /* preserve original generation error */ }
       }
-    })().finally(() => running.delete(lock));
+    }).finally(() => running.delete(lock));
     running.set(lock, task);
     return task;
   }
@@ -402,7 +403,7 @@ export function variantApi(options = {}) {
   async function processVariant(itemId, variantId, input) {
     const lock = `${itemId}:${variantId}`;
     if (runningPipelines.has(lock)) return runningPipelines.get(lock);
-    const task = (async () => {
+    const task = trackArchivePromise(dataDir, async () => {
       try {
         const provider = resolveProvider(setting).provider;
         const mode = await currentMode();
@@ -493,7 +494,7 @@ export function variantApi(options = {}) {
           await saveItems(replaceItem(fresh, failed), base);
         } catch { /* preserve the pipeline error */ }
       }
-    })().finally(() => runningPipelines.delete(lock));
+    }).finally(() => runningPipelines.delete(lock));
     runningPipelines.set(lock, task);
     return task;
   }
@@ -724,11 +725,20 @@ export function variantApi(options = {}) {
       libraryFile = path.join(dataDir, "library.json");
       outfitsFile = path.join(dataDir, "outfits.json");
       libraryAssetDir = path.join(dataDir, "imported");
-      await mkdir(libraryAssetDir, { recursive: true });
-      await migrateDataDirectory(dataDir);
-      await migrateCatalogAssetPaths(dataDir, atomicJson, mutateLibrary);
+      await withArchiveWriteLease(dataDir, async () => {
+        await ensureArchiveRecovered(dataDir);
+        const preflight = await inspectArchiveCatalogs(dataDir);
+        if (!preflight.valid) {
+          reportSkippedArchiveStartup("variant startup migrations", preflight);
+          return;
+        }
+        await mkdir(libraryAssetDir, { recursive: true });
+        const migration = await migrateDataDirectory(dataDir);
+        if (migration.skipped) return;
+        await migrateCatalogAssetPaths(dataDir, atomicJson, mutateLibrary);
+      });
     },
-    configureServer(server) { server.middlewares.use(handler); },
-    configurePreviewServer(server) { server.middlewares.use(handler); },
+    configureServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },
+    configurePreviewServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },
   };
 }

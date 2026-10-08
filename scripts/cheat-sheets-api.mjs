@@ -8,7 +8,8 @@ import { catalogForHttp } from "../shared/portable-assets.mjs";
 import { buildCheatSheetLayout, CHEAT_SHEET_LAYOUT_VERSION, CHEAT_SHEET_MAX_HEIGHT, CHEAT_SHEET_EXPORT_WIDTH, CHEAT_SHEET_MIN_LOGICAL_HEIGHT, normalizeCheatSheetScale } from "../shared/cheat-sheet-layout.mjs";
 import { buildCheatSheetBeautifyPrompt, CHEAT_SHEET_DESCRIPTION_LIMIT, CHEAT_SHEET_PROMPT_LIMIT, DEFAULT_CHEAT_SHEET_BEAUTIFY_PROMPT } from "../shared/cheat-sheet-prompt.mjs";
 import { cheatSheetImageSettings, generateCheatSheetImage } from "./cheat-sheet-beautify.mjs";
-import { mimeForExtension, resolveArchiveFile } from "./archive-store.mjs";
+import { inspectArchiveCatalogs, mimeForExtension, reportSkippedArchiveStartup, resolveArchiveFile } from "./archive-store.mjs";
+import { createArchiveRequestHandler, ensureArchiveRecovered, trackArchivePromise, withArchiveWriteLease } from "./archive-coordinator.mjs";
 
 const API_ROOT = "/api/cheat-sheets";
 const ASSET_ROOT = `${API_ROOT}/assets`;
@@ -81,6 +82,10 @@ export function cheatSheetsApi(options = {}) {
     mutationQueue = next.catch(() => {});
     return next;
   };
+
+  function presentSheet(sheet) {
+    return running.has(sheet.id) ? { ...sheet, beautifyStatus: "processing" } : sheet;
+  }
 
   async function loadSheets() {
     try {
@@ -325,9 +330,10 @@ export function cheatSheetsApi(options = {}) {
       if (running.has(id)) throw Object.assign(new Error("This cheat sheet is already being beautified."), { status: 409 });
       const sheet = { ...current, beautifyPrompt: prompt.trim(), beautifyTier: settings.tier, beautifyStatus: "processing", beautifyError: null, beautifyJobId: randomUUID() };
       await saveSheets(sheets.map((entry) => entry.id === id ? sheet : entry));
-      const task = beautifySheet(sheet, settings).catch((error) => {
+      let task;
+      task = trackArchivePromise(dataDir, () => beautifySheet(sheet, settings)).catch((error) => {
         console.error("Could not persist cheat sheet beautification status:", error.message);
-      }).finally(() => running.delete(id));
+      }).finally(() => { if (running.get(id) === task) running.delete(id); });
       running.set(id, task);
       return sheet;
     });
@@ -340,7 +346,7 @@ export function cheatSheetsApi(options = {}) {
     try {
       if (url.pathname === API_ROOT && req.method === "GET") {
         const sheets = await loadSheets();
-        return json(res, 200, { sheets: [...sheets].sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))) });
+        return json(res, 200, { sheets: sheets.map(presentSheet).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))) });
       }
       if (url.pathname === API_ROOT && req.method === "POST") {
         const rendered = await validateAndCompose(await readBody(req));
@@ -373,7 +379,7 @@ export function cheatSheetsApi(options = {}) {
 
       if (req.method === "GET") {
         const sheet = (await loadSheets()).find((entry) => entry.id === id);
-        return sheet ? json(res, 200, { sheet }) : json(res, 404, { error: "Cheat sheet not found" });
+        return sheet ? json(res, 200, { sheet: presentSheet(sheet) }) : json(res, 404, { error: "Cheat sheet not found" });
       }
       if (req.method === "PUT") {
         const input = await readBody(req);
@@ -416,16 +422,24 @@ export function cheatSheetsApi(options = {}) {
       sheetsFile = path.join(dataDir, "cheat-sheets.json");
       libraryAssetDir = path.join(dataDir, "imported");
       assetDir = path.join(dataDir, "cheat-sheets-assets");
-      await mkdir(dataDir, { recursive: true });
-      await mkdir(assetDir, { recursive: true });
-      const sheets = await loadSheets();
-      if (sheets.some((sheet) => sheet.beautifyStatus === "processing")) {
-        await saveSheets(sheets.map((sheet) => sheet.beautifyStatus === "processing"
-          ? { ...sheet, beautifyStatus: "error", beautifyError: "Generation was interrupted when the server restarted. Try again." }
-          : sheet));
-      }
+      await withArchiveWriteLease(dataDir, async () => {
+        await ensureArchiveRecovered(dataDir);
+        const preflight = await inspectArchiveCatalogs(dataDir);
+        if (!preflight.valid) {
+          reportSkippedArchiveStartup("cheat-sheet restart recovery", preflight);
+          return;
+        }
+        await mkdir(dataDir, { recursive: true });
+        await mkdir(assetDir, { recursive: true });
+        const sheets = await loadSheets();
+        if (sheets.some((sheet) => sheet.beautifyStatus === "processing")) {
+          await saveSheets(sheets.map((sheet) => sheet.beautifyStatus === "processing"
+            ? { ...sheet, beautifyStatus: "error", beautifyError: "Generation was interrupted when the server restarted. Try again." }
+            : sheet));
+        }
+      });
     },
-    configureServer(server) { server.middlewares.use(handler); },
-    configurePreviewServer(server) { server.middlewares.use(handler); },
+    configureServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },
+    configurePreviewServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },
   };
 }

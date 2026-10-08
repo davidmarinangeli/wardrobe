@@ -66,7 +66,8 @@ async function assertCapturedOriginal(dataDir, source) {
   assert.deepEqual(await readFile(path.join(dataDir, relative)), source);
   const inventory = await buildArchiveInventory(dataDir);
   assert.ok(inventory.files.some((entry) => entry.path === relative && entry.sha256 === digest(source)));
-  assert.equal((await validateArchive(dataDir, inventory)).valid, true);
+  const validation = await validateArchive(dataDir, inventory);
+  assert.equal(validation.valid, true, JSON.stringify(validation.errors));
 }
 
 test("web import keeps raw upload bytes when mocked AI fails or finds zero garments", async (t) => {

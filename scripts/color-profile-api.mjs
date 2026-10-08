@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { createArchiveRequestHandler } from "./archive-coordinator.mjs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import {
@@ -601,7 +602,7 @@ export function colorProfileApi(options = {}) {
       root = config.root;
       dataDir = path.resolve(root, setting("WARDROBE_DATA_DIR", "data"));
     },
-    configureServer(server) { server.middlewares.use(handler); },
-    configurePreviewServer(server) { server.middlewares.use(handler); },
+    configureServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },
+    configurePreviewServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },
   };
 }

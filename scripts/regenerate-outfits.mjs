@@ -25,6 +25,7 @@ import {
 } from "./import-job-api.mjs";
 import { mimeForExtension, prepareArchiveDirectory, readReferenceBytes, resolveArchiveFile } from "./archive-store.mjs";
 import { normalizeItemV2, resolveOutfitPieces, variantApprovedImage } from "../shared/wardrobe-model.mjs";
+import { withArchiveWriteLease } from "./archive-coordinator.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -282,7 +283,7 @@ async function main() {
   console.log(`\nFinished: ${completed} generated successfully, ${failed} failed.`);
 }
 
-main().catch((err) => {
+withArchiveWriteLease(path.resolve(ROOT, envSetting("WARDROBE_DATA_DIR", "data")), () => main()).catch((err) => {
   console.error("Fatal error:", err);
   process.exit(1);
 });

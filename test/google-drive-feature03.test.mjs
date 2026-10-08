@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { access, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, it } from "node:test";
@@ -239,7 +239,7 @@ async function prepareArchive(root, media = Buffer.from("coat-image")) {
   return dataDir;
 }
 
-function setup(dataDir, drive, rootId = ROOT_ID) {
+function setup(dataDir, drive, rootId = ROOT_ID, workerOptions = {}) {
   let target = {
     targetFingerprint: digest(Buffer.from(`target:${rootId}`)),
     connectionGeneration: "12345678123456781234567812345678",
@@ -254,7 +254,7 @@ function setup(dataDir, drive, rootId = ROOT_ID) {
   };
   return {
     service,
-    worker: createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs: 60_000 }),
+    worker: createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs: 60_000, ...workerOptions }),
     changeTarget(patch) { target = { ...target, ...patch }; },
   };
 }
@@ -284,6 +284,13 @@ async function choose(worker, choice = "use-local") {
 
 function stateFile(dataDir) { return path.join(dataDir, ".google-drive", "sync-state.json"); }
 async function readSyncState(worker) { return JSON.parse(await readFile(path.join(worker.privateDir, "sync-state.json"), "utf8")); }
+
+async function writeCatalogAtomically(dataDir, text) {
+  const destination = path.join(dataDir, "library.json");
+  const temporary = `${destination}.test-tmp`;
+  await writeFile(temporary, text, { mode: 0o600 });
+  await rename(temporary, destination);
+}
 
 async function prepareGenerationSealedRestore(dataDir) {
   const metadataPath = path.join(dataDir, "archive-metadata.json");
@@ -473,22 +480,31 @@ describe("persistent Google Drive archive sync", () => {
     await assert.rejects(worker.commitArchiveChoice({ evidenceId: preview.evidenceId, source: "feature04", confirmed: true, choice: "initialize" }));
   });
 
-  it("rejects a corrupt local catalog without changing the previously committed pointer", async () => {
-    const root = await temporaryRoot();
-    const dataDir = await prepareArchive(root);
-    const drive = makeDrive();
-    const { worker } = setup(dataDir, drive);
-    const first = await choose(worker);
-    await waitForCompleted(worker, first.local.fingerprint);
-    const pointer = drive.children().find((item) => item.name === COMMIT_NAME);
-    const pointerBytes = await drive.client.readFile(pointer.id);
-    const previousFingerprint = (await readSyncState(worker)).lastCompleted.fingerprint;
+  it("rejects malformed domain schemas without changing the previously committed pointer", async () => {
+    const malformed = [
+      ["library.json", [{ id: "bad-library", variants: 17 }]],
+      ["outfits.json", [{ id: "bad-outfit", pieces: "bad" }]],
+      ["inspo.json", [{ id: "bad-inspo", colors: { red: true } }]],
+      ["wishlist.json", [{ id: "bad-wishlist", cropImage: true }]],
+      ["cheat-sheets.json", [{ id: "bad-sheet", pieces: [{ itemId: "item" }], bands: "bad" }]],
+    ];
+    for (const [catalog, value] of malformed) {
+      const root = await temporaryRoot();
+      const dataDir = await prepareArchive(root);
+      const drive = makeDrive();
+      const { worker } = setup(dataDir, drive);
+      const first = await choose(worker);
+      await waitForCompleted(worker, first.local.fingerprint);
+      const pointer = drive.children().find((item) => item.name === COMMIT_NAME);
+      const pointerBytes = await drive.client.readFile(pointer.id);
+      const previousFingerprint = (await readSyncState(worker)).lastCompleted.fingerprint;
 
-    await writeFile(path.join(dataDir, "library.json"), "{malformed");
-    await assert.rejects(worker.runOnce(), { code: "archive_invalid" });
-    assert.deepEqual(await drive.client.readFile(pointer.id), pointerBytes);
-    assert.equal((await readSyncState(worker)).lastCompleted.fingerprint, previousFingerprint);
-    assert.equal((await worker.getSafeStatus()).syncError.code, "archive_invalid");
+      await writeFile(path.join(dataDir, catalog), `${JSON.stringify(value)}\n`);
+      await assert.rejects(worker.runOnce(), { code: "archive_invalid" }, `${catalog} must fail structural validation`);
+      assert.deepEqual(await drive.client.readFile(pointer.id), pointerBytes, `${catalog} cannot replace the committed pointer`);
+      assert.equal((await readSyncState(worker)).lastCompleted.fingerprint, previousFingerprint);
+      assert.equal((await worker.getSafeStatus()).syncError.code, "archive_invalid");
+    }
   });
 
   it("preserves malformed private state and reports only a curated status", async () => {
@@ -637,14 +653,20 @@ describe("persistent Google Drive archive sync", () => {
     const preview = await choose(worker);
     const errorWaitStarted = Date.now();
     let persisted;
-    while (Date.now() - errorWaitStarted < 2_000) {
+    let errorAndWriterReleased = false;
+    while (Date.now() - errorWaitStarted < 20_000) {
       persisted = JSON.parse(await readFile(stateFile(dataDir), "utf8"));
       if (persisted.phase === "error") {
         try { await access(path.join(dataDir, ".google-drive", "sync.lock")); }
-        catch { break; }
+        catch (error) {
+          assert.equal(error.code, "ENOENT");
+          errorAndWriterReleased = true;
+          break;
+        }
       }
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
+    assert.equal(errorAndWriterReleased, true, "the lost acknowledgement must be persisted and the uploader lock released before restart state is edited");
     assert.ok(persisted.candidate?.directory, "immutable candidate remains durable after the lost acknowledgement");
     persisted.retry.at = 0;
     await writeFile(stateFile(dataDir), JSON.stringify(persisted), { mode: 0o600 });
@@ -686,6 +708,46 @@ describe("persistent Google Drive archive sync", () => {
     assert.equal(second.syncState, "idle");
     assert.notEqual((await readSyncState(worker)).lastCompleted.fingerprint, firstCompleted);
     assert.equal(drive.children().filter((item) => item.name.startsWith("wardrobe-snapshot-")).length, 1);
+  });
+
+  it("coalesces runOnce requests made after lock release but before the active run is cleared", async () => {
+    const root = await temporaryRoot();
+    const dataDir = await prepareArchive(root);
+    const drive = makeDrive();
+    let releaseGate;
+    let announceGate;
+    const gateReached = new Promise((resolve) => { announceGate = resolve; });
+    const gate = new Promise((resolve) => { releaseGate = resolve; });
+    let holdFirstRun = true;
+    const { worker } = setup(dataDir, drive, ROOT_ID, {
+      onRunLockReleased: async () => {
+        if (!holdFirstRun) return;
+        holdFirstRun = false;
+        announceGate();
+        await gate;
+      },
+    });
+
+    await choose(worker);
+    await gateReached;
+    const stateAtGate = await readSyncState(worker);
+    assert.equal(stateAtGate.phase, "idle", "the first scan has written its completed state");
+    try {
+      await access(path.join(dataDir, ".google-drive", "sync.lock"));
+      assert.fail("the writer lock should be released while the run completion is gated");
+    } catch (error) { assert.equal(error.code, "ENOENT"); }
+
+    await writeFile(path.join(dataDir, "library.json"), "[{\"id\":\"coalesced-after-lock-release\"}]\n");
+    const editedFingerprint = digest(Buffer.from(JSON.stringify(await buildArchiveInventory(dataDir))));
+    const requestedRun = worker.runOnce();
+    let rerunFinished = false;
+    requestedRun.then(() => { rerunFinished = true; });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(rerunFinished, false, "the concurrent caller waits for its requested follow-up scan");
+    releaseGate();
+    await requestedRun;
+    await waitForCompleted(worker, editedFingerprint);
+    assert.equal((await readSyncState(worker)).lastCompleted.fingerprint, editedFingerprint);
   });
 
   it("keeps a pre-pointer candidate retryable when the pointer update fails", async () => {
@@ -918,7 +980,10 @@ describe("persistent Google Drive archive sync", () => {
     assert.equal(adoptedStatus.syncState, "idle");
     assert.equal(adoptedStatus.syncError, null);
 
-    await writeFile(path.join(dataDir, "library.json"), "[{\"id\":\"after-adopted-ack\"}]\n");
+    // Let any auto-scan queued by equivalent adoption settle before simulating
+    // the application's atomic catalog publication.
+    await worker.runOnce();
+    await writeCatalogAtomically(dataDir, "[{\"id\":\"after-adopted-ack\"}]\n");
     const editedFingerprint = digest(Buffer.from(JSON.stringify(await buildArchiveInventory(dataDir))));
     await worker.runOnce();
     await waitForCompleted(worker, editedFingerprint);

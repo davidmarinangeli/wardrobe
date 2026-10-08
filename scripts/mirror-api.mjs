@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { createArchiveRequestHandler } from "./archive-coordinator.mjs";
 import path from "node:path";
 import { geminiPerceiveOutfit, normalizeImage, openAIPerceiveOutfit, readAiMode, resolveApiKey, resolveOpenAICompatibleBaseUrl, resolveProvider } from "./import-job-api.mjs";
 import { buildMirrorCritique } from "./style-rules.mjs";
@@ -119,7 +120,7 @@ export function mirrorApi(options = {}) {
       root = config.root;
       dataDir = path.resolve(root, setting("WARDROBE_DATA_DIR", "data"));
     },
-    configureServer(server) { server.middlewares.use(handler); },
-    configurePreviewServer(server) { server.middlewares.use(handler); },
+    configureServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },
+    configurePreviewServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },
   };
 }

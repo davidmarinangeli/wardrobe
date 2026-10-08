@@ -4,6 +4,7 @@ import { lstat, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { prepareArchiveDirectory, preserveOriginal } from "./archive-store.mjs";
+import { withArchiveWriteLease } from "./archive-coordinator.mjs";
 
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff", ".gif", ".avif", ".bmp", ".heic", ".heif"]);
 const IGNORED_DIRECTORIES = new Set([".git", "node_modules", "data", "dist"]);
@@ -67,7 +68,18 @@ async function readArchiveSettings(root, env) {
   return settings;
 }
 
-export async function captureImportSources({ inputDir, outputFile, root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."), env = process.env }) {
+async function archiveGeneration(dataDir) {
+  let generation = 0;
+  for (const name of ["archive-metadata.json", "browser-state.json"]) {
+    try {
+      const value = JSON.parse(await readFile(path.join(dataDir, name), "utf8"));
+      if (Number.isSafeInteger(value?.archiveGeneration) && value.archiveGeneration > generation) generation = value.archiveGeneration;
+    } catch (error) { if (error.code !== "ENOENT" && !(error instanceof SyntaxError)) throw error; }
+  }
+  return generation;
+}
+
+async function captureImportSourcesInsideLease({ inputDir, outputFile, root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."), env = process.env }) {
   const inputRoot = path.resolve(inputDir);
   const inputInfo = await lstat(inputRoot);
   if (inputInfo.isSymbolicLink() || (!inputInfo.isDirectory() && !inputInfo.isFile())) throw new Error("Source input must be a real directory or image file");
@@ -75,6 +87,7 @@ export async function captureImportSources({ inputDir, outputFile, root = path.r
   const dataDir = path.resolve(root, settings.WARDROBE_DATA_DIR || "data");
   const setting = (name, fallback = "") => settings[name] || fallback;
   await prepareArchiveDirectory({ root, dataDir, setting });
+  const provenanceGeneration = await archiveGeneration(dataDir);
   const files = await findImages(inputRoot);
   if (!files.length) throw new Error("No supported image files found in the source folder");
 
@@ -91,11 +104,19 @@ export async function captureImportSources({ inputDir, outputFile, root = path.r
       filename: source.filename,
     });
   }
-  const manifest = { version: 1, sources };
+  const manifest = { version: 1, provenanceGeneration, sources };
   const output = path.resolve(outputFile);
   await mkdir(path.dirname(output), { recursive: true });
   await writeFile(output, `${JSON.stringify(manifest, null, 2)}\n`);
   return { output, count: sources.length, sources };
+}
+
+export async function captureImportSources(options) {
+  const root = path.resolve(options?.root || path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."));
+  const env = options?.env || process.env;
+  const settings = await readArchiveSettings(root, env);
+  const dataDir = path.resolve(root, settings.WARDROBE_DATA_DIR || "data");
+  return withArchiveWriteLease(dataDir, () => captureImportSourcesInsideLease({ ...options, root, env }));
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

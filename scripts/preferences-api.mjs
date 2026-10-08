@@ -1,4 +1,5 @@
 // Storage and HTTP for the behaviour-derived taste profile. The derivation
+import { createArchiveRequestHandler } from "./archive-coordinator.mjs";
 // itself is pure and lives in preferences.mjs.
 //
 // Local-first like the rest of data/: this file never leaves the machine.
@@ -233,7 +234,7 @@ export function preferencesApi(options = {}) {
     async configResolved(config) {
       dataDir = path.resolve(config.root, setting("WARDROBE_DATA_DIR", "data"));
     },
-    configureServer(server) { server.middlewares.use(handler); },
-    configurePreviewServer(server) { server.middlewares.use(handler); },
+    configureServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },
+    configurePreviewServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },
   };
 }

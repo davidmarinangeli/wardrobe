@@ -1,4 +1,5 @@
 import { mkdir, readFile } from "node:fs/promises";
+import { createArchiveRequestHandler } from "./archive-coordinator.mjs";
 import path from "node:path";
 import { atomicJson } from "./import-job-api.mjs";
 import { recordSignalStrict } from "./preferences-api.mjs";
@@ -241,7 +242,7 @@ export function browserStateApi(options = {}) {
     name: "wardrobe-browser-state-api",
     apply: "serve",
     configResolved(config) { dataDir = path.resolve(config.root, setting("WARDROBE_DATA_DIR", "data")); },
-    configureServer(server) { server.middlewares.use(handler); },
-    configurePreviewServer(server) { server.middlewares.use(handler); },
+    configureServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },
+    configurePreviewServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },
   };
 }

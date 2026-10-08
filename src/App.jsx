@@ -76,6 +76,7 @@ export function App() {
     setSelectedId(id);
   }, []);
   const [loading, setLoading] = useState(true);
+  const [loadedArchiveGeneration, setLoadedArchiveGeneration] = useState(null);
   const [error, setError] = useState("");
   const [colorProfile, setColorProfile] = useState(null);
   const browserStateSnapshot = useBrowserState();
@@ -101,10 +102,15 @@ export function App() {
   const [wear, setWear] = useState(null);
   const [showDeclutter, setShowDeclutter] = useState(false);
   const observedArchiveGeneration = useRef(null);
+  const initialArchiveLoadStarted = useRef(false);
+  const currentArchiveGeneration = useRef(browserState?.archiveGeneration ?? 0);
+  currentArchiveGeneration.current = browserState?.archiveGeneration ?? 0;
+  const archiveReady = browserStateSnapshot.status === "ready" && !loading
+    && loadedArchiveGeneration === (browserState?.archiveGeneration ?? 0);
 
   useEffect(() => {
     if (view !== "overview") setOverviewSelectionCount(0);
-  }, [view]);
+  }, [view, browserState?.archiveGeneration]);
 
   useEffect(() => {
     if (view !== "wardrobe") return undefined;
@@ -112,19 +118,23 @@ export function App() {
     // Silent on failure: the count is an enrichment, and a piece with no
     // outfits looks exactly like a piece whose index didn't load — neither is
     // an error worth putting in front of someone.
+    const generation = currentArchiveGeneration.current;
     api("/api/outfits/index")
-      .then((payload) => { if (!cancelled) setOutfitIndex(buildOutfitIndex(payload.outfits)); })
+      .then((payload) => { if (!cancelled && generation === currentArchiveGeneration.current) setOutfitIndex(buildOutfitIndex(payload.outfits)); })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [view]);
+  }, [view, browserState?.archiveGeneration]);
 
   // Refetched whenever it is missing — on mount, on returning to the wardrobe,
   // and after a triage decision nulls it. Silent on failure: the hot card simply
   // does not appear, which is the same thing the user sees when there is nothing
   // to say, and neither is an error worth interrupting them for.
-  const refreshWear = useCallback(() => api("/api/preferences/wear")
-    .then(setWear)
-    .catch(() => {}), []);
+  const refreshWear = useCallback(() => {
+    const generation = currentArchiveGeneration.current;
+    return api("/api/preferences/wear")
+      .then((profile) => { if (generation === currentArchiveGeneration.current) setWear(profile); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (wear || view !== "wardrobe") return undefined;
@@ -169,22 +179,29 @@ export function App() {
     (async () => {
       await ensureBrowserStateReady();
       if (cancelled) return;
+      if (initialArchiveLoadStarted.current) return;
+      initialArchiveLoadStarted.current = true;
+      const generation = currentArchiveGeneration.current;
       const loadedItems = await api("/api/import/wardrobe", { cache: "no-store" });
-      if (cancelled) return;
+      if (cancelled || generation !== currentArchiveGeneration.current) return;
       setItems(loadedItems.filter((item) => !item.status || item.status === "active"));
       setRetiredItems(loadedItems.filter((item) => item.status && item.status !== "active"));
+      setLoadedArchiveGeneration(generation);
     })()
-      .catch((requestError) => setError(requestError.message))
+      .catch((requestError) => { if (!cancelled) setError(requestError.message); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [browserState?.archiveGeneration]);
 
   // Sync color profile from server database on mount
   useEffect(() => {
     if (!browserState) return undefined;
+    let cancelled = false;
+    const generation = browserState.archiveGeneration;
     fetch("/api/color-profile/status", { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
+        if (cancelled || generation !== currentArchiveGeneration.current) return;
         if (data?.hasProfile && data.profile?.season) {
           const resolvedSeason = SEASONS[data.profile.season] || SEASONS[data.profile.parentSeason] || SEASONS["autumn-deep"];
           const fullProfile = {
@@ -197,7 +214,7 @@ export function App() {
         } else setColorProfile(null);
       })
       .catch(() => {});
-    return undefined;
+    return () => { cancelled = true; };
   }, [browserState?.revision, browserState?.archiveGeneration]);
 
   useEffect(() => {
@@ -209,20 +226,43 @@ export function App() {
     }
     if (observedArchiveGeneration.current === generation) return undefined;
     observedArchiveGeneration.current = generation;
+    // Local state can include references to records that no longer exist in
+    // the selected archive. Clear every domain cache and open surface before
+    // reloading so no dialog or background closure can keep rendering it.
+    setItems([]);
+    setLoading(true);
+    setLoadedArchiveGeneration(null);
+    setRetiredItems([]);
+    setOutfitIndex(EMPTY_OUTFIT_INDEX);
+    setWear(null);
+    setColorProfile(null);
+    setSelectedId(null);
+    setOpenedFrom(null);
+    setOpenedVariantId(null);
+    setOpenOutfitId(null);
+    setOnlyMatches(false);
+    setOverviewSelectionCount(0);
+    setShowColorQuiz(false);
+    setShowDeclutter(false);
+    setShowInspoImporter(false);
+    setShowOutfitBuilder(false);
+    setShowOutfitSuggestions(false);
     let cancelled = false;
     Promise.all([
       api("/api/import/wardrobe", { cache: "no-store" }),
       api("/api/outfits/index", { cache: "no-store" }),
       api("/api/preferences/wear", { cache: "no-store" }),
     ]).then(([loadedItems, outfitPayload, wearProfile]) => {
-      if (cancelled) return;
+      if (cancelled || generation !== currentArchiveGeneration.current) return;
       setItems(loadedItems.filter((item) => !item.status || item.status === "active"));
       setRetiredItems(loadedItems.filter((item) => item.status && item.status !== "active"));
       setOutfitIndex(buildOutfitIndex(outfitPayload.outfits));
       setWear(wearProfile);
+      setLoadedArchiveGeneration(generation);
+      setLoading(false);
       setSelectedId(null);
       setOpenOutfitId(null);
-    }).catch((requestError) => { if (!cancelled) setError(requestError.message); });
+    }).catch((requestError) => { if (!cancelled) { setError(requestError.message); setLoading(false); } });
     return () => { cancelled = true; };
   }, [browserState?.archiveGeneration]);
 
@@ -348,29 +388,34 @@ export function App() {
   };
 
   const saveItem = async (updatedItem) => {
+    const generation = currentArchiveGeneration.current;
     try {
       const response = await fetch(`/api/wardrobe/items/${encodeURIComponent(updatedItem.id)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: updatedItem.name, part: updatedItem.part, color: updatedItem.color, secondaryColor: updatedItem.secondaryColor, tags: updatedItem.tags }) });
       if (!response.ok) throw new Error("Could not save wardrobe item.");
       updatedItem = await response.json();
     } catch (requestError) {
-      setError(requestError.message);
+      if (generation === currentArchiveGeneration.current) setError(requestError.message);
       return;
     }
+    if (generation !== currentArchiveGeneration.current) return;
     setItems((current) => current.map((item) => item.id === updatedItem.id ? updatedItem : item));
   };
 
   const applyBulkItemUpdates = useCallback((updatedItems) => {
+    if (currentArchiveGeneration.current !== (browserState?.archiveGeneration ?? 0)) return;
     const updates = new Map(updatedItems.map((item) => [item.id, item]));
     setItems((current) => current.map((item) => updates.has(item.id) ? updates.get(item.id) : item));
-  }, []);
+  }, [browserState?.archiveGeneration]);
 
   const deleteItem = async (id) => {
+    const generation = currentArchiveGeneration.current;
     try {
       await api(`/api/wardrobe/items/${encodeURIComponent(id)}`, { method: "DELETE" });
     } catch (requestError) {
-      setError(requestError.message);
+      if (generation === currentArchiveGeneration.current) setError(requestError.message);
       return;
     }
+    if (generation !== currentArchiveGeneration.current) return;
     setItems((current) => current.filter((item) => item.id !== id));
     setSelectedId(null);
   };
@@ -391,6 +436,7 @@ export function App() {
    * a jacket. Reversible in one tap from the piles.
    */
   const setItemStatus = useCallback(async (id, status) => {
+    const generation = currentArchiveGeneration.current;
     let updated;
     try {
       updated = await api(`/api/import/wardrobe/${id}`, {
@@ -398,9 +444,10 @@ export function App() {
         body: JSON.stringify({ status }),
       });
     } catch (requestError) {
-      setError(requestError.message);
+      if (generation === currentArchiveGeneration.current) setError(requestError.message);
       return;
     }
+    if (generation !== currentArchiveGeneration.current) return;
 
     const active = !updated.status || updated.status === "active";
     // Local edits are an overlay the server knows nothing about, so they have to
@@ -427,10 +474,12 @@ export function App() {
   }, [refreshWear]);
 
   const addImportedItem = useCallback((newItem) => {
+    if (currentArchiveGeneration.current !== (browserState?.archiveGeneration ?? 0)) return;
     setItems((current) => current.some((item) => item.id === newItem.id) ? current : [...current, newItem]);
-  }, []);
+  }, [browserState?.archiveGeneration]);
 
   const generateModeledPhoto = useCallback(async (item, tier, prompt, variantId = item.defaultVariantId) => {
+    const generation = currentArchiveGeneration.current;
     const response = await fetch(`/api/wardrobe/items/${encodeURIComponent(item.id)}/variants/${encodeURIComponent(variantId)}/modeled`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -438,6 +487,7 @@ export function App() {
     });
     const value = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(value.error || "Could not start generating a model photo.");
+    if (generation !== currentArchiveGeneration.current) return;
     setItems((current) => current.map((existing) => existing.id === item.id
       ? { ...existing, ...value, variants: value.variants || existing.variants }
       : existing));
@@ -463,7 +513,7 @@ export function App() {
   const premiumAllowed = !aiSetup || aiSetup.provider !== "gemini" || aiSetup.mode === "prod";
 
   return (
-    <div className={`app-shell${selectedItem ? " has-selection" : ""}`}>
+    <div key={browserState?.archiveGeneration ?? 0} className={`app-shell${selectedItem ? " has-selection" : ""}`}>
       <MobileCompactBar
         title={VIEW_TITLES[view] || "Wardrobe"}
         barRef={barRef}
@@ -529,7 +579,9 @@ export function App() {
           largeRef={largeRef}
         />
 
-        {view === "overview" ? (
+        {!archiveReady ? (
+          <PageStatus loading={!error} error={error} empty={false} emptyMessage="Loading the selected archive…" noun="archive" />
+        ) : view === "overview" ? (
           <Overview
             items={items}
             premiumAllowed={premiumAllowed}
@@ -619,15 +671,15 @@ export function App() {
 
       <BottomNav view={view} onSelect={setView} navRef={bottomNavRef} />
 
-      {selectedItem && <ItemViewer item={selectedItem} openedFrom={openedFrom} initialVariantId={openedVariantId} onClose={() => setSelectedId(null)} onSave={saveItem} onDelete={deleteItem} onGenerateModeled={generateModeledPhoto} premiumAllowed={premiumAllowed} provider={aiSetup?.provider ?? null} outfits={selectedItemOutfits} onOpenOutfit={openOutfit} />}
-      {showColorQuiz && (
+      {archiveReady && selectedItem && <ItemViewer item={selectedItem} openedFrom={openedFrom} initialVariantId={openedVariantId} onClose={() => setSelectedId(null)} onSave={saveItem} onDelete={deleteItem} onGenerateModeled={generateModeledPhoto} premiumAllowed={premiumAllowed} provider={aiSetup?.provider ?? null} outfits={selectedItemOutfits} onOpenOutfit={openOutfit} />}
+      {archiveReady && showColorQuiz && (
         <ColorProfileModal
           initialProfile={colorProfile}
           onClose={() => setShowColorQuiz(false)}
           onSave={(profile) => { setColorProfile(profile); setShowColorQuiz(false); }}
         />
       )}
-      {showDeclutter && (
+      {archiveReady && showDeclutter && (
         <DeclutterPanel
           wear={wear}
           itemsById={declutterItemsById}

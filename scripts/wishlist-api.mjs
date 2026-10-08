@@ -25,6 +25,7 @@ import {
 import { GARMENT_PART_ID_SET } from "../shared/garments.mjs";
 import { recordSignal } from "./preferences-api.mjs";
 import { catalogForHttp } from "../shared/portable-assets.mjs";
+import { createArchiveRequestHandler, ensureArchiveRecovered, trackArchivePromise, withArchiveWriteLease } from "./archive-coordinator.mjs";
 import { mimeForExtension, preserveOriginal, resolveArchiveFile } from "./archive-store.mjs";
 
 const ASSET_ROOT = "/api/wishlist/assets";
@@ -178,7 +179,7 @@ export function wishlistApi(options = {}) {
 
   async function retryItem(id) {
     if (retrying.has(id)) return retrying.get(id);
-    const task = (async () => {
+    const task = trackArchivePromise(dataDir, async () => {
       try {
         const items = await loadItems();
         const item = items.find((entry) => entry.id === id);
@@ -202,7 +203,7 @@ export function wishlistApi(options = {}) {
           ? { ...entry, generateStatus: "error", generateError: error.message, updatedAt: new Date().toISOString() }
           : entry));
       }
-    })().finally(() => retrying.delete(id));
+    }).finally(() => retrying.delete(id));
     retrying.set(id, task);
     return task;
   }
@@ -282,11 +283,14 @@ export function wishlistApi(options = {}) {
       dataDir = path.resolve(root, setting("WARDROBE_DATA_DIR", "data"));
       wishlistFile = path.join(dataDir, "wishlist.json");
       wishlistAssetDir = path.join(dataDir, "wishlist-assets");
-      await mkdir(dataDir, { recursive: true });
-      await mkdir(wishlistAssetDir, { recursive: true });
+      await withArchiveWriteLease(dataDir, async () => {
+        await ensureArchiveRecovered(dataDir);
+        await mkdir(dataDir, { recursive: true });
+        await mkdir(wishlistAssetDir, { recursive: true });
+      });
     },
-    configureServer(server) { server.middlewares.use(handler); },
-    configurePreviewServer(server) { server.middlewares.use(handler); },
+    configureServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },
+    configurePreviewServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },
   };
 }
 

@@ -401,7 +401,7 @@ function OutfitsWithItem({ outfits, onOpen }) {
                 // this size, and they are already loaded for the grid behind.
                 <span className="item-outfits__pieces">
                   {outfit.pieces.slice(0, 3).map((piece) => (
-                    <img key={piece.id} src={piece.thumbnail || piece.image} alt="" loading="lazy" />
+                    <OptimizedImage key={piece.id} src={piece.thumbnail || piece.image} alt="" loading="lazy" />
                   ))}
                 </span>
               )}

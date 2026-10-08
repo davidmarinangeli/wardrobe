@@ -9,6 +9,7 @@ import { normalizeItemV2, variantIdFor } from "../../../../shared/wardrobe-model
 import { mutateLibrary } from "../../../../shared/wardrobe-library.mjs";
 import { safeArchivePath } from "../../../../shared/portable-assets.mjs";
 import { prepareArchiveDirectory, preserveOriginal, resolveArchiveFile } from "../../../../scripts/archive-store.mjs";
+import { withArchiveWriteLease } from "../../../../scripts/archive-coordinator.mjs";
 
 const PARTS = new Set(["upperbody", "wholebody_up", "lowerbody", "accessories_up", "shoes"]);
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -155,7 +156,25 @@ const archiveSettings = await readArchiveSettings(repo);
 const setting = (name, fallback = "") => archiveSettings[name] || fallback;
 const dataDir = path.resolve(repo, archiveSettings.WARDROBE_DATA_DIR || "data");
 
+async function currentArchiveGeneration() {
+  let generation = 0;
+  for (const name of ["archive-metadata.json", "browser-state.json"]) {
+    try {
+      const value = await readJson(path.join(dataDir, name), null);
+      if (Number.isSafeInteger(value?.archiveGeneration) && value.archiveGeneration > generation) generation = value.archiveGeneration;
+    } catch (error) { if (error.code !== "ENOENT") throw error; }
+  }
+  return generation;
+}
+
+await withArchiveWriteLease(dataDir, async () => {
+const generation = await currentArchiveGeneration();
 const manifest = await readJson(manifestFile, null);
+if (Number.isSafeInteger(manifest?.provenanceGeneration)) {
+  if (manifest.provenanceGeneration !== generation) throw new Error("Prepared manifest is stale: the archive generation changed after preparation");
+} else if (generation > 1) {
+  throw new Error("Prepared manifest has no archive-generation provenance and cannot be applied after an archive restore");
+}
 if (!manifest || !Array.isArray(manifest.items)) throw new Error("Manifest must contain an items array");
 const accepted = manifest.items.map(normalizeItem).filter(Boolean);
 if (!accepted.length) throw new Error("Manifest contains no accepted items");
@@ -333,3 +352,4 @@ console.log(JSON.stringify({
     ...item.references.map((reference) => reference.original).filter((original) => typeof original === "string"),
   ]),
 }, null, 2));
+});

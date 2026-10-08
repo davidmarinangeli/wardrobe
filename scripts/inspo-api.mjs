@@ -8,6 +8,7 @@ import { GARMENT_PART_IDS } from "../shared/garments.mjs";
 import { recordSignal } from "./preferences-api.mjs";
 import { catalogForHttp } from "../shared/portable-assets.mjs";
 import { mimeForExtension, preserveOriginal, resolveArchiveFile } from "./archive-store.mjs";
+import { createArchiveRequestHandler, ensureArchiveRecovered, trackArchivePromise, withArchiveWriteLease } from "./archive-coordinator.mjs";
 
 const INSPO_ASSET_ROOT = "/api/inspo/assets";
 const VALID_PARTS = new Set([...GARMENT_PART_IDS, "full_look"]);
@@ -99,7 +100,7 @@ export function inspoApi(options = {}) {
 
   async function detectPinItems(id) {
     if (detecting.has(id)) return detecting.get(id);
-    const task = (async () => {
+    const task = trackArchivePromise(dataDir, async () => {
       try {
         const pins = await loadPins();
         const pin = pins.find((p) => p.id === id);
@@ -129,7 +130,7 @@ export function inspoApi(options = {}) {
           ? { ...p, detectStatus: "error", detectError: error.message, updatedAt: new Date().toISOString() }
           : p));
       }
-    })().finally(() => detecting.delete(id));
+    }).finally(() => detecting.delete(id));
     detecting.set(id, task);
     return task;
   }
@@ -262,10 +263,13 @@ export function inspoApi(options = {}) {
       dataDir = path.resolve(root, setting("WARDROBE_DATA_DIR", "data"));
       inspoFile = path.join(dataDir, "inspo.json");
       inspoAssetDir = path.join(dataDir, "inspo-assets");
-      await mkdir(dataDir, { recursive: true });
-      await mkdir(inspoAssetDir, { recursive: true });
+      await withArchiveWriteLease(dataDir, async () => {
+        await ensureArchiveRecovered(dataDir);
+        await mkdir(dataDir, { recursive: true });
+        await mkdir(inspoAssetDir, { recursive: true });
+      });
     },
-    configureServer(server) { server.middlewares.use(handler); },
-    configurePreviewServer(server) { server.middlewares.use(handler); },
+    configureServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },
+    configurePreviewServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },
   };
 }

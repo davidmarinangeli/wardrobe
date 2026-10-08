@@ -67,7 +67,7 @@ test("archive inventory includes persistent media, excludes nested control files
     references: [{ original: "originals/photo.jpg", label: "originals/descriptive-label.png" }],
     tags: ["originals/ordinary-tag"],
   }]));
-  await writeFile(path.join(dataDir, "outfits.json"), JSON.stringify([{ image: "/api/archive/assets/outfit-images/look.png?v=2" }]));
+  await writeFile(path.join(dataDir, "outfits.json"), JSON.stringify([{ id: "fixture-outfit", image: "/api/archive/assets/outfit-images/look.png?v=2" }]));
 
   const inventory = await buildArchiveInventory(dataDir);
   const paths = inventory.files.map((entry) => entry.path);

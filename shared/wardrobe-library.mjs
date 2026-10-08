@@ -2,6 +2,7 @@ import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { catalogForDisk } from "./portable-assets.mjs";
+import { withArchiveWriteLease } from "../scripts/archive-coordinator.mjs";
 
 const queues = new Map();
 const LOCK_STALE_AFTER_MS = 3 * 60_000;
@@ -203,7 +204,7 @@ function serializeInProcess(key, operation) {
  */
 export function mutateLibrary(dataDir, mutation) {
   const file = path.join(dataDir, "library.json");
-  return serializeInProcess(file, async () => {
+  return withArchiveWriteLease(dataDir, () => serializeInProcess(file, async () => {
     const release = await acquireFileLock(`${file}.lock`);
     try {
       const current = await readLibrary(file);
@@ -214,5 +215,5 @@ export function mutateLibrary(dataDir, mutation) {
     } finally {
       await release();
     }
-  });
+  }));
 }

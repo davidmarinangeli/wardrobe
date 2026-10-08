@@ -3,6 +3,8 @@ import path from "node:path";
 import { createGoogleDriveService, GoogleDriveError } from "./google-drive-auth.mjs";
 import { getGoogleDriveSyncWorker } from "./google-drive-sync.mjs";
 import { hasGoogleDrivePrivatePathComponent } from "./google-drive-private-path.mjs";
+import { createArchiveAdmissionMiddleware, ensureArchiveRecovered, setArchiveRecovery } from "./archive-coordinator.mjs";
+import { createGoogleDriveArchiveManager, recoverArchiveRestore } from "./archive-restore.mjs";
 
 const COOKIE_NAME = "wardrobe_google_oauth_nonce";
 const workerCloseWrappedServers = new WeakSet();
@@ -208,6 +210,7 @@ function safeError(error) {
     "invalid_mime_type", "invalid_app_properties", "empty_update", "drive_parent_ambiguous", "drive_ancestry_cycle",
     "drive_ancestry_too_deep", "drive_parent_not_folder", "root_mutation_forbidden", "created_file_outside_target",
     "updated_file_moved", "malformed_page_token", "repeated_page_token", "drive_listing_too_large", "drive_listing_too_many_pages",
+    "archive_maintenance", "archive_control_invalid", "archive_invalid", "snapshot_changed", "sync_conflict",
   ]);
   const exposedCode = allowed.has(code) ? code : "google_unavailable";
   const safeMessages = {
@@ -263,6 +266,11 @@ function safeError(error) {
     repeated_page_token: "Google Drive ha ripetuto una pagina dell’elenco.",
     drive_listing_too_large: "La cartella Drive supera il limite di elementi supportato.",
     drive_listing_too_many_pages: "La cartella Drive ha troppe pagine da elencare.",
+    archive_maintenance: "L’archivio è in manutenzione. Riprova tra poco.",
+    archive_control_invalid: "Lo stato di ripristino dell’archivio non è leggibile o non è valido.",
+    archive_invalid: "L’archivio selezionato non è completo o non è valido.",
+    snapshot_changed: "L’archivio è cambiato dopo l’anteprima. Rivedi la scelta.",
+    sync_conflict: "La scelta dell’archivio è scaduta o non corrisponde all’anteprima.",
     google_unavailable: "Google Drive non è raggiungibile in questo momento.",
   };
   return { error: { code: exposedCode, message: safeMessages[exposedCode] || safeMessages.google_unavailable, retryable: Boolean(error?.retryable) } };
@@ -313,9 +321,12 @@ export function googleDriveApi(options = {}) {
   let buildDir;
   let guard;
   let syncWorker;
+  let archiveManager;
+  let admission;
 
   function installHandlers(server) {
     server.middlewares.use(guard);
+    server.middlewares.use(admission);
     server.middlewares.use(handler);
     syncWorker?.start();
     if (typeof server.close === "function" && !workerCloseWrappedServers.has(server)) {
@@ -337,8 +348,34 @@ export function googleDriveApi(options = {}) {
     try {
       if (route === "/api/google-drive/status") {
         if (method !== "GET") return json(res, 405, { error: { code: "method_not_allowed", message: "Metodo non consentito.", retryable: false } });
-        const [authStatus, syncStatus] = await Promise.all([service.getStatus(), syncWorker?.getSafeStatus() || {}]);
-        return json(res, 200, { ...authStatus, ...syncStatus });
+        const [authStatus, syncStatus, archiveStatus] = await Promise.all([service.getStatus(), syncWorker?.getSafeStatus() || {}, archiveManager?.status() || {}]);
+        return json(res, 200, { ...authStatus, ...syncStatus, ...archiveStatus });
+      }
+
+      if (route === "/api/google-drive/archive/status") {
+        if (method !== "GET") return json(res, 405, { error: { code: "method_not_allowed", message: "Metodo non consentito.", retryable: false } });
+        return json(res, 200, await archiveManager.status());
+      }
+
+      const previewRoutes = new Map([
+        ["/api/google-drive/archive/activation/preview", "activation"],
+        ["/api/google-drive/archive/restore/preview", "restore"],
+      ]);
+      const choiceRoutes = new Map([
+        ["/api/google-drive/archive/activation/choice", "activation"],
+        ["/api/google-drive/archive/restore/confirm", "restore"],
+      ]);
+      if (previewRoutes.has(route) || choiceRoutes.has(route) || route === "/api/google-drive/archive/disable") {
+        if (method !== "POST") return json(res, 405, { error: { code: "method_not_allowed", message: "Metodo non consentito.", retryable: false } });
+        if (!service.callbackOrigin) {
+          const status = await service.getStatus();
+          throw new GoogleDriveError(status.error?.code || "configuration_incomplete");
+        }
+        if (!sameOrigin(req, service)) throw new GoogleDriveError("cross_origin_request", "Cross-origin request rejected", { status: 403 });
+        const body = await readJsonBody(req);
+        if (previewRoutes.has(route)) return json(res, 200, await archiveManager.preview(previewRoutes.get(route)));
+        if (choiceRoutes.has(route)) return json(res, 202, await archiveManager.choose({ ...body, operation: choiceRoutes.get(route) }));
+        return json(res, 200, await syncWorker.disable());
       }
 
       if (route === "/api/google-drive/oauth/callback") {
@@ -400,27 +437,54 @@ export function googleDriveApi(options = {}) {
       buildDir = path.resolve(root, config.build.outDir || "dist");
       const env = options.env || process.env;
       const privateDir = path.join(path.resolve(root, typeof env?.WARDROBE_DATA_DIR === "string" && env.WARDROBE_DATA_DIR.trim() ? env.WARDROBE_DATA_DIR : "data"), ".google-drive");
-      const privatePlacementInvalid = await privatePathUnderStaticRoot(privateDir, publicDir, buildDir).catch(() => true);
-      service = options.service || createGoogleDriveService({
-        root,
-        env,
-        fetchImpl: options.fetchImpl,
-        now: options.now,
-        randomBytes: options.randomBytes,
-        publicDir,
-        buildOutDir: buildDir,
-        privatePlacementInvalid,
+      const dataDir = path.dirname(privateDir);
+      const serving = config.command !== "build";
+      let markWorkerReady;
+      const workerReady = new Promise((resolve) => { markWorkerReady = resolve; });
+      let recoveryWorker = null;
+      let workerInitError = null;
+      if (serving) setArchiveRecovery(dataDir, async () => {
+        await workerReady;
+        if (workerInitError) throw workerInitError;
+        return recoverArchiveRestore({ dataDir, worker: recoveryWorker });
       });
-      if (service.privateDir !== privateDir) throw new Error("Injected Google Drive service uses a different private data root");
-      syncWorker = options.syncWorker || getGoogleDriveSyncWorker({
-        service,
-        dataDir: path.dirname(service.privateDir),
-        now: options.now,
-      });
+      let privatePlacementInvalid;
+      try {
+        privatePlacementInvalid = await privatePathUnderStaticRoot(privateDir, publicDir, buildDir).catch(() => true);
+        service = options.service || createGoogleDriveService({
+          root,
+          env,
+          fetchImpl: options.fetchImpl,
+          now: options.now,
+          randomBytes: options.randomBytes,
+          publicDir,
+          buildOutDir: buildDir,
+          privatePlacementInvalid,
+        });
+        if (service.privateDir !== privateDir) throw new Error("Injected Google Drive service uses a different private data root");
+        syncWorker = options.syncWorker || getGoogleDriveSyncWorker({
+          service,
+          dataDir: path.dirname(service.privateDir),
+          now: options.now,
+        });
+        recoveryWorker = syncWorker;
+        markWorkerReady();
+        if (serving) {
+          await ensureArchiveRecovered(dataDir);
+          await recoverArchiveRestore({ dataDir, worker: syncWorker, recoverOrphan: true });
+        }
+      } catch (error) {
+        workerInitError = error;
+        markWorkerReady();
+        throw error;
+      }
       guard = createPrivateFileGuard({ root, privateDir, publicDir, buildDir });
       if (config.command === "build") {
         if (privatePlacementInvalid) throw new Error("Google Drive private state cannot be stored under Vite publicDir or build.outDir");
         await auditPublicSymlinks(publicDir, privateDir);
+      } else {
+        archiveManager = createGoogleDriveArchiveManager({ dataDir, service, worker: syncWorker, now: options.now });
+        admission = createArchiveAdmissionMiddleware(dataDir);
       }
     },
     configureServer(server) {

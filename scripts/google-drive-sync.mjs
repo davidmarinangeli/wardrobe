@@ -9,6 +9,7 @@ import {
   ARCHIVE_SCHEMA_VERSION,
   buildArchiveInventory,
   createArchiveSnapshot,
+  createRawArchiveSnapshot,
   hashArchiveFile,
   isAllowedArchivePath,
   validateArchive,
@@ -61,6 +62,23 @@ function validTargetRecord(target) {
     && typeof target.folderId === "string" && /^[A-Za-z0-9_-]{5,200}$/.test(target.folderId)
     && (target.driveId === null || (typeof target.driveId === "string" && /^[A-Za-z0-9_-]{5,200}$/.test(target.driveId))));
 }
+function validRestoreProofRecord(proof) {
+  return Boolean(proof && typeof proof === "object" && !Array.isArray(proof)
+    && /^[0-9a-f-]{36}$/i.test(proof.transactionId || "")
+    && /^[0-9a-f-]{36}$/i.test(proof.restoreAuthorizationId || "")
+    && validTargetRecord(proof.target)
+    && /^[a-f0-9]{64}$/.test(proof.remoteFingerprint || "")
+    && /^[a-f0-9]{64}$/.test(proof.descriptorFingerprint || "")
+    && /^[a-f0-9]{64}$/.test(proof.previousFingerprint || "")
+    && /^[A-Za-z0-9_-]{5,200}$/.test(proof.snapshotId || "")
+    && typeof proof.snapshotName === "string" && proof.snapshotName.length > 0
+    && proof.snapshotName.length <= 255 && !/[\0\r\n]/.test(proof.snapshotName)
+    && typeof proof.activate === "boolean"
+    && proof.previousMode && typeof proof.previousMode.enabled === "boolean" && typeof proof.previousMode.paused === "boolean"
+    && Number.isSafeInteger(proof.epoch) && proof.epoch >= 1
+    && /^[a-f0-9]{64}$/.test(proof.stagedFingerprint || "")
+    && /^[a-f0-9]{64}$/.test(proof.completedFingerprint || ""));
+}
 function owned(metadata, version, relativePath) {
   return metadata?.appProperties?.wardrobeVersion === version
     && [sha256(Buffer.from(relativePath)), relativePath].includes(metadata.appProperties?.wardrobePath);
@@ -101,6 +119,7 @@ function defaultState() {
     pendingCleanups: [],
     orphanCandidates: [],
     restoreAuthorization: null,
+    lastRestoreProof: null,
     progress: { currentFiles: 0, totalFiles: 0, currentBytes: 0, totalBytes: 0 },
     retry: { attempts: 0, at: null },
     lastError: null,
@@ -134,11 +153,20 @@ function validState(state) {
       && Number.isFinite(state.restoreAuthorization.expiresAt) && validTargetRecord(state.restoreAuthorization.target)
       && /^[a-f0-9]{64}$/.test(state.restoreAuthorization.remoteFingerprint || "")
       && /^[a-f0-9]{64}$/.test(state.restoreAuthorization.descriptorFingerprint || "")
+      && /^[a-f0-9]{64}$/.test(state.restoreAuthorization.localFingerprint || "")
       && typeof state.restoreAuthorization.snapshotId === "string"
       && /^[A-Za-z0-9_-]{5,200}$/.test(state.restoreAuthorization.snapshotId)
       && typeof state.restoreAuthorization.snapshotName === "string"
       && state.restoreAuthorization.snapshotName.length > 0 && state.restoreAuthorization.snapshotName.length <= 255
-      && !/[\0\r\n/\\]/.test(state.restoreAuthorization.snapshotName)
+      && !/[\0\r\n]/.test(state.restoreAuthorization.snapshotName)
+      && (state.restoreAuthorization.active === undefined || typeof state.restoreAuthorization.active === "boolean")
+      && (state.restoreAuthorization.transactionId === undefined || /^[0-9a-f-]{36}$/i.test(state.restoreAuthorization.transactionId))
+      && (state.restoreAuthorization.activate === undefined || typeof state.restoreAuthorization.activate === "boolean")
+      && (state.restoreAuthorization.previousMode === undefined || (state.restoreAuthorization.previousMode
+        && typeof state.restoreAuthorization.previousMode.enabled === "boolean" && typeof state.restoreAuthorization.previousMode.paused === "boolean"))
+      && (state.restoreAuthorization.completedFingerprint === undefined || /^[a-f0-9]{64}$/.test(state.restoreAuthorization.completedFingerprint))
+      && (state.restoreAuthorization.stagedFingerprint === undefined || /^[a-f0-9]{64}$/.test(state.restoreAuthorization.stagedFingerprint))
+      && (state.restoreAuthorization.completedEpoch === undefined || (Number.isSafeInteger(state.restoreAuthorization.completedEpoch) && state.restoreAuthorization.completedEpoch >= 1))
       && Math.abs(state.restoreAuthorization.expiresAt) <= 8.64e15);
   const validCandidate = state.candidate === null || (state.candidate && typeof state.candidate.name === "string"
     && typeof state.candidate.fingerprint === "string" && /^[a-f0-9]{64}$/.test(state.candidate.fingerprint)
@@ -146,7 +174,7 @@ function validState(state) {
   const validCompleted = state.lastCompleted === null || (state.lastCompleted && typeof state.lastCompleted.fingerprint === "string"
     && /^[a-f0-9]{64}$/.test(state.lastCompleted.fingerprint) && typeof state.lastCompleted.snapshotName === "string"
     && typeof state.lastCompleted.snapshotId === "string" && /^[A-Za-z0-9_-]{5,200}$/.test(state.lastCompleted.snapshotId)
-    && state.lastCompleted.snapshotName.length > 0 && state.lastCompleted.snapshotName.length <= 255 && !/[\0\r\n/\\]/.test(state.lastCompleted.snapshotName)
+    && state.lastCompleted.snapshotName.length > 0 && state.lastCompleted.snapshotName.length <= 255 && !/[\0\r\n]/.test(state.lastCompleted.snapshotName)
     && (state.lastCompleted.descriptorFingerprint === undefined || /^[a-f0-9]{64}$/.test(state.lastCompleted.descriptorFingerprint))
     && Number.isSafeInteger(state.lastCompleted.fileCount) && state.lastCompleted.fileCount >= 0
     && Number.isSafeInteger(state.lastCompleted.totalBytes) && state.lastCompleted.totalBytes >= 0
@@ -169,6 +197,8 @@ function validState(state) {
     && (state.pendingCleanups === undefined || state.pendingCleanups.every(validCleanupRecord))
     && (state.orphanCandidates === undefined || (Array.isArray(state.orphanCandidates) && state.orphanCandidates.length <= 1000 && state.orphanCandidates.every(validOrphan)))
     && validRestoreAuthorization && validCandidate && validCompleted
+    && (state.lastRestoreProof === undefined || state.lastRestoreProof === null || validRestoreProofRecord(state.lastRestoreProof))
+    && (state.lastRestoreTransaction === undefined || /^[0-9a-f-]{36}$/i.test(state.lastRestoreTransaction))
     && (state.target === null || validTargetRecord(state.target));
 }
 
@@ -193,7 +223,7 @@ function validCleanupRecord(cleanup) {
   if (cleanup.kind === "snapshot") return typeof cleanup.snapshotId === "string"
       && /^[A-Za-z0-9_-]{5,200}$/.test(cleanup.snapshotId)
       && typeof cleanup.snapshotName === "string" && cleanup.snapshotName.length > 0
-      && cleanup.snapshotName.length <= 255 && !/[\0\r\n/\\]/.test(cleanup.snapshotName);
+      && cleanup.snapshotName.length <= 255 && !/[\0\r\n]/.test(cleanup.snapshotName);
   return typeof cleanup.rootId === "string" && /^[A-Za-z0-9_-]{5,200}$/.test(cleanup.rootId)
     && cleanup.containerId === cleanup.rootId && typeof cleanup.preserveUnknown === "boolean";
 }
@@ -294,7 +324,11 @@ async function ensurePrivateDirectory(directory) {
   if (!hasGoogleDrivePrivatePathComponent(directory)) throw new GoogleDriveSyncError("private_state_invalid");
   const info = await lstat(directory).catch((error) => error.code === "ENOENT" ? null : Promise.reject(error));
   if (info?.isSymbolicLink() || (info && !info.isDirectory())) throw new GoogleDriveSyncError("private_state_invalid");
-  if (!info) await mkdir(directory, { recursive: false, mode: 0o700 });
+  if (!info) {
+    await mkdir(directory, { recursive: false, mode: 0o700 });
+    const parent = await open(path.dirname(directory), "r");
+    try { await parent.sync(); } finally { await parent.close(); }
+  }
   await chmod(directory, 0o700);
 }
 
@@ -302,7 +336,11 @@ async function ensurePrivateChild(parent, child) {
   await ensurePrivateDirectory(parent);
   const info = await lstat(child).catch((error) => error.code === "ENOENT" ? null : Promise.reject(error));
   if (info?.isSymbolicLink() || (info && !info.isDirectory())) throw new GoogleDriveSyncError("private_state_invalid");
-  if (!info) await mkdir(child, { recursive: false, mode: 0o700 });
+  if (!info) {
+    await mkdir(child, { recursive: false, mode: 0o700 });
+    const parentHandle = await open(parent, "r");
+    try { await parentHandle.sync(); } finally { await parentHandle.close(); }
+  }
   await chmod(child, 0o700);
 }
 
@@ -316,7 +354,12 @@ async function atomicJson(filePath, value) {
     await handle.sync();
     await handle.chmod(0o600);
   } finally { await handle.close(); }
-  try { await rename(temp, filePath); }
+  try {
+    await rename(temp, filePath);
+    const directoryHandle = await open(directory, "r");
+    try { await directoryHandle.sync(); }
+    finally { await directoryHandle.close(); }
+  }
   catch (error) { await unlink(temp).catch(() => {}); throw error; }
 }
 
@@ -356,13 +399,21 @@ async function isSemanticallyEmpty(inventory, directory) {
           || Object.keys(value).some((key) => key !== "mode")) return false;
       continue;
     }
+    if (entry.path === "preferences.json") {
+      if (!value || typeof value !== "object" || Array.isArray(value) || value.version !== 1 || !Array.isArray(value.signals)) return false;
+      if (value.signals.length) return false;
+      continue;
+    }
     if (entry.path === "browser-state.json") {
       const defaults = {
         declutterKeptIds: [], dismissedNudges: [], modelTier: "standard",
         onboardingDismissed: false, wornToday: { day: "", ids: [] },
       };
       const userState = value && typeof value === "object" && !Array.isArray(value) ? value : {};
-      if (!Array.isArray(userState.declutterKeptIds) || !Array.isArray(userState.dismissedNudges)
+      if (userState.version !== 1 || !Number.isSafeInteger(userState.archiveGeneration) || userState.archiveGeneration < 1
+          || !Number.isSafeInteger(userState.revision) || userState.revision < 0
+          || typeof userState.migrationSealed !== "boolean" || !Array.isArray(userState.migratedFields)
+          || !Array.isArray(userState.declutterKeptIds) || !Array.isArray(userState.dismissedNudges)
           || typeof userState.modelTier !== "string" || typeof userState.onboardingDismissed !== "boolean"
           || !userState.wornToday || typeof userState.wornToday !== "object" || Array.isArray(userState.wornToday)
           || typeof userState.wornToday.day !== "string" || !Array.isArray(userState.wornToday.ids)
@@ -377,6 +428,7 @@ async function isSemanticallyEmpty(inventory, directory) {
       }
       const known = new Set(["version", "archiveGeneration", "revision", "migrationSealed", "migratedFields", ...Object.keys(defaults), "itemEdits", "deletedIds"]);
       if (Object.keys(userState).some((key) => !known.has(key))) return false;
+      if (userState.migratedFields.some((field) => !["itemEdits", "deletedIds", "colorProfile", "declutterKeptIds", "dismissedNudges", "modelTier", "onboardingDismissed", "wornToday"].includes(field))) return false;
       continue;
     }
     if (Array.isArray(value) && value.length > 0) return false;
@@ -407,8 +459,11 @@ async function verifyRestoreControlTransform({ remoteDirectory, localDirectory, 
   const metadataDefault = { schemaVersion: ARCHIVE_SCHEMA_VERSION, archiveGeneration: 0, referenceSources: {} };
   const remoteMetadata = await readOptionalJson(remoteDirectory, "archive-metadata.json", metadataDefault);
   const localMetadata = await readOptionalJson(localDirectory, "archive-metadata.json", metadataDefault);
-  const previousMetadata = previousLocalDirectory
-    ? await readOptionalJson(previousLocalDirectory, "archive-metadata.json", metadataDefault) : metadataDefault;
+  let previousMetadata = metadataDefault;
+  if (previousLocalDirectory) {
+    try { previousMetadata = await readOptionalJson(previousLocalDirectory, "archive-metadata.json", metadataDefault); }
+    catch { previousMetadata = metadataDefault; }
+  }
   const generation = localMetadata?.archiveGeneration;
   const maximumPriorGeneration = Math.max(remoteMetadata?.archiveGeneration || 0, previousMetadata?.archiveGeneration || 0);
   const normalizedRemoteMetadata = { ...remoteMetadata, archiveGeneration: generation };
@@ -424,8 +479,11 @@ async function verifyRestoreControlTransform({ remoteDirectory, localDirectory, 
   const remoteBrowser = await readOptionalJson(remoteDirectory, "browser-state.json", emptyBrowserState);
   const localBrowser = await readOptionalJson(localDirectory, "browser-state.json", emptyBrowserState);
   const browserGeneration = localBrowser?.archiveGeneration;
-  const previousBrowser = previousLocalDirectory
-    ? await readOptionalJson(previousLocalDirectory, "browser-state.json", emptyBrowserState) : emptyBrowserState;
+  let previousBrowser = emptyBrowserState;
+  if (previousLocalDirectory) {
+    try { previousBrowser = await readOptionalJson(previousLocalDirectory, "browser-state.json", emptyBrowserState); }
+    catch { previousBrowser = emptyBrowserState; }
+  }
   const knownMigratedFields = ["itemEdits", "deletedIds", "colorProfile", "declutterKeptIds", "dismissedNudges", "modelTier", "onboardingDismissed", "wornToday"];
   const stripBrowserControls = (value) => {
     const { archiveGeneration: _generation, revision: _revision, migrationSealed: _sealed, migratedFields: _migrated, ...payload } = value;
@@ -484,7 +542,7 @@ function snapshotName(fingerprintValue, epoch, nonce = randomUUID().slice(0, 8))
 }
 
 /** One persistent sync coordinator for one existing Google auth-service instance and archive. */
-export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs = DEFAULT_POLL_MS, now = Date.now } = {}) {
+export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs = DEFAULT_POLL_MS, now = Date.now, onRunLockReleased } = {}) {
   if (!service || typeof service.getTarget !== "function" || typeof service.getClient !== "function") throw new TypeError("The existing Google Drive auth service is required");
   const resolvedDataDir = path.resolve(dataDir || path.dirname(service.privateDir));
   const privateDir = path.resolve(service.privateDir || path.join(resolvedDataDir, ".google-drive"));
@@ -497,6 +555,8 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
   let serialization = Promise.resolve();
   let timer = null;
   let activeRun = null;
+  let rerunRequested = false;
+  const rerunWaiters = [];
   let stopping = false;
   let stopPromise = null;
   let runtimeError = null;
@@ -574,6 +634,7 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
     state.pendingCleanup = state.pendingCleanups[0] || null;
     state.orphanCandidates ||= [];
     state.restoreAuthorization ??= null;
+    state.lastRestoreProof ??= null;
     validateLoadedState(state);
     try { await atomicJson(stateFile, state); }
     catch (error) { throw new GoogleDriveSyncError("sync_state_invalid", "Private sync state could not be saved", { cause: error }); }
@@ -614,7 +675,7 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
       await disposePreview(oldest[1]);
     }
     for (const [id, authorization] of restoreAuthorizations) {
-      if (removeAll || authorization.expiresAt <= now()) {
+      if ((!authorization.active && removeAll) || (!authorization.active && authorization.expiresAt <= now())) {
         restoreAuthorizations.delete(id);
         await disposePreview(authorization.token);
       }
@@ -1909,13 +1970,21 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
     };
   }
 
-  async function preview() {
+  async function preview({ allowInvalidLocal = false, previousMode: requestedPreviousMode } = {}) {
     const target = await service.getTarget();
     await ensurePrivateChild(privateDir, snapshotsDir);
     await ensurePrivateChild(privateDir, previewsDir);
     return withWriterLock(async () => {
       await prunePreviewEvidence({ scanPrivate: true });
-      const local = await createArchiveSnapshot({ sourceDir: resolvedDataDir, stagingRoot: previewsDir });
+      const controlState = await readState();
+      const previousMode = requestedPreviousMode && typeof requestedPreviousMode.enabled === "boolean"
+        && typeof requestedPreviousMode.paused === "boolean"
+        ? { enabled: requestedPreviousMode.enabled, paused: requestedPreviousMode.paused }
+        : { enabled: controlState.enabled, paused: controlState.paused };
+      if (controlState.enabled !== previousMode.enabled) throw new GoogleDriveSyncError("sync_conflict");
+      const local = allowInvalidLocal
+        ? await createRawArchiveSnapshot({ sourceDir: resolvedDataDir, stagingRoot: previewsDir })
+        : await createArchiveSnapshot({ sourceDir: resolvedDataDir, stagingRoot: previewsDir });
       let remote;
       const client = await boundedClient(target);
       try {
@@ -1932,12 +2001,16 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
       const localPopulated = !(await isSemanticallyEmpty(local.inventory, local.directory));
       const remotePopulated = remote.valid && remote.exists && !(await isSemanticallyEmpty(remote.inventory, remote.directory));
       const evidenceId = randomUUID();
-      previewEvidence.set(evidenceId, { target, local, localPopulated, remote, remotePopulated, expiresAt: now() + 10 * 60 * 1000 });
+      previewEvidence.set(evidenceId, {
+        target, local, localPopulated, remote, remotePopulated, allowInvalidLocal,
+        previousMode, previewEpoch: controlState.epoch, previewEnabled: controlState.enabled, previewPaused: controlState.paused,
+        expiresAt: now() + 10 * 60 * 1000,
+      });
       await prunePreviewEvidence();
       return {
         evidenceId,
         target,
-        local: { fingerprint: local.fingerprint, inventory: local.inventory, populated: localPopulated, directory: local.directory },
+        local: { fingerprint: local.fingerprint, inventory: local.inventory, populated: localPopulated, valid: local.valid !== false, directory: local.directory },
         remote: {
           valid: remote.valid,
           empty: remote.valid && !remote.exists,
@@ -2004,7 +2077,7 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
           if (decision.choice === "equivalent") {
             if (!freshRemote.exists || !freshRemote.manifestMatches || freshLocal.fingerprint !== freshRemote.fingerprint) throw new GoogleDriveSyncError("sync_conflict");
           } else if (decision.choice === "initialize") {
-            if (localPopulated || remotePopulated || freshRemote.exists) throw new GoogleDriveSyncError("sync_conflict");
+            if (localPopulated || remotePopulated) throw new GoogleDriveSyncError("sync_conflict");
           } else if (decision.choice === "use-local") {
             if (!localPopulated && remotePopulated) throw new GoogleDriveSyncError("sync_conflict");
           } else throw new GoogleDriveSyncError("sync_conflict");
@@ -2051,9 +2124,14 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
       if (!token || token.expiresAt <= now() || decision.source !== "feature04"
           || decision.confirmed !== true || decision.choice !== "use-drive"
           || !token.remote?.valid || !token.remote.exists) throw new GoogleDriveSyncError("sync_conflict");
+      const state = await readState();
+      if (state.epoch !== token.previewEpoch || state.enabled !== token.previewEnabled || state.paused !== token.previewPaused
+          || token.previousMode?.enabled !== state.enabled) throw new GoogleDriveSyncError("sync_conflict");
       const target = await service.getTarget();
       if (!sameTarget(target, token.target)) throw new GoogleDriveSyncError("target_changed");
-      const local = await createArchiveSnapshot({ sourceDir: resolvedDataDir, stagingRoot: previewsDir });
+      const local = token.allowInvalidLocal
+        ? await createRawArchiveSnapshot({ sourceDir: resolvedDataDir, stagingRoot: previewsDir })
+        : await createArchiveSnapshot({ sourceDir: resolvedDataDir, stagingRoot: previewsDir });
       try {
         if (local.fingerprint !== token.local.fingerprint) throw new GoogleDriveSyncError("snapshot_changed");
         const client = await boundedClient(target);
@@ -2062,13 +2140,33 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
         if (!remote.exists || !remote.manifestMatches || remote.fingerprint !== token.remote.fingerprint
             || remote.descriptorFingerprint !== token.remote.descriptorFingerprint
             || remote.snapshotName !== token.remote.snapshotName) throw new GoogleDriveSyncError("sync_conflict");
-        if (!sameTarget(await service.getTarget(), token.target)) throw new GoogleDriveSyncError("target_changed");
-        const restoreAuthorizationId = randomUUID();
-        const authorization = { token, target, expiresAt: token.expiresAt };
+      if (!sameTarget(await service.getTarget(), token.target)) throw new GoogleDriveSyncError("target_changed");
+      const restoreAuthorizationId = randomUUID();
+        const previousMode = token.previousMode;
+        const transactionId = decision.transactionId || randomUUID();
+        if (typeof transactionId !== "string" || !/^[0-9a-f-]{36}$/i.test(transactionId)
+            || state.restoreAuthorization?.active) throw new GoogleDriveSyncError("sync_conflict");
+        const authorization = { id: restoreAuthorizationId, token, target, expiresAt: 8_640_000_000_000_000, previousMode, activate: decision.activate !== false, active: true, transactionId };
         restoreAuthorizations.set(restoreAuthorizationId, authorization);
+        state.restoreAuthorization = {
+          id: restoreAuthorizationId,
+          expiresAt: authorization.expiresAt,
+          active: true,
+          transactionId,
+          activate: authorization.activate,
+          previousMode,
+          target,
+          remoteFingerprint: token.remote.fingerprint,
+          descriptorFingerprint: token.remote.descriptorFingerprint,
+          localFingerprint: token.local.fingerprint,
+          snapshotId: token.remote.snapshotId,
+          snapshotName: token.remote.snapshotName,
+        };
+        try { await writeState(state); }
+        catch (error) { restoreAuthorizations.delete(restoreAuthorizationId); throw error; }
         previewEvidence.delete(decision.evidenceId);
         await prunePreviewEvidence();
-        return { restoreAuthorizationId, target };
+        return { restoreAuthorizationId, target, transactionId };
       } finally {
         await removePrivateDirectory(local.directory).catch(() => {});
       }
@@ -2112,9 +2210,20 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
 
   async function disable() {
     const before = await readState();
+    if (before.restoreAuthorization?.active || [...restoreAuthorizations.values()].some((authorization) => authorization.active)) {
+      throw new GoogleDriveSyncError("sync_conflict");
+    }
+    const controlBefore = await getControl();
     await requestPause(before.epoch);
     return serialize(() => withWriterLock(async () => {
       const state = await readState();
+      if (state.restoreAuthorization?.active || [...restoreAuthorizations.values()].some((authorization) => authorization.active)) {
+        const control = await getControl();
+        if (!controlBefore.pauseRequested && control.pauseRequested && control.epoch === before.epoch) {
+          await setControl({ epoch: state.epoch, pauseRequested: false });
+        }
+        throw new GoogleDriveSyncError("sync_conflict");
+      }
       const stagedDirectory = state.candidate?.directory;
       if (state.target) queueOrphanCandidate(state, state.target);
       state.enabled = false;
@@ -2129,14 +2238,18 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
       await writeState(state);
       await setControl({ epoch: state.epoch, pauseRequested: false });
       await removePrivateDirectory(stagedDirectory).catch(() => {});
+      await prunePreviewEvidence({ removeAll: true, scanPrivate: true });
       return getSafeStatus();
     }));
   }
 
-  async function invalidateAfterRestore({ target: expectedTarget, restoreAuthorizationId } = {}) {
+  async function invalidateAfterRestore({ target: expectedTarget, restoreAuthorizationId, transactionId } = {}) {
     await prunePreviewEvidence();
     const authorization = restoreAuthorizations.get(restoreAuthorizationId);
-    if (!authorization || authorization.expiresAt <= now()) throw new GoogleDriveSyncError("sync_conflict");
+    transactionId ||= authorization?.transactionId;
+    if (!authorization || authorization.expiresAt <= now()
+        || typeof transactionId !== "string" || authorization.transactionId !== transactionId
+        || !/^[0-9a-f-]{36}$/i.test(transactionId)) throw new GoogleDriveSyncError("sync_conflict");
     const before = await readState();
     await requestPause(before.epoch);
     return serialize(() => withWriterLock(async () => {
@@ -2155,21 +2268,29 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
       state.desiredFingerprint = null;
       state.restoreAuthorization = {
         id: restoreAuthorizationId,
-        expiresAt: authorization.expiresAt,
+        expiresAt: 8_640_000_000_000_000,
+        active: true,
+        transactionId,
+        activate: authorization.activate === true,
+        previousMode: authorization.previousMode,
         target,
         remoteFingerprint: authorization.token.remote.fingerprint,
         descriptorFingerprint: authorization.token.remote.descriptorFingerprint,
+        localFingerprint: authorization.token.local.fingerprint,
+        stagedFingerprint: state.restoreAuthorization?.stagedFingerprint,
         snapshotId: authorization.token.remote.snapshotId,
         snapshotName: authorization.token.remote.snapshotName,
       };
       await writeState(state);
       await setControl({ epoch: state.epoch, pauseRequested: false });
       await removePrivateDirectory(stagedDirectory).catch(() => {});
+      authorization.expiresAt = 8_640_000_000_000_000;
+      authorization.active = true;
       return { epoch: state.epoch, target, restoreAuthorizationId };
     }));
   }
 
-  async function completeRestore({ target: expectedTarget, epoch, restoreAuthorizationId } = {}) {
+  async function completeRestore({ target: expectedTarget, epoch, restoreAuthorizationId, keepPaused = false } = {}) {
     return serialize(() => withWriterLock(async () => {
       const state = await readState();
       const target = await service.getTarget();
@@ -2207,6 +2328,8 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
           localInventory: localStage.inventory,
           previousLocalDirectory: remoteToken.local.directory,
         });
+        if (keepPaused && (!state.restoreAuthorization.stagedFingerprint
+            || state.restoreAuthorization.stagedFingerprint !== localStage.fingerprint)) throw new GoogleDriveSyncError("sync_conflict");
         await assertRestoreFence();
         const freshState = await readState();
         freshState.target = target;
@@ -2217,11 +2340,23 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
         freshState.candidate = null;
         freshState.pendingCleanups ||= freshState.pendingCleanup ? [freshState.pendingCleanup] : [];
         freshState.pendingCleanup = freshState.pendingCleanups[0] || null;
-        freshState.enabled = true;
-        freshState.paused = false;
-        freshState.phase = "idle";
+        const restoreProof = freshState.restoreAuthorization;
+        if (keepPaused) {
+          freshState.restoreAuthorization = {
+            ...restoreProof,
+            stagedFingerprint: localStage.fingerprint,
+            completedFingerprint: localStage.fingerprint,
+            completedEpoch: epoch,
+          };
+        }
+        const shouldEnable = restoreProof?.activate === true || authorization.previousMode?.enabled === true;
+        const shouldPause = keepPaused || (restoreProof?.activate === true ? false
+          : (authorization.previousMode?.paused === true || !shouldEnable));
+        freshState.enabled = shouldEnable;
+        freshState.paused = shouldPause;
+        freshState.phase = shouldPause ? (shouldEnable ? "paused" : "disabled") : "idle";
         freshState.lastError = null;
-        freshState.restoreAuthorization = null;
+        if (!keepPaused) freshState.restoreAuthorization = null;
         freshState.retry = { attempts: 0, at: null };
         freshState.progress = freshState.lastCompleted ? {
           currentFiles: freshState.lastCompleted.fileCount, totalFiles: freshState.lastCompleted.fileCount,
@@ -2230,21 +2365,258 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
         await assertRestoreFence();
         await writeState(freshState);
         await setControl({ epoch: freshState.epoch, pauseRequested: false });
-        restoreAuthorizations.delete(restoreAuthorizationId);
+        if (!keepPaused) restoreAuthorizations.delete(restoreAuthorizationId);
         runtimeError = null;
         return getSafeStatus();
       } finally {
         if (localStage?.directory) await removePrivateDirectory(localStage.directory).catch(() => {});
-        restoreAuthorizations.delete(restoreAuthorizationId);
-        await disposePreview(remoteToken);
+        if (!keepPaused) {
+          restoreAuthorizations.delete(restoreAuthorizationId);
+          await disposePreview(remoteToken);
+        }
       }
     }));
   }
 
-  async function runOnce() {
-    if (stopping) return getSafeStatus();
-    if (activeRun) return activeRun;
-    activeRun = serialize(() => withWriterLock(runOnceInternal)).finally(() => { activeRun = null; });
+  async function verifyRestoreJournal(expectedProof = {}) {
+    return serialize(() => withWriterLock(async () => {
+      const state = await readState();
+      const proof = state.restoreAuthorization;
+      const validBinding = /^[0-9a-f-]{36}$/i.test(expectedProof.transactionId || "")
+        && /^[0-9a-f-]{36}$/i.test(expectedProof.restoreAuthorizationId || "")
+        && validTargetRecord(expectedProof.target)
+        && /^[a-f0-9]{64}$/.test(expectedProof.remoteFingerprint || "")
+        && /^[a-f0-9]{64}$/.test(expectedProof.descriptorFingerprint || "")
+        && /^[a-f0-9]{64}$/.test(expectedProof.previousFingerprint || "")
+        && /^[A-Za-z0-9_-]{5,200}$/.test(expectedProof.snapshotId || "")
+        && /^[a-f0-9]{64}$/.test(expectedProof.stagedFingerprint || "")
+        && typeof expectedProof.snapshotName === "string" && expectedProof.snapshotName.length > 0
+        && expectedProof.snapshotName.length <= 255 && !/[\0\r\n]/.test(expectedProof.snapshotName)
+        && typeof expectedProof.activate === "boolean"
+        && expectedProof.previousMode && typeof expectedProof.previousMode.enabled === "boolean"
+        && typeof expectedProof.previousMode.paused === "boolean";
+      if (!validBinding) throw new GoogleDriveSyncError("sync_conflict");
+      if (!proof?.active) {
+        const completed = state.lastRestoreProof;
+        if (expectedProof.phase !== "committed" || state.lastRestoreTransaction !== expectedProof.transactionId
+            || !validRestoreProofRecord(completed)
+            || completed.transactionId !== expectedProof.transactionId
+            || completed.restoreAuthorizationId !== expectedProof.restoreAuthorizationId
+            || canonicalJson(completed.target) !== canonicalJson(expectedProof.target)
+            || completed.remoteFingerprint !== expectedProof.remoteFingerprint
+            || completed.descriptorFingerprint !== expectedProof.descriptorFingerprint
+            || completed.previousFingerprint !== expectedProof.previousFingerprint
+            || completed.snapshotId !== expectedProof.snapshotId || completed.snapshotName !== expectedProof.snapshotName
+            || completed.activate !== expectedProof.activate
+            || canonicalJson(completed.previousMode) !== canonicalJson(expectedProof.previousMode)
+            || completed.epoch !== expectedProof.epoch
+            || completed.completedFingerprint !== expectedProof.completedFingerprint) throw new GoogleDriveSyncError("sync_conflict");
+        const inventory = await buildArchiveInventory(resolvedDataDir);
+        if (fingerprint(inventory) !== expectedProof.completedFingerprint || !(await validateArchive(resolvedDataDir, inventory)).valid
+            || !sameTarget(await service.getTarget(), expectedProof.target)) throw new GoogleDriveSyncError("sync_conflict");
+        return true;
+      }
+      if (proof.transactionId !== expectedProof.transactionId
+          || proof.id !== expectedProof.restoreAuthorizationId
+          || canonicalJson(proof.target) !== canonicalJson(expectedProof.target)
+          || proof.remoteFingerprint !== expectedProof.remoteFingerprint
+          || proof.descriptorFingerprint !== expectedProof.descriptorFingerprint
+          || proof.localFingerprint !== expectedProof.previousFingerprint
+          || proof.snapshotId !== expectedProof.snapshotId || proof.snapshotName !== expectedProof.snapshotName
+          || proof.activate !== expectedProof.activate
+          || canonicalJson(proof.previousMode) !== canonicalJson(expectedProof.previousMode)) {
+        throw new GoogleDriveSyncError("sync_conflict");
+      }
+      if (expectedProof.epoch !== undefined && (!Number.isSafeInteger(expectedProof.epoch) || state.epoch !== expectedProof.epoch)) {
+        throw new GoogleDriveSyncError("sync_conflict");
+      }
+      if (proof.completedFingerprint !== undefined
+          && (proof.completedFingerprint !== expectedProof.completedFingerprint || proof.completedEpoch !== expectedProof.epoch)) {
+        throw new GoogleDriveSyncError("sync_conflict");
+      }
+      if (proof.stagedFingerprint !== expectedProof.stagedFingerprint) throw new GoogleDriveSyncError("sync_conflict");
+      if (expectedProof.phase === "committed" && (!proof.completedFingerprint
+          || proof.completedFingerprint !== expectedProof.completedFingerprint || proof.completedEpoch !== expectedProof.epoch)) {
+        throw new GoogleDriveSyncError("sync_conflict");
+      }
+      return true;
+    }));
+  }
+
+  async function bindRestoreIncoming({ target: expectedTarget, restoreAuthorizationId, transactionId, previousFingerprint, incomingFingerprint } = {}) {
+    return serialize(() => withWriterLock(async () => {
+      const state = await readState();
+      const proof = state.restoreAuthorization;
+      const authorization = restoreAuthorizations.get(restoreAuthorizationId);
+      if (!authorization || authorization.expiresAt <= now() || !authorization.active
+          || !proof?.active || proof.id !== restoreAuthorizationId || proof.transactionId !== transactionId
+          || authorization.transactionId !== transactionId || !validTargetRecord(expectedTarget)
+          || !sameTarget(expectedTarget, authorization.target) || !sameTarget(expectedTarget, proof.target)
+          || proof.localFingerprint !== previousFingerprint || authorization.token.local.fingerprint !== previousFingerprint
+          || !/^[a-f0-9]{64}$/.test(incomingFingerprint || "")
+          || !sameTarget(await service.getTarget(), expectedTarget)) throw new GoogleDriveSyncError("sync_conflict");
+      if (proof.stagedFingerprint && proof.stagedFingerprint !== incomingFingerprint) throw new GoogleDriveSyncError("sync_conflict");
+      state.restoreAuthorization = { ...proof, stagedFingerprint: incomingFingerprint };
+      await writeState(state);
+      return { transactionId, restoreAuthorizationId, stagedFingerprint: incomingFingerprint };
+    }));
+  }
+
+  async function finishRestore({ transactionId, restoreAuthorizationId, expectedProof } = {}) {
+    return serialize(() => withWriterLock(async () => {
+      const state = await readState();
+      const proof = state.restoreAuthorization;
+      if (!validRestoreProofRecord(expectedProof) || expectedProof.transactionId !== transactionId
+          || expectedProof.restoreAuthorizationId !== restoreAuthorizationId) throw new GoogleDriveSyncError("sync_conflict");
+      const liveInventory = await buildArchiveInventory(resolvedDataDir);
+      const liveValidation = await validateArchive(resolvedDataDir, liveInventory);
+      const liveFingerprint = fingerprint(liveInventory);
+      if (!liveValidation.valid || liveFingerprint !== expectedProof.completedFingerprint) throw new GoogleDriveSyncError("sync_conflict");
+      const matchesExpected = (candidate) => Boolean(candidate && candidate.transactionId === expectedProof.transactionId
+        && candidate.restoreAuthorizationId === expectedProof.restoreAuthorizationId
+        && canonicalJson(candidate.target) === canonicalJson(expectedProof.target)
+        && candidate.remoteFingerprint === expectedProof.remoteFingerprint
+        && candidate.descriptorFingerprint === expectedProof.descriptorFingerprint
+        && candidate.previousFingerprint === expectedProof.previousFingerprint
+        && candidate.stagedFingerprint === expectedProof.stagedFingerprint
+        && candidate.snapshotId === expectedProof.snapshotId
+        && candidate.snapshotName === expectedProof.snapshotName
+        && candidate.activate === expectedProof.activate
+        && canonicalJson(candidate.previousMode) === canonicalJson(expectedProof.previousMode)
+        && candidate.epoch === expectedProof.epoch
+        && candidate.completedFingerprint === expectedProof.completedFingerprint);
+      if (!proof?.active && state.lastRestoreTransaction === transactionId) {
+        if (!matchesExpected(state.lastRestoreProof)) throw new GoogleDriveSyncError("sync_conflict");
+        const target = await service.getTarget();
+        if (!sameTarget(target, expectedProof.target)) throw new GoogleDriveSyncError("target_changed");
+        return getSafeStatus();
+      }
+      if (!proof?.active || proof.transactionId !== transactionId
+          || (restoreAuthorizationId && proof.id !== restoreAuthorizationId)
+          || !/^[0-9a-f-]{36}$/i.test(transactionId || "")) throw new GoogleDriveSyncError("sync_conflict");
+      const authorized = {
+        transactionId: proof.transactionId,
+        restoreAuthorizationId: proof.id,
+        target: proof.target,
+        remoteFingerprint: proof.remoteFingerprint,
+        descriptorFingerprint: proof.descriptorFingerprint,
+        previousFingerprint: proof.localFingerprint,
+        stagedFingerprint: proof.stagedFingerprint,
+        snapshotId: proof.snapshotId,
+        snapshotName: proof.snapshotName,
+        activate: proof.activate,
+        previousMode: proof.previousMode,
+        epoch: proof.completedEpoch,
+        completedFingerprint: proof.completedFingerprint,
+      };
+      if (!matchesExpected(authorized) || proof.completedEpoch !== state.epoch) throw new GoogleDriveSyncError("sync_conflict");
+      const target = await service.getTarget();
+      if (!sameTarget(target, proof.target)) throw new GoogleDriveSyncError("target_changed");
+      const shouldEnable = proof.activate === true || proof.previousMode.enabled === true;
+      const shouldPause = proof.activate === true ? false : (proof.previousMode.paused === true || !shouldEnable);
+      state.epoch += 1;
+      state.lastRestoreTransaction = transactionId;
+      state.lastRestoreProof = structuredClone(expectedProof);
+      state.enabled = shouldEnable;
+      state.paused = shouldPause;
+      state.phase = shouldPause ? (shouldEnable ? "paused" : "disabled") : "idle";
+      state.restoreAuthorization = null;
+      state.operations = {};
+      state.candidate = null;
+      state.desiredFingerprint = null;
+      state.retry = { attempts: 0, at: null };
+      state.lastError = null;
+      state.progress = state.lastCompleted ? {
+        currentFiles: state.lastCompleted.fileCount, totalFiles: state.lastCompleted.fileCount,
+        currentBytes: state.lastCompleted.totalBytes, totalBytes: state.lastCompleted.totalBytes,
+      } : { currentFiles: 0, totalFiles: 0, currentBytes: 0, totalBytes: 0 };
+      await writeState(state);
+      await setControl({ epoch: state.epoch, pauseRequested: false });
+      const authorization = [...restoreAuthorizations.values()].find((value) => value.transactionId === transactionId);
+      if (authorization) { restoreAuthorizations.delete(authorization.id); await disposePreview(authorization.token); }
+      runtimeError = null;
+      if (state.enabled && !state.paused) queueMicrotask(() => { void runOnce().catch(() => {}); });
+      return getSafeStatus();
+    }));
+  }
+
+  async function recoverOrphanRestoreAuthorization({ transactionId } = {}) {
+    return serialize(() => withWriterLock(async () => {
+      const state = await readState();
+      const proof = state.restoreAuthorization;
+      const proofTransaction = proof?.active === true ? proof.transactionId : null;
+      if (transactionId && proofTransaction && proofTransaction !== transactionId) return false;
+      const authorization = [...restoreAuthorizations.values()].find((candidate) => candidate.transactionId === (transactionId || proofTransaction));
+      if (!proofTransaction && !authorization) return false;
+      const targetBinding = proofTransaction ? proof.target : authorization.target;
+      const previousMode = proofTransaction ? proof.previousMode : authorization.previousMode;
+      const target = await service.getTarget().catch(() => null);
+      const same = sameTarget(target, targetBinding);
+      state.epoch += 1;
+      state.enabled = same && previousMode?.enabled === true;
+      state.paused = !same || previousMode?.paused === true || !state.enabled;
+      state.phase = state.paused ? (state.enabled ? "paused" : "disabled") : "idle";
+      state.restoreAuthorization = null;
+      state.operations = {};
+      state.candidate = null;
+      state.desiredFingerprint = null;
+      state.retry = { attempts: 0, at: null };
+      await writeState(state);
+      await setControl({ epoch: state.epoch, pauseRequested: false });
+      if (authorization) {
+        restoreAuthorizations.delete(authorization.id);
+        await disposePreview(authorization.token);
+      }
+      if (state.enabled && !state.paused) queueMicrotask(() => { void runOnce().catch(() => {}); });
+      return true;
+    }));
+  }
+
+  async function executeRun() {
+    const result = await serialize(() => withWriterLock(runOnceInternal));
+    await onRunLockReleased?.();
+    return result;
+  }
+
+  async function runRequestedScans() {
+    let result;
+    let initialError;
+    try { result = await executeRun(); }
+    catch (error) { initialError = error; }
+    while (rerunRequested && !stopping) {
+      rerunRequested = false;
+      const waiters = rerunWaiters.splice(0);
+      try {
+        result = await executeRun();
+        for (const waiter of waiters) waiter.resolve(result);
+      } catch (error) {
+        for (const waiter of waiters) waiter.reject(error);
+      }
+    }
+    if (rerunWaiters.length) {
+      const status = await getSafeStatus();
+      for (const waiter of rerunWaiters.splice(0)) waiter.resolve(status);
+      rerunRequested = false;
+    }
+    if (initialError) throw initialError;
+    return result;
+  }
+
+  function runOnce() {
+    if (stopping) return Promise.resolve(getSafeStatus());
+    if (activeRun) {
+      rerunRequested = true;
+      return new Promise((resolve, reject) => rerunWaiters.push({ resolve, reject }));
+    }
+    const task = runRequestedScans();
+    activeRun = task.finally(() => {
+      activeRun = null;
+      if (rerunWaiters.length) {
+        const pending = rerunWaiters.splice(0);
+        rerunRequested = false;
+        void getSafeStatus().then((status) => pending.forEach((waiter) => waiter.resolve(status)), (error) => pending.forEach((waiter) => waiter.reject(error)));
+      }
+    });
     return activeRun;
   }
 
@@ -2265,12 +2637,12 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
     if (timer) clearInterval(timer);
     timer = null;
     stopPromise = (async () => {
-      if (activeRun) await activeRun.catch(() => {});
+        if (activeRun) await activeRun.catch(() => {});
       await serialize(() => withWriterLock(async () => {
         await prunePreviewEvidence({ removeAll: true, scanPrivate: true });
         try {
           const state = await readState();
-          state.restoreAuthorization = null;
+          if (!state.restoreAuthorization?.active) state.restoreAuthorization = null;
           await writeState(state);
         } catch { /* Preserve malformed private state. */ }
       })).catch(() => {});
@@ -2294,6 +2666,10 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
     disable,
     invalidateAfterRestore,
     completeRestore,
+    finishRestore,
+    verifyRestoreJournal,
+    bindRestoreIncoming,
+    recoverOrphanRestoreAuthorization,
     privateDir,
   });
 }

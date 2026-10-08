@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm, unlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
@@ -16,8 +16,43 @@ import { DRAPE_SETS } from "../shared/draping.mjs";
 
 async function fixtureRoot(t, prefix) {
   const root = await mkdtemp(path.join(os.tmpdir(), prefix));
-  t.after(() => rm(root, { recursive: true, force: true }));
+  t.after(async () => {
+    await waitForArchiveLeases(root);
+    await rm(root, { recursive: true, force: true });
+  });
   return root;
+}
+
+async function archiveLeaseFiles(root) {
+  const files = [];
+  const visit = async (directory) => {
+    const leaseDirectory = path.join(directory, ".google-drive", "archive-coordination", "leases");
+    try {
+      for (const name of await readdir(leaseDirectory)) files.push(path.join(leaseDirectory, name));
+    } catch (error) { if (error.code !== "ENOENT") throw error; }
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      if (entry.isDirectory() && entry.name !== ".google-drive") await visit(path.join(directory, entry.name));
+    }
+  };
+  await visit(root);
+  return files;
+}
+
+async function waitForArchiveLeases(root) {
+  for (let attempt = 0; attempt < 1_000; attempt += 1) {
+    const leases = await archiveLeaseFiles(root);
+    for (const file of leases) {
+      let record;
+      try { record = JSON.parse(await readFile(file, "utf8")); }
+      catch (error) { if (error.code === "ENOENT") continue; throw error; }
+      let alive = true;
+      try { process.kill(record.pid, 0); } catch (error) { alive = error.code === "EPERM"; }
+      if (!alive) await unlink(file).catch((error) => { if (error.code !== "ENOENT") throw error; });
+    }
+    if ((await archiveLeaseFiles(root)).length === 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error("Archive writer leases did not drain before fixture cleanup");
 }
 
 async function middlewareFor(plugin, root) {

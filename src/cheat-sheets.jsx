@@ -11,6 +11,7 @@ import { buildOverviewIndex, filterOverviewIndex } from "../shared/overview-inde
 import { cheatSheetSourceFingerprint, renderCheatSheet } from "./cheat-sheet-renderer.js";
 import { CHEAT_SHEET_LAYOUT_VERSION, CHEAT_SHEET_MAX_PIECE_SCALE, CHEAT_SHEET_MIN_PIECE_SCALE, CHEAT_SHEET_PIECE_SCALE_STEP, normalizeCheatSheetScale } from "../shared/cheat-sheet-layout.mjs";
 import { CHEAT_SHEET_DESCRIPTION_LIMIT, CHEAT_SHEET_PROMPT_LIMIT, DEFAULT_CHEAT_SHEET_BEAUTIFY_PROMPT } from "../shared/cheat-sheet-prompt.mjs";
+import { OptimizedImage } from "./OptimizedImage.jsx";
 import "./cheat-sheets.css";
 
 const sortSheets = (sheets) => [...sheets].sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
@@ -74,7 +75,7 @@ function SheetCard({ sheet, onOpen, onEdit, opening }) {
   return (
     <article className="cheat-card">
       <button id={`cheat-sheet-card-${sheet.id}`} type="button" className="cheat-card__open" onClick={onOpen} aria-label={`View cheat sheet fullscreen: ${sheet.title || "Untitled"}`} aria-haspopup="dialog" aria-busy={opening || undefined}>
-        <span className="cheat-card__cover"><img src={sheet.aiThumbnailImage || sheet.thumbnailImage} alt="" loading="lazy" /></span>
+        <span className="cheat-card__cover"><OptimizedImage src={sheet.aiThumbnailImage || sheet.thumbnailImage} alt="" loading="lazy" /></span>
         <span className="cheat-card__title">{sheet.title}</span>
         <span className="cheat-card__meta">{opening ? "Opening…" : <>{sheet.pieces?.length || 0} {(sheet.pieces?.length || 0) === 1 ? "piece" : "pieces"}{sheet.beautifyStatus === "processing" ? " · Beautifying…" : sheet.aiImage ? " · AI finish" : ""}</>}</span>
       </button>
@@ -221,7 +222,7 @@ const PiecePicker = forwardRef(function PiecePicker({ items, selected, onToggle,
             <label key={item.id} className={`cheat-picker__item${checked ? " is-selected" : ""}`}>
               <input type="checkbox" checked={checked} disabled={disabled} onChange={() => onToggle(item)} />
               <span className="cheat-picker__checkbox" aria-hidden="true">{checked && <Check size={13} weight="bold" />}</span>
-              <span className="cheat-picker__thumb">{image && <img src={image} alt="" loading="lazy" />}</span>
+              <span className="cheat-picker__thumb">{image && <OptimizedImage src={image} alt="" loading="lazy" />}</span>
               <span className="cheat-picker__name"><strong>{item.name || "Untitled piece"}</strong><small>{CATEGORY_LABEL[item.part] || "Other"}</small></span>
             </label>
           );
@@ -555,12 +556,12 @@ function CheatSheetEditor({ items, entry, onClose, onSaved, onSheetUpdate, premi
     </div>
   );
   const displayPreview = (interactive = true) => {
-    if (showingAi) return <img className="cheat-preview__saved-image" src={savedSheet.aiImage} alt={`${savedSheet.title}, AI finish`} />;
-    if (!dirty && savedSheet?.originalImage) return <img className="cheat-preview__saved-image" src={savedSheet.originalImage} alt={`${savedSheet.title}, saved cheat sheet`} />;
+    if (showingAi) return <OptimizedImage className="cheat-preview__saved-image" src={savedSheet.aiImage} alt={`${savedSheet.title}, AI finish`} />;
+    if (!dirty && savedSheet?.originalImage) return <OptimizedImage className="cheat-preview__saved-image" src={savedSheet.originalImage} alt={`${savedSheet.title}, saved cheat sheet`} />;
     if (renderReady || (dirty && title.trim() && preview?.bands?.length)) {
       return renderPreviewSurface(renderPreviewBands(preview.bands), previewUpdating);
     }
-    if (savedSheet?.originalImage) return renderPreviewSurface(<div className="cheat-preview__stale"><img className="cheat-preview__saved-image" src={savedSheet.originalImage} alt={`${savedSheet.title}, last saved cheat sheet`} /><span>Last saved version</span></div>, previewUpdating);
+    if (savedSheet?.originalImage) return renderPreviewSurface(<div className="cheat-preview__stale"><OptimizedImage className="cheat-preview__saved-image" src={savedSheet.originalImage} alt={`${savedSheet.title}, last saved cheat sheet`} /><span>Last saved version</span></div>, previewUpdating);
     return (
       renderPreviewSurface(<div className="cheat-preview__placeholder" role={renderIssue ? "alert" : undefined}>
         <span className="cheat-preview__placeholder-mark" aria-hidden="true" />
@@ -675,7 +676,7 @@ function CheatSheetEditor({ items, entry, onClose, onSaved, onSheetUpdate, premi
                       const issueForItem = renderIssue?.itemId === itemId;
                       return (
                         <article key={itemId} className={`cheat-selected-piece${unavailable || issueForItem ? " is-error" : ""}`}>
-                          <span className="cheat-selected-piece__image">{item && variantImage(item, variantId) && <img src={variantImage(item, variantId)} alt="" />}</span>
+                          <span className="cheat-selected-piece__image">{item && variantImage(item, variantId) && <OptimizedImage src={variantImage(item, variantId)} alt="" />}</span>
                           <div className="cheat-selected-piece__details">
                             <strong>{item?.name || "Missing wardrobe piece"}</strong>
                             {item && item.variants?.length > 1 ? <label className="sr-only" htmlFor={`cheat-variant-${itemId}`}>Variant for {item.name}</label> : <small>{variant?.name || "Reference missing"}</small>}
@@ -930,7 +931,7 @@ export function CheatSheetsArea({ items, premiumAllowed = true, provider = null,
   return <>
     {active && <SheetCollection sheets={sheets} loading={loading} error={error} onNew={newSheet} onOpen={openSheetViewer} onEdit={openSheetEditor} openingId={openingId} />}
     {active && collectionViewer && <FullscreenCheatSheetViewer title={collectionViewer.sheet.title} versionLabel={collectionViewer.versionLabel} isDraft={false} onClose={closeCollectionViewer} openedFrom={collectionViewer.trigger}>
-      <img className="cheat-preview__saved-image" src={collectionViewer.image} alt={`${collectionViewer.sheet.title || "Cheat sheet"}, ${collectionViewer.versionLabel.toLowerCase()}`} />
+      <OptimizedImage className="cheat-preview__saved-image" src={collectionViewer.image} alt={`${collectionViewer.sheet.title || "Cheat sheet"}, ${collectionViewer.versionLabel.toLowerCase()}`} />
     </FullscreenCheatSheetViewer>}
     {entry && <CheatSheetEditor key={entry.key} items={items} entry={entry} onClose={closeEditor} onSaved={saved} onSheetUpdate={updateSheet} premiumAllowed={premiumAllowed} provider={provider} />}
   </>;
