@@ -1,9 +1,11 @@
 import { lstat, readdir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { createGoogleDriveService, GoogleDriveError } from "./google-drive-auth.mjs";
+import { getGoogleDriveSyncWorker } from "./google-drive-sync.mjs";
 import { hasGoogleDrivePrivatePathComponent } from "./google-drive-private-path.mjs";
 
 const COOKIE_NAME = "wardrobe_google_oauth_nonce";
+const workerCloseWrappedServers = new WeakSet();
 function inside(parent, candidate) {
   const relative = path.relative(path.resolve(parent), path.resolve(candidate));
   return relative === "" || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative));
@@ -310,6 +312,22 @@ export function googleDriveApi(options = {}) {
   let publicDir;
   let buildDir;
   let guard;
+  let syncWorker;
+
+  function installHandlers(server) {
+    server.middlewares.use(guard);
+    server.middlewares.use(handler);
+    syncWorker?.start();
+    if (typeof server.close === "function" && !workerCloseWrappedServers.has(server)) {
+      const closeServer = server.close;
+      server.close = async function closeAfterSyncDrain(...args) {
+        await syncWorker?.stop();
+        return closeServer.apply(this, args);
+      };
+      workerCloseWrappedServers.add(server);
+    }
+    server.httpServer?.once("close", () => { void syncWorker?.stop(); });
+  }
 
   async function handler(req, res, next) {
     const url = new URL(req.url || "/", "http://localhost");
@@ -319,7 +337,8 @@ export function googleDriveApi(options = {}) {
     try {
       if (route === "/api/google-drive/status") {
         if (method !== "GET") return json(res, 405, { error: { code: "method_not_allowed", message: "Metodo non consentito.", retryable: false } });
-        return json(res, 200, await service.getStatus());
+        const [authStatus, syncStatus] = await Promise.all([service.getStatus(), syncWorker?.getSafeStatus() || {}]);
+        return json(res, 200, { ...authStatus, ...syncStatus });
       }
 
       if (route === "/api/google-drive/oauth/callback") {
@@ -393,6 +412,11 @@ export function googleDriveApi(options = {}) {
         privatePlacementInvalid,
       });
       if (service.privateDir !== privateDir) throw new Error("Injected Google Drive service uses a different private data root");
+      syncWorker = options.syncWorker || getGoogleDriveSyncWorker({
+        service,
+        dataDir: path.dirname(service.privateDir),
+        now: options.now,
+      });
       guard = createPrivateFileGuard({ root, privateDir, publicDir, buildDir });
       if (config.command === "build") {
         if (privatePlacementInvalid) throw new Error("Google Drive private state cannot be stored under Vite publicDir or build.outDir");
@@ -400,15 +424,15 @@ export function googleDriveApi(options = {}) {
       }
     },
     configureServer(server) {
-      server.middlewares.use(guard);
-      server.middlewares.use(handler);
+      installHandlers(server);
     },
     configurePreviewServer(server) {
-      server.middlewares.use(guard);
-      server.middlewares.use(handler);
+      installHandlers(server);
     },
     // Server-side workers can share this exact instance so refresh, relink,
     // disconnect, and generation checks all use one lifecycle.
     getService() { return service || null; },
+    // Feature 04 uses this internal server-only seam for preview/choice/restore.
+    getSyncWorker() { return syncWorker || null; },
   };
 }

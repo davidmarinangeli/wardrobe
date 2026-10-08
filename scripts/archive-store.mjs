@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
-import { lstat, mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
+import { createReadStream, createWriteStream } from "node:fs";
+import { lstat, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { pipeline } from "node:stream/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { archivePathFromAsset, catalogForDisk, isArchiveAssetField, safeArchivePath } from "../shared/portable-assets.mjs";
@@ -23,6 +25,16 @@ const MIME_EXTENSIONS = new Map([
 ]);
 
 function sha256(bytes) { return createHash("sha256").update(bytes).digest("hex"); }
+
+export async function hashArchiveFile(filePath) {
+  const hash = createHash("sha256");
+  let size = 0;
+  for await (const chunk of createReadStream(filePath)) {
+    hash.update(chunk);
+    size += chunk.length;
+  }
+  return { size, sha256: hash.digest("hex") };
+}
 
 async function assertNoSymlink(file) {
   try {
@@ -57,8 +69,8 @@ async function visitAllowedDirectory(dataDir, relativeDir, entries) {
       await visitAllowedDirectory(dataDir, relativePath, entries);
     } else if (childInfo?.isFile()) {
       if (isControlName(child.name) || !IMAGE_EXTENSIONS.has(path.extname(child.name).toLowerCase())) continue;
-      const bytes = await readFile(absolutePath);
-      entries.push({ path: relativePath, size: bytes.length, sha256: sha256(bytes) });
+      const digest = await hashArchiveFile(absolutePath);
+      entries.push({ path: relativePath, ...digest });
     } else {
       throw new Error(`Unsupported archive entry: ${relativePath}`);
     }
@@ -83,8 +95,8 @@ export async function buildArchiveInventory(dataDir) {
     const info = await assertNoSymlink(file);
     if (!info) continue;
     if (!info.isFile()) throw new Error(`Archive catalog is not a file: ${name}`);
-    const bytes = await readFile(file);
-    entries.push({ path: name, size: bytes.length, sha256: sha256(bytes) });
+    const digest = await hashArchiveFile(file);
+    entries.push({ path: name, ...digest });
   }
   for (const name of ARCHIVE_MEDIA_ROOTS) await visitAllowedDirectory(dataDir, name, entries);
   for (const name of ["model-reference.png", "model-reference.jpg", "model-reference.jpeg", "model-reference.webp", "model-reference-face.png", "model-reference-face.jpg", "model-reference-face.jpeg", "model-reference-face.webp"]) {
@@ -93,11 +105,51 @@ export async function buildArchiveInventory(dataDir) {
     const info = await assertNoSymlink(file);
     if (!info) continue;
     if (!info.isFile()) throw new Error(`Archive reference is not a file: ${name}`);
-    const bytes = await readFile(file);
-    entries.push({ path: name, size: bytes.length, sha256: sha256(bytes) });
+    const digest = await hashArchiveFile(file);
+    entries.push({ path: name, ...digest });
   }
   entries.sort((a, b) => a.path.localeCompare(b.path, "en"));
   return { version: ARCHIVE_SCHEMA_VERSION, files: entries };
+}
+
+function inventoryFingerprint(inventory) {
+  return sha256(Buffer.from(JSON.stringify(inventory)));
+}
+
+/** Captures one immutable, validated archive snapshot inside a caller-owned private directory. */
+export async function createArchiveSnapshot({ sourceDir, stagingRoot, attempts = 3 } = {}) {
+  if (!sourceDir || !stagingRoot) throw new TypeError("Archive source and private staging root are required");
+  const stagingInfo = await assertNoSymlink(stagingRoot);
+  if (stagingInfo && !stagingInfo.isDirectory()) throw new Error("Archive staging root is not a directory");
+  await mkdir(stagingRoot, { recursive: true, mode: 0o700 });
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const directory = path.join(stagingRoot, `snapshot-${randomUUID()}`);
+    await mkdir(directory, { recursive: false, mode: 0o700 });
+    try {
+      const before = await buildArchiveInventory(sourceDir);
+      const sourceValidation = await validateArchive(sourceDir, before);
+      if (!sourceValidation.valid) throw new Error(`Local archive is invalid: ${sourceValidation.errors.join("; ")}`);
+      for (const entry of before.files) {
+        const source = await resolveArchiveFile(sourceDir, entry.path);
+        const destination = path.join(directory, ...entry.path.split("/"));
+        await mkdir(path.dirname(destination), { recursive: true, mode: 0o700 });
+        await pipeline(createReadStream(source), createWriteStream(destination, { flags: "wx", mode: 0o600 }));
+        const copied = await hashArchiveFile(destination);
+        if (copied.size !== entry.size || copied.sha256 !== entry.sha256) throw new Error(`Archive changed while capturing: ${entry.path}`);
+      }
+      const after = await buildArchiveInventory(sourceDir);
+      if (inventoryFingerprint(before) !== inventoryFingerprint(after)) throw new Error("Local archive changed while capturing snapshot");
+      const staged = await buildArchiveInventory(directory);
+      if (inventoryFingerprint(before) !== inventoryFingerprint(staged)) throw new Error("Staged archive snapshot failed inventory verification");
+      const stagedValidation = await validateArchive(directory, before);
+      if (!stagedValidation.valid) throw new Error(`Staged archive snapshot is invalid: ${stagedValidation.errors.join("; ")}`);
+      return { directory, inventory: before, fingerprint: inventoryFingerprint(before) };
+    } catch (error) {
+      await rm(directory, { recursive: true, force: true }).catch(() => {});
+      if (attempt + 1 >= attempts) throw error;
+    }
+  }
+  throw new Error("Could not capture a stable local archive snapshot");
 }
 
 function visitMediaReferences(value, parentKey, parentParentKey, found, historical) {
@@ -141,9 +193,9 @@ export async function validateArchive(dataDir, inventory) {
     try {
       const info = await assertNoSymlink(file);
       if (!info?.isFile()) { errors.push(`Missing archive file: ${relative}`); continue; }
-      const bytes = await readFile(file);
-      if (!Number.isInteger(entry.size) || entry.size !== bytes.length) errors.push(`Archive size mismatch: ${relative}`);
-      if (!/^[a-f0-9]{64}$/i.test(entry.sha256) || entry.sha256.toLowerCase() !== sha256(bytes)) errors.push(`Archive checksum mismatch: ${relative}`);
+      const digest = await hashArchiveFile(file);
+      if (!Number.isInteger(entry.size) || entry.size !== digest.size) errors.push(`Archive size mismatch: ${relative}`);
+      if (!/^[a-f0-9]{64}$/i.test(entry.sha256) || entry.sha256.toLowerCase() !== digest.sha256) errors.push(`Archive checksum mismatch: ${relative}`);
     } catch (error) { errors.push(error.message); }
   }
   try {
@@ -174,7 +226,7 @@ export async function validateArchive(dataDir, inventory) {
   return { valid: errors.length === 0, errors, historicalMissing: [...new Set(historicalMissing)].sort(), inventory };
 }
 
-function isAllowedArchivePath(relative) {
+export function isAllowedArchivePath(relative) {
   if (ARCHIVE_CATALOGS.includes(relative) || isCanonicalReference(relative)) return true;
   const root = ARCHIVE_MEDIA_ROOTS.find((candidate) => relative.startsWith(`${candidate}/`));
   if (!root) return false;

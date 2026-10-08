@@ -216,7 +216,7 @@ function googleError(response, payload, operation) {
 }
 
 async function fetchWithTimeout(fetchImpl, url, init) {
-  try { return await fetchImpl(url, { ...init, signal: timeoutSignal() }); }
+  try { return await fetchImpl(url, { redirect: "error", ...init, signal: timeoutSignal() }); }
   catch (error) { throw new GoogleDriveError("google_unavailable", undefined, { retryable: true, cause: error }); }
 }
 
@@ -378,6 +378,24 @@ export function createGoogleDriveService({ root = process.cwd(), env = process.e
     }
     const response = await fetchWithTimeout(fetchImpl, target, { method, headers: requestHeaders, body: payloadBody });
     await assertCurrent();
+    if (responseType === "upload") {
+      if (response.status === 308 || response.status === 404 || response.status === 410) {
+        await assertCurrent();
+        return { status: response.status, headers: response.headers, data: null };
+      }
+      if (response.status >= 300 && response.status < 400) {
+        throw new GoogleDriveError("google_unavailable", undefined, { status: 502, retryable: false });
+      }
+      if (!response.ok) {
+        const payload = await responseJson(response);
+        await assertCurrent();
+        throw googleError(response, payload, "drive");
+      }
+      if (response.status === 204) return { status: response.status, headers: response.headers, data: null };
+      const data = await responseJson(response);
+      await assertCurrent();
+      return { status: response.status, headers: response.headers, data };
+    }
     if (!response.ok) {
       const payload = await responseJson(response);
       await assertCurrent();
@@ -391,6 +409,12 @@ export function createGoogleDriveService({ root = process.cwd(), env = process.e
       const bytes = Buffer.from(await response.arrayBuffer());
       await assertCurrent();
       return { status: response.status, headers: response.headers, bytes };
+    }
+    if (responseType === "stream") {
+      if (!response.body) throw new GoogleDriveError("google_unavailable", undefined, { status: 502, retryable: true });
+      // The bounded client consumes this stream and rechecks the target around
+      // each read, including the final EOF. Never expose the response itself.
+      return { status: response.status, headers: response.headers, stream: response.body };
     }
     const data = await responseJson(response);
     await assertCurrent();

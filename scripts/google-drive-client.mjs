@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
 const FOLDER_MIME = "application/vnd.google-apps.folder";
@@ -7,6 +9,8 @@ const MAX_DEPTH = 32;
 const MAX_PAGES = 100;
 const MAX_FILES = 50_000;
 const MAX_CONTENT_BYTES = 64 * 1024 * 1024;
+const MAX_RESUMABLE_CHUNK_BYTES = 8 * 1024 * 1024;
+const MAX_STREAMED_FILE_BYTES = 2 * 1024 * 1024 * 1024;
 const FIELDS = "id,name,mimeType,parents,trashed,capabilities,driveId,size,modifiedTime,version,md5Checksum,sha256Checksum,appProperties,webViewLink";
 
 export class GoogleDriveClientError extends Error {
@@ -69,12 +73,50 @@ function validateAppProperties(properties) {
   if (entries.length > 3) fail("invalid_app_properties", "Drive application metadata is invalid");
   const clean = {};
   for (const [key, value] of entries) {
-    if (!allowed.has(key) || typeof value !== "string" || value.length > 124 || /[\0\r\n]/.test(value)) {
+    if (!allowed.has(key) || typeof value !== "string"
+        || Buffer.byteLength(key, "utf8") + Buffer.byteLength(value, "utf8") > 124
+        || /[\0\r\n]/.test(value)) {
       fail("invalid_app_properties", "Drive application metadata is invalid");
     }
     clean[key] = value;
   }
   return clean;
+}
+
+function validateGeneratedId(id) {
+  if (!validId(id)) fail("invalid_drive_id", "A generated Drive id is malformed");
+  return id;
+}
+
+function headerValue(headers, name) {
+  if (typeof headers?.get === "function") return headers.get(name);
+  const key = Object.keys(headers || {}).find((candidate) => candidate.toLowerCase() === name.toLowerCase());
+  return key ? headers[key] : null;
+}
+
+function validateUploadSessionUrl(value, fileId = null) {
+  let url;
+  try { url = new URL(value); } catch { fail("invalid_upload_session", "Google Drive returned an invalid upload session"); }
+  const ids = url.searchParams.getAll("upload_id");
+  const extra = [...url.searchParams.keys()].filter((key) => !["upload_id", "uploadType"].includes(key));
+  const expectedPath = fileId ? `/upload/drive/v3/files/${encodeURIComponent(fileId)}` : "/upload/drive/v3/files";
+  if (url.protocol !== "https:" || url.origin !== "https://www.googleapis.com"
+      || url.pathname !== expectedPath || url.username || url.password || url.hash
+      || ids.length !== 1 || !ids[0] || ids[0].length > 1024 || /[\0\r\n]/.test(ids[0]) || extra.length
+      || (url.searchParams.has("uploadType") && url.searchParams.get("uploadType") !== "resumable")) {
+    fail("invalid_upload_session", "Google Drive returned an invalid upload session");
+  }
+  return url.toString();
+}
+
+function confirmedOffset(headers, total) {
+  const range = headerValue(headers, "range");
+  if (range === null || range === "") return 0;
+  const match = /^bytes=0-(\d+)$/.exec(range);
+  if (!match) fail("malformed_upload_range", "Google Drive returned an invalid upload offset", { status: 502 });
+  const offset = Number(match[1]) + 1;
+  if (!Number.isSafeInteger(offset) || offset < 0 || offset > total) fail("malformed_upload_range", "Google Drive returned an invalid upload offset", { status: 502 });
+  return offset;
 }
 
 function asBuffer(bytes) {
@@ -295,7 +337,109 @@ export function createBoundedDriveClient({ folderId, request, expectedDriveId, a
     return bytes;
   }
 
-  async function createFolder({ name, parentId = folderId } = {}) {
+  async function hashFile(fileId) {
+    const metadata = await ancestry(assertId(fileId), { allowRoot: false });
+    if (metadata.mimeType.startsWith(GOOGLE_MIME_PREFIX)) fail("google_document_not_supported", "Google-native documents cannot be read as archive files", { status: 415 });
+    if (metadata.capabilities.canDownload !== true) fail("file_read_denied", "This Drive file cannot be downloaded", { status: 403 });
+    const declaredSize = metadata.size === undefined ? null : Number(metadata.size);
+    if (declaredSize !== null && (!Number.isSafeInteger(declaredSize) || declaredSize < 0 || declaredSize > MAX_STREAMED_FILE_BYTES)) {
+      fail("file_too_large", "This Drive file exceeds the streamed verification limit", { status: 413 });
+    }
+    const response = await send({ method: "GET", url: drivePath(metadata.id), query: { alt: "media", supportsAllDrives: "true" }, responseType: "stream" });
+    const hash = createHash("sha256");
+    let size = 0;
+    const consume = async (chunk) => {
+      await current();
+      const bytes = Buffer.from(chunk);
+      size += bytes.length;
+      if (size > MAX_STREAMED_FILE_BYTES) fail("file_too_large", "This Drive file exceeds the streamed verification limit", { status: 413 });
+      hash.update(bytes);
+      await current();
+    };
+    const stream = response?.stream;
+    try {
+      if (stream?.getReader) {
+        const reader = stream.getReader();
+        try {
+          while (true) {
+            await current();
+            const part = await reader.read();
+            await current();
+            if (part.done) break;
+            await consume(part.value);
+          }
+        } finally { reader.releaseLock?.(); }
+      } else if (stream && typeof stream[Symbol.asyncIterator] === "function") {
+        for await (const part of stream) await consume(part);
+      } else if (response?.bytes || response?.data instanceof Uint8Array) {
+        await consume(response.bytes || response.data);
+      } else fail("malformed_drive_response", "Google Drive returned invalid streamed content", { status: 502 });
+    } catch (error) {
+      await current();
+      throw error;
+    }
+    await current();
+    const digest = hash.digest("hex");
+    if (declaredSize !== null && declaredSize !== size) fail("remote_checksum_mismatch", "The Drive file size does not match its metadata", { status: 502 });
+    if (metadata.sha256Checksum && metadata.sha256Checksum.toLowerCase() !== digest) fail("remote_checksum_mismatch", "The Drive file checksum does not match its content", { status: 502 });
+    await ancestry(metadata.id, { allowRoot: false });
+    await current();
+    return { size, sha256: digest };
+  }
+
+  async function downloadFile(fileId, writeChunk) {
+    if (typeof writeChunk !== "function") throw new TypeError("A streamed file sink is required");
+    const metadata = await ancestry(assertId(fileId), { allowRoot: false });
+    if (metadata.mimeType.startsWith(GOOGLE_MIME_PREFIX)) fail("google_document_not_supported", "Google-native documents cannot be downloaded as archive files", { status: 415 });
+    if (metadata.capabilities.canDownload !== true) fail("file_read_denied", "This Drive file cannot be downloaded", { status: 403 });
+    const declaredSize = metadata.size === undefined ? null : Number(metadata.size);
+    if (declaredSize !== null && (!Number.isSafeInteger(declaredSize) || declaredSize < 0 || declaredSize > MAX_STREAMED_FILE_BYTES)) {
+      fail("file_too_large", "This Drive file exceeds the streamed download limit", { status: 413 });
+    }
+    const response = await send({ method: "GET", url: drivePath(metadata.id), query: { alt: "media", supportsAllDrives: "true" }, responseType: "stream" });
+    const hash = createHash("sha256");
+    let size = 0;
+    const consume = async (chunk) => {
+      await current();
+      const bytes = Buffer.from(chunk);
+      size += bytes.length;
+      if (size > MAX_STREAMED_FILE_BYTES) fail("file_too_large", "This Drive file exceeds the streamed download limit", { status: 413 });
+      hash.update(bytes);
+      await writeChunk(bytes);
+      await current();
+    };
+    const stream = response?.stream;
+    try {
+      if (stream?.getReader) {
+        const reader = stream.getReader();
+        try {
+          while (true) {
+            await current();
+            const part = await reader.read();
+            await current();
+            if (part.done) break;
+            await consume(part.value);
+          }
+        } finally { reader.releaseLock?.(); }
+      } else if (stream && typeof stream[Symbol.asyncIterator] === "function") {
+        for await (const part of stream) await consume(part);
+      } else if (response?.bytes || response?.data instanceof Uint8Array) {
+        await consume(response.bytes || response.data);
+      } else fail("malformed_drive_response", "Google Drive returned invalid streamed content", { status: 502 });
+    } catch (error) {
+      await current();
+      throw error;
+    }
+    await current();
+    const digest = hash.digest("hex");
+    if (declaredSize !== null && declaredSize !== size) fail("remote_checksum_mismatch", "The Drive file size does not match its metadata", { status: 502 });
+    if (metadata.sha256Checksum && metadata.sha256Checksum.toLowerCase() !== digest) fail("remote_checksum_mismatch", "The Drive file checksum does not match its content", { status: 502 });
+    await ancestry(metadata.id, { allowRoot: false });
+    await current();
+    return { size, sha256: digest };
+  }
+
+  async function createFolder({ name, parentId = folderId, id, appProperties } = {}) {
     validateName(name);
     const parent = await validateParent(parentId);
     await current();
@@ -303,7 +447,11 @@ export function createBoundedDriveClient({ folderId, request, expectedDriveId, a
       method: "POST",
       url: `${DRIVE_API}/files`,
       query: { supportsAllDrives: "true", fields: FIELDS },
-      body: { name, mimeType: FOLDER_MIME, parents: [parent.id] },
+      body: {
+        ...(id ? { id: validateGeneratedId(id) } : {}),
+        name, mimeType: FOLDER_MIME, parents: [parent.id],
+        ...(appProperties ? { appProperties: validateAppProperties(appProperties) } : {}),
+      },
       headers: { "Content-Type": "application/json" },
     });
     await current();
@@ -314,13 +462,13 @@ export function createBoundedDriveClient({ folderId, request, expectedDriveId, a
     return created;
   }
 
-  async function createFile({ name, mimeType, bytes, parentId = folderId, appProperties } = {}) {
+  async function createFile({ name, mimeType, bytes, parentId = folderId, appProperties, id } = {}) {
     validateName(name);
     const contentType = validateContentType(mimeType);
     const content = asBuffer(bytes);
     const props = validateAppProperties(appProperties);
     const parent = await validateParent(parentId);
-    const metadata = { name, mimeType: contentType, parents: [parent.id], ...(props ? { appProperties: props } : {}) };
+    const metadata = { ...(id ? { id: validateGeneratedId(id) } : {}), name, mimeType: contentType, parents: [parent.id], ...(props ? { appProperties: props } : {}) };
     const multi = multipart(metadata, content, contentType);
     await current();
     const response = await send({
@@ -395,5 +543,150 @@ export function createBoundedDriveClient({ folderId, request, expectedDriveId, a
     return { id, deleted: true };
   }
 
-  return Object.freeze({ verifyRoot, getMetadata, listChildren, readFile, createFolder, createFile, updateFile, deleteFile });
+  async function generateId() {
+    const response = await send({
+      method: "GET", url: `${DRIVE_API}/files/generateIds`,
+      query: { count: "1", space: "drive", type: "files" },
+    });
+    const data = response?.data;
+    if (!data || !Array.isArray(data.ids) || data.ids.length !== 1) fail("malformed_drive_response", "Google Drive did not return a generated id", { status: 502 });
+    return validateGeneratedId(data.ids[0]);
+  }
+
+  async function copyFile({ fileId, name, parentId = folderId, id, appProperties } = {}) {
+    const sourceId = assertId(fileId, "Source file id");
+    const source = await ancestry(sourceId, { allowRoot: false });
+    if (source.mimeType.startsWith(GOOGLE_MIME_PREFIX)) fail("google_document_not_supported", "Google-native documents cannot be copied into the archive", { status: 415 });
+    const parent = await validateParent(parentId);
+    const metadata = {
+      ...(id ? { id: validateGeneratedId(id) } : {}),
+      name: validateName(name || source.name),
+      parents: [parent.id],
+      ...(appProperties ? { appProperties: validateAppProperties(appProperties) } : {}),
+    };
+    const response = await send({
+      method: "POST", url: `${DRIVE_API}/files/${encodeURIComponent(sourceId)}/copy`,
+      query: { supportsAllDrives: "true", fields: FIELDS }, body: metadata,
+      headers: { "Content-Type": "application/json" },
+    });
+    const copied = normalizeMetadata(ensureObjectResponse(response, "file copy"));
+    if (copied.parents?.length !== 1 || copied.parents[0] !== parent.id || copied.mimeType.startsWith(GOOGLE_MIME_PREFIX)) {
+      fail("created_file_outside_target", "Google Drive copied a file outside the verified destination", { status: 502 });
+    }
+    await ancestry(copied.id, { allowRoot: false });
+    return copied;
+  }
+
+  async function startResumableUpload({ name, mimeType, size, parentId = folderId, id, fileId, appProperties } = {}) {
+    validateName(name);
+    const contentType = validateContentType(mimeType);
+    if (!Number.isSafeInteger(size) || size < 0) fail("invalid_file_size", "A valid upload size is required");
+    const parent = await validateParent(parentId);
+    const existingFileId = fileId ? assertId(fileId) : null;
+    const generatedId = id ? validateGeneratedId(id) : null;
+    if (existingFileId) {
+      const existing = await ancestry(existingFileId, { allowRoot: false });
+      if (existing.mimeType.startsWith(GOOGLE_MIME_PREFIX)) fail("google_document_not_supported", "Google-native documents cannot be replaced as archive files", { status: 415 });
+      if (existing.parents?.length !== 1 || existing.parents[0] !== parent.id || existing.capabilities.canModifyContent !== true
+          || (appProperties && existing.capabilities.canEdit !== true)) {
+        fail("file_write_denied", "This Drive file cannot be replaced", { status: 403 });
+      }
+    }
+    const metadata = {
+      ...(!existingFileId && generatedId ? { id: generatedId } : {}), name, mimeType: contentType,
+      ...(!existingFileId ? { parents: [parent.id] } : {}),
+      ...(appProperties ? { appProperties: validateAppProperties(appProperties) } : {}),
+    };
+    let response;
+    let requestError;
+    try {
+      response = await send({
+        method: existingFileId ? "PATCH" : "POST", url: `${UPLOAD_API}/files${existingFileId ? `/${encodeURIComponent(existingFileId)}` : ""}`,
+        query: { uploadType: "resumable", supportsAllDrives: "true", fields: FIELDS },
+        body: metadata,
+        headers: { "Content-Type": "application/json", "X-Upload-Content-Type": contentType, "X-Upload-Content-Length": String(size) },
+        responseType: "upload",
+      });
+    } catch (error) { requestError = error; }
+    let boundaryError;
+    try {
+      await validateParent(parent.id);
+      if (existingFileId) {
+        const currentFile = await ancestry(existingFileId, { allowRoot: false });
+        if (currentFile.parents?.length !== 1 || currentFile.parents[0] !== parent.id
+            || currentFile.mimeType.startsWith(GOOGLE_MIME_PREFIX) || currentFile.capabilities.canModifyContent !== true
+            || (appProperties && currentFile.capabilities.canEdit !== true)) {
+          fail("updated_file_moved", "The resumable upload target moved during session creation", { status: 409 });
+        }
+      }
+    } catch (error) { boundaryError = error; }
+    if (boundaryError) throw boundaryError;
+    if (requestError) throw requestError;
+    const sessionUrl = validateUploadSessionUrl(headerValue(response?.headers, "location"), existingFileId);
+    return { sessionUrl, parentId: parent.id, fileId: existingFileId };
+  }
+
+  async function resumableRequest({ sessionUrl, offset, total, bytes, probe = false, parentId, fileId = null } = {}) {
+    const safeUrl = validateUploadSessionUrl(sessionUrl, fileId);
+    if (!Number.isSafeInteger(total) || total < 0 || !Number.isSafeInteger(offset) || offset < 0 || offset > total) {
+      fail("invalid_upload_offset", "The saved upload offset is invalid");
+    }
+    const parent = await validateParent(parentId);
+    if (fileId) {
+      const existing = await ancestry(assertId(fileId), { allowRoot: false });
+      if (existing.parents?.length !== 1 || existing.parents[0] !== parent.id || existing.mimeType.startsWith(GOOGLE_MIME_PREFIX)
+          || existing.capabilities.canModifyContent !== true) fail("file_write_denied", "The resumable upload target is outside the verified archive", { status: 403 });
+    }
+    const chunk = probe ? Buffer.alloc(0) : asBuffer(bytes);
+    if (!probe && (!chunk.length || chunk.length > MAX_RESUMABLE_CHUNK_BYTES || chunk.length % (256 * 1024) !== 0 && offset + chunk.length < total)) {
+      fail("invalid_upload_chunk", "The upload chunk has an invalid size");
+    }
+    const end = probe ? "*" : String(offset + chunk.length - 1);
+    let response;
+    let requestError;
+    try {
+      response = await send({
+        method: "PUT", url: safeUrl,
+        headers: { "Content-Type": "application/octet-stream", "Content-Range": `bytes ${probe ? "*" : `${offset}-${end}`}/${total}` },
+        body: probe ? undefined : chunk,
+        responseType: "upload",
+      });
+    } catch (error) { requestError = error; }
+    let boundaryError;
+    try {
+      await validateParent(parent.id);
+      if (fileId) {
+        const currentFile = await ancestry(fileId, { allowRoot: false });
+        if (currentFile.parents?.length !== 1 || currentFile.parents[0] !== parent.id
+            || currentFile.mimeType.startsWith(GOOGLE_MIME_PREFIX) || currentFile.capabilities.canModifyContent !== true
+            || currentFile.capabilities.canEdit !== true) {
+          fail("updated_file_moved", "The resumable upload target moved during transfer", { status: 409 });
+        }
+      }
+    } catch (error) { boundaryError = error; }
+    if (boundaryError) throw boundaryError;
+    if (requestError) throw requestError;
+    const status = response?.status;
+    if (status === 308) return { complete: false, offset: confirmedOffset(response.headers, total) };
+    if (status === 404 || status === 410) fail("resumable_session_expired", "The upload session expired", { status, retryable: true });
+    if (status < 200 || status >= 300) fail("google_unavailable", "Google Drive could not accept the upload chunk", { status: 502, retryable: status >= 500 });
+    const metadata = normalizeMetadata(ensureObjectResponse(response, "resumable upload"));
+    if (metadata.parents?.length !== 1 || metadata.parents[0] !== parent.id || metadata.mimeType.startsWith(GOOGLE_MIME_PREFIX)) fail("created_file_outside_target", "Google Drive completed an upload outside the verified destination", { status: 502 });
+    await ancestry(metadata.id, { allowRoot: false });
+    return { complete: true, offset: total, metadata };
+  }
+
+  async function queryResumableUpload({ sessionUrl, total, parentId, fileId } = {}) {
+    return resumableRequest({ sessionUrl, offset: 0, total, probe: true, parentId, fileId });
+  }
+
+  async function uploadResumableChunk(options = {}) {
+    if (!Number.isSafeInteger(options.offset) || options.offset + (options.bytes?.length || 0) !== options.endOffset) {
+      // The end offset is an explicit fence against callers persisting a guessed acknowledgement.
+      if (options.endOffset !== undefined) fail("invalid_upload_offset", "The upload chunk bounds are invalid");
+    }
+    return resumableRequest(options);
+  }
+
+  return Object.freeze({ verifyRoot, getMetadata, listChildren, readFile, hashFile, downloadFile, createFolder, createFile, updateFile, deleteFile, generateId, copyFile, startResumableUpload, queryResumableUpload, uploadResumableChunk });
 }
