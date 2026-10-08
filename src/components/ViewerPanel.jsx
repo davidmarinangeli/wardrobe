@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { X } from "@phosphor-icons/react";
 import { useDismiss } from "../hooks/useDismiss.js";
@@ -41,8 +41,14 @@ export function ViewerPanel({
   overlayClassName,
   entryClassName,
   panelClassName,
+  overlayStyle,
   entryStyle,
   openedFrom,
+  onRequestClose,
+  swipeToClose = true,
+  swipeHandleOnly = false,
+  closeDisabled = false,
+  focusTrap = false,
   children,
 }) {
   // Every panel is a panel: the body class that locks scroll and scales the page
@@ -61,28 +67,62 @@ export function ViewerPanel({
   // the chrome breakpoint: at desktop widths this is a right-edge drawer, where
   // a downward drag means nothing and the pointer handlers are pure overhead.
   const isPhone = useIsPhone();
+  const requestDismiss = (options) => {
+    if (closeDisabled || onRequestClose?.() === false) return;
+    dismiss(options);
+  };
   const { dragHandlers } = useSheetGesture({
     sheetRef,
     overlayRef,
-    enabled: isPhone,
+    enabled: isPhone && swipeToClose && !closeDisabled,
+    handleOnly: swipeHandleOnly,
     // Straight to onClose, not through dismiss(): the gesture has already
     // carried the sheet off the bottom of the screen under the user's own
     // thumb, so playing the 160ms exit on top of it would animate it a second
     // time from a place it has already left.
-    onDismiss: onClose,
+    onDismiss: () => {
+      if (onRequestClose?.() !== false) onClose();
+    },
   });
+
+  useEffect(() => {
+    if (!focusTrap || typeof document === "undefined") return undefined;
+    const previousFocus = document.activeElement;
+    const dialog = sheetRef.current;
+    const focusableSelector = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    const trapTab = (event) => {
+      if (event.key !== "Tab" || !dialog) return;
+      const focusable = [...dialog.querySelectorAll(focusableSelector)].filter((element) => {
+        if (!element.isConnected || element.getClientRects().length === 0 || element.getAttribute("aria-hidden") === "true") return false;
+        return !element.closest("[hidden], [inert]");
+      });
+      if (!focusable.length) { event.preventDefault(); dialog.focus(); return; }
+      const first = focusable[0], last = focusable.at(-1);
+      if (event.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) {
+        event.preventDefault(); last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !dialog.contains(document.activeElement))) {
+        event.preventDefault(); first.focus();
+      }
+    };
+    document.addEventListener("keydown", trapTab);
+    return () => {
+      document.removeEventListener("keydown", trapTab);
+      if (previousFocus?.isConnected) requestAnimationFrame(() => previousFocus.focus?.({ preventScroll: true }));
+    };
+  }, [focusTrap]);
 
   const content = (
     <div
       ref={overlayRef}
       className={`viewer-overlay${overlayClassName ? ` ${overlayClassName}` : ""}`}
+      style={overlayStyle}
       role="presentation"
       data-closing={closing}
       // pointerdown rather than mousedown. After a touch the browser replays a
       // synthetic mousedown at the release point — which lands on the overlay
       // once the sheet has moved out from under the finger, dismissing a panel
       // the user was only dragging.
-      onPointerDown={(e) => e.target === e.currentTarget && dismiss()}
+      onPointerDown={(e) => e.target === e.currentTarget && requestDismiss()}
     >
       <div
         ref={entryRef}
@@ -101,9 +141,10 @@ export function ViewerPanel({
           <button
             className="icon-button viewer-icon-close"
             type="button"
-            onClick={() => dismiss()}
+            onClick={() => requestDismiss()}
             aria-label="Close"
             ref={closeRef}
+            disabled={closeDisabled}
           >
             <X size={24} weight="light" aria-hidden="true" />
           </button>
