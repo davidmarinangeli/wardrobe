@@ -1,6 +1,6 @@
 # Agent & Advanced Setup Guide
 
-This page covers everything an agent (Codex, Claude Code, or otherwise) needs to set up or operate this repo hands-off, plus the full environment variable reference for manual/advanced configuration. For the human-facing overview and the in-browser quick start, see [README.md](README.md).
+This page covers everything an agent (Codex, Claude Code, or otherwise) needs to set up or operate this repo hands-off, plus the full environment variable reference for manual/advanced configuration. For the human-facing overview and the in-browser quick start, see [README.md](README.md). Google Drive archive setup, portability, scope, and recovery are documented in [docs/google-drive-operations.md](docs/google-drive-operations.md).
 
 ## Import with Codex
 
@@ -18,7 +18,7 @@ Open the cloned repo in Codex and run either prompt. The import skill asks for a
 If you are setting up Wardrobe for a user, ask how they want to import their clothes:
 
 - **Codex:** Ask for a folder or camera-roll location and a model-reference PNG, then extract, model, and import the individual pieces by following [the bundled import skill](.agents/skills/import-clothes/SKILL.md). Afterward, offer to create a requested number of modeled looks with [the outfit-generation skill](.agents/skills/generate-outfits/SKILL.md).
-- **Web UI:** Point the user at the in-dashboard setup wizard (opens automatically on a fresh clone, or from the gear icon), then let them import through the app.
+- **Web UI:** Point the user at archive settings from the gear icon. AI import setup opens from **Impostazioni AI**; the **Archivio / Google Drive** shortcut is available in every wizard step and does not require an AI key.
 - **Any other agent (no Codex available):** Run `scripts/bulk-import.mjs` (see below) — it imports every detected garment occurrence as an independent wardrobe record without depending on Codex's built-in `imagegen` tool.
 
 ## Bulk import without Codex
@@ -34,7 +34,7 @@ Run with `--dry-run` first to see what would be imported without writing anythin
 
 ## Configuration
 
-The setup wizard covers the essentials (`AI_PROVIDER` and the matching key, plus the reference photo). Everything below is available for hand-tuning in `.env`.
+The setup wizard covers the essentials for AI import and image generation (`AI_PROVIDER` and the matching key, plus the reference photo). Storage can be configured independently and does not require an AI key. Everything below is available for hand-tuning in `.env`.
 
 | Variable | Default |
 | --- | --- |
@@ -74,6 +74,12 @@ The setup wizard covers the essentials (`AI_PROVIDER` and the matching key, plus
 | `WARDROBE_MODEL_REFERENCE` | `data/model-reference.png` |
 | `WARDROBE_FACE_REFERENCE` | `data/model-reference-face.png` (optional) |
 | `WARDROBE_DATA_DIR` | `data` |
+| `GOOGLE_DRIVE_CLIENT_ID` | Empty; optional OAuth Web application client ID |
+| `GOOGLE_DRIVE_CLIENT_SECRET` | Empty; optional backend-only OAuth client secret |
+| `GOOGLE_DRIVE_REDIRECT_URI` | Empty; callback URL registered in Google Cloud Console |
+| `GOOGLE_DRIVE_FOLDER_ID` | Empty; ID of the existing Drive folder used for archive snapshots |
+
+Configure all four Google Drive values together, then restart the backend. See [Google Drive archive setup and recovery](docs/google-drive-operations.md) for the callback example, scope implications, archive boundary, and restore procedure. OAuth consent connects an account only; the user must separately choose **Locale + Google Drive** in the storage settings to activate synchronization.
 
 OpenAI is reachable two ways, chosen with `OPENAI_IMAGE_ROUTE`. The default `images` route posts to `/v1/images/edits`. The `responses` route posts to `/v1/responses` and drives the same image model as an `image_generation` tool call on `OPENAI_RESPONSES_MODEL` — the way ChatGPT itself generates images, and the route that carries a response id for multi-turn edits. Both accept the same model ids and qualities, so switching to `gpt-image-2.5-sunburst` (or the faster, cheaper `gpt-image-2.5-flare`) is `OPENAI_IMAGE_MODEL`, and its two new quality steps above `high` are `xhigh` and `max`. On the `responses` route the image tool is offered rather than forced, so a call that comes back as text instead of an image raises that text as the error. Neither route goes through OpenRouter, whose image endpoint takes `aspect_ratio`/`input_references` rather than the `size` shape these two share.
 

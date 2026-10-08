@@ -47,6 +47,10 @@ All agents share the checkout. Do not revert another agent’s edits. Keep the e
 
 Each OWNER records implementation decisions, test evidence, review resolution, commit SHA, and any configuration or limitations in its feature plan and reports the interfaces the next OWNER will use.
 
+## Delivery record
+
+All five features are implemented in the existing React/Vite/Node architecture. Features 01–04 are locally committed as `2b41e75`, `ebfdd52`, `c9e4e2e`, and `69e1340`; feature 05 completes the settings and operations documentation after independent review clearance. Its final logic suite passed 408/408 with zero skips; the final UI wording delta passed focused tests and build. Detailed validation, browser evidence, review resolutions, interfaces, and live-service limits are recorded in `docs/google-drive-feature-05.md`. The final feature commit is made locally by PUSHER; no remote push is included in this delivery.
+
 ## Decisive acceptance checks
 
 - Restore a valid backup into an empty installation.

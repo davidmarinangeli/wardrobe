@@ -138,12 +138,12 @@ function WelcomeStep({ onNext }) {
     <div className="onboarding-step">
       <p className="onboarding-eyebrow">Setup</p>
       <h2>Welcome to your wardrobe</h2>
-      <p className="onboarding-lede">A local-first closet: detect clothes from a photo, plan outfits, keep a mood board and a wishlist, and see yourself wearing anything in it. Before any of it works, it needs two things: an AI API key, and a reference photo of you.</p>
+      <p className="onboarding-lede">A local-first closet: detect clothes from a photo, plan outfits, keep a mood board and a wishlist, and see yourself wearing anything in it. AI imports and modeled photos need an AI API key and a reference photo. Archive and Google Drive settings are available from the shortcut in this panel.</p>
       <ul className="onboarding-highlights">
         <li>Detects every clothing item in a photo and cuts it out cleanly</li>
         <li>Generates an editorial photo of you wearing each piece — or a full outfit</li>
         <li>Suggests outfits from your own wardrobe, tuned to occasion, weather, and your colors</li>
-        <li>Everything — photos, keys, the wardrobe database — stays on your machine in <code>data/</code></li>
+        <li>The working archive lives in <code>data/</code>; an optional Drive backup copies it. AI keys stay in the local <code>.env</code> and are excluded from the archive.</li>
       </ul>
       <div className="onboarding-actions">
         <span className="action-spacer" />
@@ -576,7 +576,7 @@ function DoneStep({ setup, onSetupChange, onModeChange, onAddKey, onClose }) {
   );
 }
 
-export function Onboarding({ setup, onSetupChange, onModeChange, onClose }) {
+export function Onboarding({ setup, onSetupChange, onModeChange, onClose, onOpenStorage, active = true }) {
   const [step, setStep] = useState(() => initialStepFor(setup));
   // checkSetup() always resolves a provider — falling back to "openai" — even when nothing has
   // been configured yet, so that fallback can't be trusted as a real choice. Only treat
@@ -598,6 +598,8 @@ export function Onboarding({ setup, onSetupChange, onModeChange, onClose }) {
     return onClose();
   }, [onClose]);
 
+  if (!active) return null;
+
   return (
     <ViewerPanel
       onClose={dismiss}
@@ -607,6 +609,10 @@ export function Onboarding({ setup, onSetupChange, onModeChange, onClose }) {
       panelClassName="onboarding"
     >
       <StepDots step={step} />
+      <div className="onboarding-storage-shortcut">
+        <span>Impostazioni archivio</span>
+        <button type="button" onClick={onOpenStorage}><span aria-hidden="true">↗</span> Archivio / Google Drive</button>
+      </div>
       {step === "welcome" && <WelcomeStep onNext={() => setStep("provider")} />}
       {step === "provider" && <ProviderStep provider={provider} setProvider={setProvider} onNext={() => setStep("keys")} onBack={() => setStep("welcome")} />}
       {step === "keys" && (

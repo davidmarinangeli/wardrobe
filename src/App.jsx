@@ -22,7 +22,8 @@ import { useChromeScroll } from "./hooks/useChromeScroll.js";
 import "./components/mobile-chrome.css";
 import { Onboarding, RESUME_KEY as ONBOARDING_RESUME_KEY, SWITCHED_KEY as PROVIDER_SWITCHED_KEY } from "./onboarding.jsx";
 import { resolveOutfitPieces } from "../shared/wardrobe-model.mjs";
-import { ensureBrowserStateReady, updateBrowserState, useBrowserState } from "./browser-state.js";
+import { ensureBrowserStateReady, refreshBrowserState, updateBrowserState, useBrowserState } from "./browser-state.js";
+import { GoogleDriveStorage } from "./google-drive-storage.jsx";
 
 const EMPTY_OUTFIT_INDEX = { outfits: {}, byItem: {} };
 const VIEW_TITLES = {
@@ -85,6 +86,9 @@ export function App() {
   const [onlyMatches, setOnlyMatches] = useState(false);
   const [aiSetup, setAiSetup] = useState(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showStorage, setShowStorage] = useState(false);
+  const [storageReturnToWizard, setStorageReturnToWizard] = useState(false);
+  const [archiveMaintenanceActive, setArchiveMaintenanceActive] = useState(false);
   const [showInspoImporter, setShowInspoImporter] = useState(false);
   const [showOutfitBuilder, setShowOutfitBuilder] = useState(false);
   const [showOutfitSuggestions, setShowOutfitSuggestions] = useState(false);
@@ -105,7 +109,7 @@ export function App() {
   const initialArchiveLoadStarted = useRef(false);
   const currentArchiveGeneration = useRef(browserState?.archiveGeneration ?? 0);
   currentArchiveGeneration.current = browserState?.archiveGeneration ?? 0;
-  const archiveReady = browserStateSnapshot.status === "ready" && !loading
+  const archiveReady = browserStateSnapshot.status === "ready" && !loading && !archiveMaintenanceActive
     && loadedArchiveGeneration === (browserState?.archiveGeneration ?? 0);
 
   useEffect(() => {
@@ -147,6 +151,22 @@ export function App() {
       .then((response) => response.ok ? response.json() : null)
       .then(setAiSetup)
       .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const acceptedResults = new Set([
+      "connected", "oauth_state_invalid", "oauth_denied", "oauth_code_missing", "oauth_scope_insufficient",
+      "oauth_refresh_missing", "configuration_incomplete", "configuration_invalid", "private_state_invalid",
+      "target_changed", "reconnect_required", "google_unavailable", "google_permission_denied", "folder_access_denied",
+    ]);
+    const url = new URL(window.location.href);
+    const result = url.searchParams.get("googleDrive");
+    if (!acceptedResults.has(result)) return;
+    url.searchParams.delete("googleDrive");
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+    setShowOnboarding(false);
+    setStorageReturnToWizard(false);
+    setShowStorage(true);
   }, []);
 
   useEffect(() => {
@@ -231,6 +251,7 @@ export function App() {
     // reloading so no dialog or background closure can keep rendering it.
     setItems([]);
     setLoading(true);
+    setError("");
     setLoadedArchiveGeneration(null);
     setRetiredItems([]);
     setOutfitIndex(EMPTY_OUTFIT_INDEX);
@@ -429,6 +450,43 @@ export function App() {
     }
   }, []);
 
+  const openStorage = useCallback(() => {
+    setStorageReturnToWizard(false);
+    setShowOnboarding(false);
+    setShowStorage(true);
+  }, []);
+
+  const openStorageFromWizard = useCallback(() => {
+    setStorageReturnToWizard(true);
+    setShowStorage(true);
+  }, []);
+
+  const closeStorage = useCallback(() => {
+    setShowStorage(false);
+    setShowOnboarding(storageReturnToWizard);
+    setStorageReturnToWizard(false);
+  }, [storageReturnToWizard]);
+
+  const openAiSetup = useCallback(() => {
+    setShowStorage(false);
+    setStorageReturnToWizard(false);
+    setShowOnboarding(true);
+  }, []);
+
+  const onArchiveChanged = useCallback(async () => {
+    setError("");
+    if (loadedArchiveGeneration === null || error) {
+      initialArchiveLoadStarted.current = false;
+      setLoading(true);
+    }
+    try { await refreshBrowserState(); } catch { /* The settings surface keeps the safe status error visible. */ }
+  }, [loadedArchiveGeneration, error]);
+
+  const onArchiveMaintenanceChange = useCallback((active) => {
+    setArchiveMaintenanceActive(active);
+    if (active) setError("");
+  }, []);
+
   /**
    * Move a piece between the wardrobe and a pile. Never deletes: the photos stay
    * on disk and every outfit the piece appears in is left exactly as it was,
@@ -533,7 +591,7 @@ export function App() {
               the second slot swaps between Mirror (Wardrobe/Inspo) and
               Suggest outfit (Outfits) entirely, since those aren't the same
               action wearing a different label. */}
-          <div className="top-actions" ref={topActionsRef} data-hidden="false" data-overview-selection={view === "overview" && overviewSelectionCount > 0 ? "true" : "false"}>
+          {!archiveMaintenanceActive && <div className="top-actions" ref={topActionsRef} data-hidden="false" data-overview-selection={view === "overview" && overviewSelectionCount > 0 ? "true" : "false"}>
             <WardrobeImportFlow
               onGarmentApproved={addImportedItem}
               externalSetup={aiSetup}
@@ -563,8 +621,8 @@ export function App() {
               // button does when its whole branch mounts.
               <Mirror key={view} items={items} />
             )}
-          </div>
-          <button type="button" className="setup-trigger" onClick={() => setShowOnboarding(true)} aria-label="Open setup guide">
+          </div>}
+          <button type="button" className="setup-trigger" onClick={openStorage} aria-label="Open archive settings">
             <Gear size={16} />
             <AiModeBadge setup={aiSetup} />
           </button>
@@ -574,13 +632,19 @@ export function App() {
       <div className="app-shell__page">
         <MobileHeadRow
           title={VIEW_TITLES[view] || "Wardrobe"}
-          onSettings={() => setShowOnboarding(true)}
+          onSettings={openStorage}
           badge={<AiModeBadge setup={aiSetup} />}
           largeRef={largeRef}
         />
 
         {!archiveReady ? (
-          <PageStatus loading={!error} error={error} empty={false} emptyMessage="Loading the selected archive…" noun="archive" />
+          <PageStatus
+            loading={!archiveMaintenanceActive && !error}
+            error={error}
+            empty={archiveMaintenanceActive}
+            emptyMessage="L’archivio è in manutenzione. Puoi controllare l’operazione dalle impostazioni archivio."
+            noun="archive"
+          />
         ) : view === "overview" ? (
           <Overview
             items={items}
@@ -690,14 +754,23 @@ export function App() {
         />
       )}
 
-      {showOnboarding && (
+      {(showOnboarding || storageReturnToWizard) && (
         <Onboarding
           setup={aiSetup}
           onSetupChange={setAiSetup}
           onModeChange={setAiMode}
           onClose={dismissOnboarding}
+          onOpenStorage={openStorageFromWizard}
+          active={showOnboarding && !showStorage}
         />
       )}
+      <GoogleDriveStorage
+        open={showStorage}
+        onClose={closeStorage}
+        onOpenAiSetup={openAiSetup}
+        onArchiveChanged={onArchiveChanged}
+        onMaintenanceChange={onArchiveMaintenanceChange}
+      />
     </div>
   );
 }
