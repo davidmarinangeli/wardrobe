@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createArchiveRequestHandler } from "./archive-coordinator.mjs";
 import path from "node:path";
 import sharp from "sharp";
-import { AI_PROVIDERS, atomicJson, resolveApiKey, resolveProvider } from "./import-job-api.mjs";
+import { AI_PROVIDERS, atomicJson, isSameOriginRequest, resolveApiKey, resolveProvider } from "./import-job-api.mjs";
 import { ArchiveCatalogPreflightError, prepareArchiveDirectory, preserveOriginal, reportSkippedArchiveStartup } from "./archive-store.mjs";
 
 const WRITABLE_KEYS = new Set(["AI_PROVIDER", "OPENAI_API_KEY", "OPENROUTER_API_KEY", "GEMINI_API_KEY_TEST", "GEMINI_API_KEY_PROD", "MINIMAX_API_KEY"]);
@@ -83,6 +83,7 @@ export function wardrobeSetupApi(options = {}) {
   async function handler(req, res, next) {
     const url = new URL(req.url, "http://localhost");
     if (!url.pathname.startsWith("/api/setup/")) return next();
+    if (req.method !== "GET" && !isSameOriginRequest(req)) return json(res, 403, { error: "Cross-origin request rejected" });
     try {
       // What the Settings provider picker needs: the one in use, and which
       // others could be switched to without asking for a key first.

@@ -51,6 +51,21 @@ async function body(req, limit = 25 * 1024 * 1024) {
   catch { throw Object.assign(new Error("Expected a JSON request body"), { status: 400 }); }
 }
 
+/**
+ * Whether a state-changing request came from a page served by this same server.
+ * The dev server listens on every interface and these endpoints carry no
+ * credentials, so without this any website open in the same browser could
+ * POST to localhost and swap the AI keys, the provider or the reference photo.
+ * Browsers always send Origin on POST; a request without one is refused.
+ */
+export function isSameOriginRequest(req) {
+  const origin = req.headers?.origin;
+  const host = req.headers?.host;
+  if (typeof origin !== "string" || typeof host !== "string") return false;
+  try { return new URL(origin).host === host; }
+  catch { return false; }
+}
+
 function publicJob(job) {
   const copy = structuredClone(job);
   delete copy.internal;
@@ -1587,6 +1602,7 @@ export function wardrobeImportApi(options = {}) {
         return json(res, 200, { mode: await currentMode() });
       }
       if (url.pathname === "/api/import/mode" && req.method === "POST") {
+        if (!isSameOriginRequest(req)) return json(res, 403, { error: "Cross-origin request rejected" });
         const input = await body(req);
         const mode = await writeAiMode(dataDir, input.mode);
         return json(res, 200, { mode });
