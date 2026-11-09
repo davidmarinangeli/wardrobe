@@ -18,7 +18,7 @@ Open the cloned repo in Codex and run either prompt. The import skill asks for a
 If you are setting up Wardrobe for a user, ask how they want to import their clothes:
 
 - **Codex:** Ask for a folder or camera-roll location and a model-reference PNG, then extract, model, and import the individual pieces by following [the bundled import skill](.agents/skills/import-clothes/SKILL.md). Afterward, offer to create a requested number of modeled looks with [the outfit-generation skill](.agents/skills/generate-outfits/SKILL.md).
-- **Web UI:** Point the user at archive settings from the gear icon. AI import setup opens from **Impostazioni AI**; the **Archivio / Google Drive** shortcut is available in every wizard step and does not require an AI key.
+- **Web UI:** The gear icon opens **Settings** with two tabs: **AI** (provider, keys, Gemini TEST/PROD, reference photos) and **Archive** (Google Drive). The Archive tab is greyed out until the four `GOOGLE_DRIVE_*` values are in `.env`. The first-run wizard is separate; its **Archive / Google Drive** shortcut is available in every step and does not require an AI key.
 - **Any other agent (no Codex available):** Run `scripts/bulk-import.mjs` (see below) — it imports every detected garment occurrence as an independent wardrobe record without depending on Codex's built-in `imagegen` tool.
 
 ## Bulk import without Codex
@@ -79,7 +79,7 @@ The setup wizard covers the essentials for AI import and image generation (`AI_P
 | `GOOGLE_DRIVE_REDIRECT_URI` | Empty; callback URL registered in Google Cloud Console |
 | `GOOGLE_DRIVE_FOLDER_ID` | Empty; ID of the existing Drive folder used for archive snapshots |
 
-Configure all four Google Drive values together, then restart the backend. See [Google Drive archive setup and recovery](docs/google-drive-operations.md) for the callback example, scope implications, archive boundary, and restore procedure. OAuth consent connects an account only; the user must separately choose **Locale + Google Drive** in the storage settings to activate synchronization.
+Configure all four Google Drive values together, then restart the backend. See [Google Drive archive setup and recovery](docs/google-drive-operations.md) for the callback example, scope implications, archive boundary, and restore procedure. OAuth consent connects an account only; the user must separately choose **Locale + Google Drive** in **Settings › Archive** to activate synchronization.
 
 OpenAI is reachable two ways, chosen with `OPENAI_IMAGE_ROUTE`. The default `images` route posts to `/v1/images/edits`. The `responses` route posts to `/v1/responses` and drives the same image model as an `image_generation` tool call on `OPENAI_RESPONSES_MODEL` — the way ChatGPT itself generates images, and the route that carries a response id for multi-turn edits. Both accept the same model ids and qualities, so switching to `gpt-image-2.5-sunburst` (or the faster, cheaper `gpt-image-2.5-flare`) is `OPENAI_IMAGE_MODEL`, and its two new quality steps above `high` are `xhigh` and `max`. On the `responses` route the image tool is offered rather than forced, so a call that comes back as text instead of an image raises that text as the error. Neither route goes through OpenRouter, whose image endpoint takes `aspect_ratio`/`input_references` rather than the `size` shape these two share.
 

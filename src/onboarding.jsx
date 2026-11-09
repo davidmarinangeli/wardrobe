@@ -210,8 +210,10 @@ function KeysStep({ provider, onSaved, onBack, fromSettings = false }) {
   const save = async () => {
     setSaving(true); setError("");
     try {
-      sessionStorage.setItem(RESUME_KEY, "1");
+      // The .env write reloads the page. Leave a note for App so it reopens
+      // whichever surface this was saved from: Settings, or the wizard.
       if (fromSettings) sessionStorage.setItem(SWITCHED_KEY, provider);
+      else sessionStorage.setItem(RESUME_KEY, "1");
       // Gemini checks the PROD key by default; a TEST-only key would otherwise stay unusable
       // until someone flips the mode switch on the done step, so point the app at whichever key
       // is being saved — before the .env write below, since that write restarts the dev server.
@@ -235,7 +237,7 @@ function KeysStep({ provider, onSaved, onBack, fromSettings = false }) {
       if (latest?.hasApiKey) onSaved(latest);
       else setError("Still waiting on the dev server to restart. If this page doesn't reload on its own in a few seconds, refresh it.");
     } catch (requestError) {
-      sessionStorage.removeItem(RESUME_KEY);
+      sessionStorage.removeItem(fromSettings ? SWITCHED_KEY : RESUME_KEY);
       setError(requestError.message);
     } finally {
       setSaving(false);
@@ -379,7 +381,9 @@ function PhotoGuideCard({ kind }) {
   );
 }
 
-function PhotosStep({ setup, onSetupChange, onNext, onBack }) {
+// The two reference dropzones, shared by the wizard's photo step and the AI tab
+// in Settings. Reports whether the required full-body photo is on file.
+function ReferencePhotos({ setup, onSetupChange, onFullUploaded }) {
   const [fullUploaded, setFullUploaded] = useState(setup?.hasModelReference || false);
   const [faceUploaded, setFaceUploaded] = useState(setup?.hasFaceReference || false);
   const [fullPreview, setFullPreview] = useState(null);
@@ -394,6 +398,7 @@ function PhotosStep({ setup, onSetupChange, onNext, onBack }) {
       (kind === "face" ? setFacePreview : setFullPreview)(imageDataUrl);
       await api("/api/setup/reference", { method: "POST", body: JSON.stringify({ kind, imageDataUrl }) });
       (kind === "face" ? setFaceUploaded : setFullUploaded)(true);
+      if (kind === "full") onFullUploaded?.();
       // No server restart happens for a reference photo — refresh the shared setup status
       // directly so the rest of the app (e.g. the import tray) notices immediately.
       onSetupChange?.(await api(CONFIG_API));
@@ -405,11 +410,7 @@ function PhotosStep({ setup, onSetupChange, onNext, onBack }) {
   };
 
   return (
-    <div className="onboarding-step">
-      <p className="onboarding-eyebrow">Step 3 of 3</p>
-      <h2>Add a reference photo</h2>
-      <p className="onboarding-lede">Wardrobe uses this to put you in every modeled photo. A clear, well-lit full-body shot works best — plain background, facing the camera.</p>
-
+    <>
       <div className="onboarding-photo-group">
         <Dropzone
           label="Full-body photo"
@@ -436,6 +437,20 @@ function PhotosStep({ setup, onSetupChange, onNext, onBack }) {
       </div>
 
       {error && <p className="onboarding-status is-error"><WarningCircle size={14} /> {error}</p>}
+    </>
+  );
+}
+
+function PhotosStep({ setup, onSetupChange, onNext, onBack }) {
+  const [fullUploaded, setFullUploaded] = useState(setup?.hasModelReference || false);
+
+  return (
+    <div className="onboarding-step">
+      <p className="onboarding-eyebrow">Step 3 of 3</p>
+      <h2>Add a reference photo</h2>
+      <p className="onboarding-lede">Wardrobe uses this to put you in every modeled photo. A clear, well-lit full-body shot works best — plain background, facing the camera.</p>
+
+      <ReferencePhotos setup={setup} onSetupChange={onSetupChange} onFullUploaded={() => setFullUploaded(true)} />
 
       <div className="onboarding-actions">
         <button className="secondary-button" type="button" onClick={onBack}><ArrowLeft size={14} /> Back</button>
@@ -576,6 +591,37 @@ function DoneStep({ setup, onSetupChange, onModeChange, onAddKey, onClose }) {
   );
 }
 
+/**
+ * The AI tab in Settings: provider, keys, the Gemini TEST/PROD switch and the
+ * reference photos. Keys are write-only here — the server only ever says
+ * whether one is saved, never what it is.
+ */
+export function AiSettings({ setup, onSetupChange, onModeChange }) {
+  const [addingKeyFor, setAddingKeyFor] = useState(null);
+
+  if (addingKeyFor) {
+    return (
+      <KeysStep
+        provider={addingKeyFor}
+        fromSettings
+        onBack={() => setAddingKeyFor(null)}
+        onSaved={(latest) => { onSetupChange?.(latest); setAddingKeyFor(null); }}
+      />
+    );
+  }
+
+  return (
+    <div className="onboarding-step settings-ai">
+      <ProviderSwitcher setup={setup} onSetupChange={onSetupChange} onAddKey={setAddingKeyFor} />
+      <AiModeToggle setup={setup} onChange={onModeChange} />
+      <section className="settings-ai__photos" aria-labelledby="settings-ai-photos-title">
+        <p id="settings-ai-photos-title" className="provider-switch__label">Reference photos</p>
+        <ReferencePhotos setup={setup} onSetupChange={onSetupChange} />
+      </section>
+    </div>
+  );
+}
+
 export function Onboarding({ setup, onSetupChange, onModeChange, onClose, onOpenStorage, active = true }) {
   const [step, setStep] = useState(() => initialStepFor(setup));
   // checkSetup() always resolves a provider — falling back to "openai" — even when nothing has
@@ -610,8 +656,8 @@ export function Onboarding({ setup, onSetupChange, onModeChange, onClose, onOpen
     >
       <StepDots step={step} />
       <div className="onboarding-storage-shortcut">
-        <span>Impostazioni archivio</span>
-        <button type="button" onClick={onOpenStorage}><span aria-hidden="true">↗</span> Archivio / Google Drive</button>
+        <span>Archive settings</span>
+        <button type="button" onClick={onOpenStorage}><span aria-hidden="true">↗</span> Archive / Google Drive</button>
       </div>
       {step === "welcome" && <WelcomeStep onNext={() => setStep("provider")} />}
       {step === "provider" && <ProviderStep provider={provider} setProvider={setProvider} onNext={() => setStep("keys")} onBack={() => setStep("welcome")} />}

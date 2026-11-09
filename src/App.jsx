@@ -23,7 +23,7 @@ import "./components/mobile-chrome.css";
 import { Onboarding, RESUME_KEY as ONBOARDING_RESUME_KEY, SWITCHED_KEY as PROVIDER_SWITCHED_KEY } from "./onboarding.jsx";
 import { resolveOutfitPieces } from "../shared/wardrobe-model.mjs";
 import { ensureBrowserStateReady, refreshBrowserState, updateBrowserState, useBrowserState } from "./browser-state.js";
-import { GoogleDriveStorage } from "./google-drive-storage.jsx";
+import { SettingsModal } from "./settings-modal.jsx";
 
 const EMPTY_OUTFIT_INDEX = { outfits: {}, byItem: {} };
 const VIEW_TITLES = {
@@ -33,9 +33,9 @@ const VIEW_TITLES = {
   inspo: "Inspo",
 };
 
-// A developer setting, findable but quiet: a small dot on the gear button
-// reporting the current Gemini mode, nothing more. The actual switch lives in
-// Settings (Onboarding's DoneStep) — see AiModeToggle there.
+// A developer setting, findable but quiet: a small dot on the gear button and
+// the AI tab reporting the current Gemini mode, nothing more. The actual switch
+// lives in the AI tab of Settings — see AiModeToggle in onboarding.jsx.
 function AiModeBadge({ setup }) {
   if (!setup || setup.provider !== "gemini") return null;
   const missingKey = setup.mode === "test" ? !setup.hasTestKey : !setup.hasProdKey;
@@ -86,8 +86,9 @@ export function App() {
   const [onlyMatches, setOnlyMatches] = useState(false);
   const [aiSetup, setAiSetup] = useState(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [showStorage, setShowStorage] = useState(false);
-  const [storageReturnToWizard, setStorageReturnToWizard] = useState(false);
+  // Which Settings tab is open ("ai" | "archive"), or null when Settings is closed.
+  const [settingsTab, setSettingsTab] = useState(null);
+  const [settingsReturnToWizard, setSettingsReturnToWizard] = useState(false);
   const [archiveMaintenanceActive, setArchiveMaintenanceActive] = useState(false);
   const [showInspoImporter, setShowInspoImporter] = useState(false);
   const [showOutfitBuilder, setShowOutfitBuilder] = useState(false);
@@ -165,8 +166,8 @@ export function App() {
     url.searchParams.delete("googleDrive");
     window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
     setShowOnboarding(false);
-    setStorageReturnToWizard(false);
-    setShowStorage(true);
+    setSettingsReturnToWizard(false);
+    setSettingsTab("archive");
   }, []);
 
   useEffect(() => {
@@ -174,7 +175,7 @@ export function App() {
     // A provider switch reloads the page mid-Settings; bring Settings back so
     // the switch can be confirmed where it was made. The picker clears the key.
     if (sessionStorage.getItem(PROVIDER_SWITCHED_KEY)) {
-      setShowOnboarding(true);
+      setSettingsTab("ai");
       return;
     }
     if (aiSetup.ready) return;
@@ -450,28 +451,22 @@ export function App() {
     }
   }, []);
 
-  const openStorage = useCallback(() => {
-    setStorageReturnToWizard(false);
+  const openSettings = useCallback(() => {
+    setSettingsReturnToWizard(false);
     setShowOnboarding(false);
-    setShowStorage(true);
+    setSettingsTab("ai");
   }, []);
 
-  const openStorageFromWizard = useCallback(() => {
-    setStorageReturnToWizard(true);
-    setShowStorage(true);
+  const openArchiveFromWizard = useCallback(() => {
+    setSettingsReturnToWizard(true);
+    setSettingsTab("archive");
   }, []);
 
-  const closeStorage = useCallback(() => {
-    setShowStorage(false);
-    setShowOnboarding(storageReturnToWizard);
-    setStorageReturnToWizard(false);
-  }, [storageReturnToWizard]);
-
-  const openAiSetup = useCallback(() => {
-    setShowStorage(false);
-    setStorageReturnToWizard(false);
-    setShowOnboarding(true);
-  }, []);
+  const closeSettings = useCallback(() => {
+    setSettingsTab(null);
+    setShowOnboarding(settingsReturnToWizard);
+    setSettingsReturnToWizard(false);
+  }, [settingsReturnToWizard]);
 
   const onArchiveChanged = useCallback(async () => {
     setError("");
@@ -622,7 +617,7 @@ export function App() {
               <Mirror key={view} items={items} />
             )}
           </div>}
-          <button type="button" className="setup-trigger" onClick={openStorage} aria-label="Open archive settings">
+          <button type="button" className="setup-trigger" onClick={openSettings} aria-label="Open settings">
             <Gear size={16} />
             <AiModeBadge setup={aiSetup} />
           </button>
@@ -632,7 +627,7 @@ export function App() {
       <div className="app-shell__page">
         <MobileHeadRow
           title={VIEW_TITLES[view] || "Wardrobe"}
-          onSettings={openStorage}
+          onSettings={openSettings}
           badge={<AiModeBadge setup={aiSetup} />}
           largeRef={largeRef}
         />
@@ -642,7 +637,7 @@ export function App() {
             loading={!archiveMaintenanceActive && !error}
             error={error}
             empty={archiveMaintenanceActive}
-            emptyMessage="L’archivio è in manutenzione. Puoi controllare l’operazione dalle impostazioni archivio."
+            emptyMessage="L’archivio è in manutenzione. Puoi controllare l’operazione da Settings › Archive."
             noun="archive"
           />
         ) : view === "overview" ? (
@@ -754,20 +749,25 @@ export function App() {
         />
       )}
 
-      {(showOnboarding || storageReturnToWizard) && (
+      {(showOnboarding || settingsReturnToWizard) && (
         <Onboarding
           setup={aiSetup}
           onSetupChange={setAiSetup}
           onModeChange={setAiMode}
           onClose={dismissOnboarding}
-          onOpenStorage={openStorageFromWizard}
-          active={showOnboarding && !showStorage}
+          onOpenStorage={openArchiveFromWizard}
+          active={showOnboarding && !settingsTab}
         />
       )}
-      <GoogleDriveStorage
-        open={showStorage}
-        onClose={closeStorage}
-        onOpenAiSetup={openAiSetup}
+      <SettingsModal
+        open={settingsTab !== null}
+        tab={settingsTab ?? "ai"}
+        onTabChange={setSettingsTab}
+        onClose={closeSettings}
+        aiSetup={aiSetup}
+        aiBadge={<AiModeBadge setup={aiSetup} />}
+        onAiSetupChange={setAiSetup}
+        onAiModeChange={setAiMode}
         onArchiveChanged={onArchiveChanged}
         onMaintenanceChange={onArchiveMaintenanceChange}
       />
