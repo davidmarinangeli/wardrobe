@@ -49,7 +49,7 @@ Each OWNER records implementation decisions, test evidence, review resolution, c
 
 ## Delivery record
 
-All five features are implemented in the existing React/Vite/Node architecture. Features 01–04 are locally committed as `2b41e75`, `ebfdd52`, `c9e4e2e`, and `69e1340`; feature 05 completes the settings and operations documentation after independent review clearance. Its final logic suite passed 408/408 with zero skips; the final UI wording delta passed focused tests and build. Detailed validation, browser evidence, review resolutions, interfaces, and live-service limits are recorded in `docs/google-drive-feature-05.md`. The final feature commit is made locally by PUSHER; no remote push is included in this delivery.
+All five features are implemented in the existing React/Vite/Node architecture. After rebasing, features 01–05 are commits `5ac256f`, `c3e5944`, `6b9e5f1`, `a0b1b98`, and `bd0b510`. The feature plans cite the pre-rebase SHAs they were written against (`2b41e75`, `ebfdd52`, `c9e4e2e`, `69e1340`). Feature 05's final logic suite passed 408/408 with zero skips; the final UI wording delta passed focused tests and build. Detailed validation, browser evidence, review resolutions, interfaces, and live-service limits are recorded in `docs/google-drive-feature-05.md`.
 
 ## Decisive acceptance checks
 
