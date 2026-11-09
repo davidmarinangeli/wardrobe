@@ -41,7 +41,7 @@ import {
 import { migrateDataDirectory } from "./wardrobe-data.mjs";
 import { mutateLibrary } from "../shared/wardrobe-library.mjs";
 import { catalogForHttp } from "../shared/portable-assets.mjs";
-import { inspectArchiveCatalogs, mimeForExtension, preserveOriginal, reportSkippedArchiveStartup, resolveArchiveFile } from "./archive-store.mjs";
+import { inspectArchiveCatalogs, mimeForExtension, preserveOriginal, pruneUnreferencedOriginals, reportSkippedArchiveStartup, resolveArchiveFile } from "./archive-store.mjs";
 import { readReferenceBytes } from "./archive-store.mjs";
 import { migrateCatalogAssetPaths } from "./archive-store.mjs";
 import { markBrowserStateFields } from "./browser-state-api.mjs";
@@ -513,13 +513,13 @@ export function variantApi(options = {}) {
       if (route.referenceId) clientId(route.referenceId, "Reference");
       if (!route.variantId && !route.action && !route.referenceId && req.method === "DELETE") {
         await markBrowserStateFields(dataDir, ["deletedIds"]);
-        let deleted = false;
+        let removed;
         await mutateLibrary(dataDir, (records) => {
-          const next = records.filter((record) => record.id !== route.itemId);
-          deleted = next.length !== records.length;
-          return next;
+          removed = records.find((record) => record.id === route.itemId);
+          return records.filter((record) => record.id !== route.itemId);
         });
-        if (!deleted) return json(res, 404, { error: "Wardrobe item not found" });
+        if (!removed) return json(res, 404, { error: "Wardrobe item not found" });
+        await pruneUnreferencedOriginals(dataDir, removed);
         return json(res, 200, { deleted: true, id: route.itemId });
       }
       const items = await loadItems();

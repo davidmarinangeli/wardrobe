@@ -9,7 +9,7 @@ import { NO_JUDGMENT_PROMPT } from "../shared/prompt-guardrails.mjs";
 import { normalizeItemV2 } from "../shared/wardrobe-model.mjs";
 import { mutateLibrary } from "../shared/wardrobe-library.mjs";
 import { catalogForDisk, catalogForHttp } from "../shared/portable-assets.mjs";
-import { inspectArchiveCatalogs, migrateCatalogAssetPaths, prepareArchiveDirectory, preserveOriginal, readReferenceBytes, reportSkippedArchiveStartup, resolveArchiveFile, mimeForExtension } from "./archive-store.mjs";
+import { inspectArchiveCatalogs, migrateCatalogAssetPaths, prepareArchiveDirectory, preserveOriginal, pruneUnreferencedOriginals, readReferenceBytes, reportSkippedArchiveStartup, resolveArchiveFile, mimeForExtension } from "./archive-store.mjs";
 import { markBrowserStateFields } from "./browser-state-api.mjs";
 import { createArchiveRequestHandler, trackArchivePromise, withArchiveWriteLease } from "./archive-coordinator.mjs";
 
@@ -1620,13 +1620,16 @@ export function wardrobeImportApi(options = {}) {
       if (wardrobeDeleteMatch && req.method === "DELETE") {
         const id = wardrobeDeleteMatch[1];
         await markBrowserStateFields(dataDir, ["deletedIds"]);
+        let removed;
         await mutateLibrary(dataDir, (records) => {
-          if (!records.some((record) => record.id === id)) throw Object.assign(new Error("Imported wardrobe item not found"), { status: 404 });
+          removed = records.find((record) => record.id === id);
+          if (!removed) throw Object.assign(new Error("Imported wardrobe item not found"), { status: 404 });
           return records.filter((record) => record.id !== id);
         });
         await Promise.all([
           rm(path.join(libraryAssetDir, `${id}-garment.png`), { force: true }),
           rm(path.join(libraryAssetDir, `${id}-modeled.png`), { force: true }),
+          pruneUnreferencedOriginals(dataDir, removed),
         ]);
         return json(res, 200, { deleted: true, id });
       }

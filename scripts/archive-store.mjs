@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
-import { lstat, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, readdir, rename, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { pipeline } from "node:stream/promises";
 import path from "node:path";
 import sharp from "sharp";
@@ -564,6 +564,10 @@ async function preserveOriginalUnlocked({ dataDir, bytes, filePath, mime, filena
   if (targetInfo?.isFile()) {
     const existing = await readFile(target);
     if (sha256(existing) !== digest) throw new Error(`Original checksum collision at ${relative}`);
+    // Refresh the mtime so pruneUnreferencedOriginals treats a re-captured
+    // original as in flight until its new owner has been written.
+    const now = new Date();
+    await utimes(target, now, now);
   } else {
     const temp = `${target}.${process.pid}.${randomUUID()}.tmp`;
     await assertNoSymlink(temp);
@@ -571,6 +575,60 @@ async function preserveOriginalUnlocked({ dataDir, bytes, filePath, mime, filena
     await rename(temp, target);
   }
   return { path: relative, size: sourceBytes.length, sha256: digest, mime: mimeForExtension(extension), extension, filename: path.basename(filename || filePath || "original") };
+}
+
+const ORIGINAL_PATH = /originals\/[a-f0-9]{64}\.(?:png|jpe?g|webp|gif|tiff?|avif|bmp|heic|heif)/gi;
+// Covers the gap between preserveOriginal and the job/record that will cite it.
+const ORIGINAL_IN_FLIGHT_MS = 2 * 60 * 1000;
+
+/** Every `originals/…` path mentioned anywhere in a JSON value, whatever the field name. */
+export function originalsMentionedBy(value, found = new Set()) {
+  if (typeof value === "string") {
+    for (const match of value.matchAll(ORIGINAL_PATH)) found.add(match[0]);
+  } else if (Array.isArray(value)) {
+    for (const entry of value) originalsMentionedBy(entry, found);
+  } else if (value && typeof value === "object") {
+    for (const entry of Object.values(value)) originalsMentionedBy(entry, found);
+  }
+  return found;
+}
+
+async function originalsStillReferenced(dataDir) {
+  const found = new Set();
+  const read = async (file) => {
+    try { originalsMentionedBy(JSON.parse(await readFile(file, "utf8")), found); }
+    catch (error) { if (error.code !== "ENOENT") throw error; }
+  };
+  // archive-metadata.json carries the model-reference sources; jobs/ holds
+  // imports still under review that will cite their original once accepted.
+  for (const name of ARCHIVE_CATALOGS) await read(path.join(dataDir, name));
+  const jobs = await readdir(path.join(dataDir, "jobs")).catch((error) => error.code === "ENOENT" ? [] : Promise.reject(error));
+  for (const id of jobs) await read(path.join(dataDir, "jobs", id, "job.json"));
+  return found;
+}
+
+/**
+ * Deletes the originals a removed record cited once nothing in the archive
+ * cites them any more. Originals are content-addressed, so one photo can back
+ * several garments: a shared original survives until its last owner is gone.
+ * Drive mirrors the local archive, so the next sync drops it from the cloud too.
+ */
+export async function pruneUnreferencedOriginals(dataDir, removedRecord) {
+  const originals = [...originalsMentionedBy(removedRecord)];
+  if (!originals.length) return [];
+  return withArchiveWriteLease(dataDir, async () => {
+    const referenced = await originalsStillReferenced(dataDir);
+    const removed = [];
+    for (const relative of originals) {
+      if (referenced.has(relative)) continue;
+      const file = path.join(dataDir, ...relative.split("/"));
+      const info = await assertNoSymlink(file);
+      if (!info?.isFile() || Date.now() - info.mtimeMs < ORIGINAL_IN_FLIGHT_MS) continue;
+      await rm(file, { force: true });
+      removed.push(relative);
+    }
+    return removed;
+  });
 }
 
 export function mimeForExtension(extension) {

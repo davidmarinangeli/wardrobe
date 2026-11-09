@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile as execFileCallback } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { access, cp, mkdir, mkdtemp, readFile, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
@@ -13,6 +13,7 @@ import {
   buildArchiveInventory,
   prepareArchiveDirectory,
   preserveOriginal,
+  pruneUnreferencedOriginals,
   readReferenceBytes,
   resolveArchiveFile,
   validateArchive,
@@ -189,4 +190,24 @@ test("agent source capture walks nested folders and distinguishes repeated basen
     assert.equal(source.mime, "image/jpeg");
   }
   assert.deepEqual(JSON.parse(await readFile(outputFile, "utf8")).sources, captured.sources);
+});
+
+test("deleting a garment prunes only the originals nothing else still cites", async (t) => {
+  const dataDir = await fixtureDirectory(t, "wardrobe-prune-originals-");
+  const png = (r) => sharp({ create: { width: 2, height: 2, channels: 3, background: { r, g: 0, b: 0 } } }).png().toBuffer();
+  const shared = await preserveOriginal({ dataDir, bytes: await png(10), filename: "shared.png" });
+  const own = await preserveOriginal({ dataDir, bytes: await png(20), filename: "own.png" });
+  const pending = await preserveOriginal({ dataDir, bytes: await png(30), filename: "pending.png" });
+  const fresh = await preserveOriginal({ dataDir, bytes: await png(40), filename: "fresh.png" });
+  const old = new Date(Date.now() - 10 * 60 * 1000);
+  for (const original of [shared, own, pending]) await utimes(path.join(dataDir, original.path), old, old);
+
+  const removed = { id: "import-a", sourceOriginal: own.path, sourceOriginals: [shared.path, pending.path, fresh.path], references: [{ original: `/api/archive/assets/${shared.path}` }] };
+  await writeFile(path.join(dataDir, "library.json"), JSON.stringify([{ id: "import-b", variants: [{ sourceRefs: [shared.path] }] }]));
+  await mkdir(path.join(dataDir, "jobs", "job-1"), { recursive: true });
+  await writeFile(path.join(dataDir, "jobs", "job-1", "job.json"), JSON.stringify({ internal: { sourceOriginal: pending.path } }));
+
+  assert.deepEqual(await pruneUnreferencedOriginals(dataDir, removed), [own.path]);
+  await assert.rejects(access(path.join(dataDir, own.path)));
+  for (const kept of [shared, pending, fresh]) await access(path.join(dataDir, kept.path));
 });

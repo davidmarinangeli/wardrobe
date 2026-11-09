@@ -43,7 +43,7 @@ The archive uses a fixed allowlist, not a recursive copy of the data directory. 
 - `library.json`, `outfits.json`, `inspo.json`, `wishlist.json`, and `cheat-sheets.json`;
 - `preferences.json` (including durable history), `color-profile.json`, `browser-state.json`, `ai-mode.json`, and `archive-metadata.json`.
 
-It also includes media under `imported/`, `outfits-assets/`, `outfit-images/`, `inspo-assets/`, `wishlist-assets/`, `cheat-sheets-assets/`, and `originals/`; and root-level `model-reference` and `model-reference-face` files with PNG, JPG, JPEG, or WebP extensions. New source originals are captured before AI processing and included. Original photos deleted before that capture feature cannot be recovered automatically.
+It also includes media under `imported/`, `outfits-assets/`, `outfit-images/`, `inspo-assets/`, `wishlist-assets/`, `cheat-sheets-assets/`, and `originals/`; and root-level `model-reference` and `model-reference-face` files with PNG, JPG, JPEG, or WebP extensions. New source originals are captured before AI processing and included. Deleting a garment also deletes its originals from `originals/` once no other garment, outfit, inspiration, wishlist entry, model reference, or pending import still uses them; the next sync removes them from Drive as well. Original photos deleted before that capture feature cannot be recovered automatically.
 
 The archive excludes `.env` and API keys, OAuth credentials/tokens, the `.google-drive/` private control directory, locks, caches, temporary work, staging and rollback data, derived `style-dna.json` and `identity-profile.json`, and public drape images. The selected AI mode is archived; provider secrets are not. Keep secrets in the installation's `.env`.
 
