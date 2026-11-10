@@ -4,6 +4,7 @@ const SAFE_ERRORS = Object.freeze({
   configuration_incomplete: "Completa la configurazione Google Drive nel file .env e riavvia l’app.",
   configuration_invalid: "La configurazione Google Drive non è valida. Controlla le quattro variabili nel file .env.",
   private_state_invalid: "Non riesco a leggere le impostazioni Google Drive salvate su questo computer. I dati dell’archivio non sono stati toccati.",
+  sync_state_invalid: "Lo stato di sincronizzazione Google Drive salvato su questo computer è illeggibile o danneggiato. I dati dell’archivio non sono stati toccati.",
   reconnect_required: "La sessione Google Drive è scaduta. Ricollega l’account.",
   target_changed: "L’account o la cartella Google Drive sono cambiati. Verifica di nuovo l’accesso.",
   google_unavailable: "Google Drive non è raggiungibile in questo momento.",
