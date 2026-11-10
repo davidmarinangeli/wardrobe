@@ -250,7 +250,10 @@ function fakeWorker({ dataDir, remoteDir, localValid = true, localPopulated = tr
 
 async function createManager(dataDir, remoteDir, options = {}) {
   const fake = fakeWorker({ dataDir, remoteDir, ...options });
-  const manager = createGoogleDriveArchiveManager({ dataDir, service: fake.service, worker: fake.worker, onRename: options.onRename, onJournalSave: options.onJournalSave });
+  const manager = createGoogleDriveArchiveManager({
+    dataDir, service: fake.service, worker: fake.worker, onRename: options.onRename, onJournalSave: options.onJournalSave,
+    activationDrainMs: options.activationDrainMs, restoreDrainMs: options.restoreDrainMs,
+  });
   return { ...fake, manager };
 }
 
@@ -270,6 +273,53 @@ describe("Google Drive feature 04 archive replacement", { concurrency: false }, 
     assert.deepEqual(await manager.choose({ actionToken: preview.actionToken, choice: "cancel", operation: "activation" }), { status: "cancelled" });
     assert.deepEqual(worker.events.slice(-2), ["cancelPreview", "resume"]);
     assert.equal(worker.mode.paused, false);
+  });
+
+  it("releases the admission lease when the client hung up before it was granted", async () => {
+    const rootDir = await tempRoot();
+    const dataDir = path.join(rootDir, "data");
+    await seedArchive(dataDir);
+    const admission = createArchiveAdmissionMiddleware(dataDir);
+    const req = { url: "/api/browser-state", method: "GET", headers: {} };
+    // A page reload aborts its fetches while the lease is still being acquired,
+    // so the close event fires before anything can listen for it.
+    const res = new EventEmitter();
+    res.closed = true;
+    res.destroyed = true;
+    res.setHeader = () => {};
+    res.end = () => {};
+    let nextCalled = false;
+    admission(req, res, () => { nextCalled = true; });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(await withArchiveMaintenance(dataDir, async () => "entered", { waitMs: 2_000 }), "entered");
+    assert.equal(nextCalled, false, "no handler runs for a client that is already gone");
+  });
+
+  it("gives up on an activation that cannot drain writers instead of freezing the archive", async () => {
+    const rootDir = await tempRoot();
+    const dataDir = path.join(rootDir, "data");
+    const remoteDir = path.join(rootDir, "remote");
+    await seedArchive(dataDir, { id: "local-item" });
+    await seedArchive(remoteDir);
+    const { manager, worker } = await createManager(dataDir, remoteDir, { remotePopulated: false, activationDrainMs: 50 });
+    const preview = await manager.preview("activation");
+    assert.equal(preview.decision, "local_to_empty");
+
+    let releaseWriter;
+    let writerHeld;
+    const held = new Promise((resolve) => { writerHeld = resolve; });
+    const writer = withArchiveWriteLease(dataDir, () => new Promise((resolve) => { releaseWriter = resolve; writerHeld(); }));
+    await held;
+    const choosing = manager.choose({ actionToken: preview.actionToken, choice: "use-local", operation: "activation" });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal((await manager.status()).maintenance.activation, true, "other tabs can tell an activation is running");
+    await assert.rejects(choosing, { code: "archive_maintenance" });
+    assert.equal(worker.captures.commit, undefined, "the choice never ran behind a live writer");
+    assert.deepEqual(await archiveMaintenanceStatus(dataDir), { active: false });
+    assert.equal((await manager.status()).maintenance.activation, false);
+    assert.deepEqual(worker.events.slice(-2), ["cancelPreview", "resume"]);
+    releaseWriter();
+    await writer;
   });
 
   it("drains a real async API handler after HTTP abort before archive maintenance", async (t) => {

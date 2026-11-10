@@ -158,9 +158,20 @@ async function assertMaintenance(paths, { reapDead = false } = {}) {
 
 async function acquireWriter(dataDir) {
   const paths = await ensureControlDirectory(dataDir);
-  const releaseGate = await acquireGate(paths);
+  let releaseGate = await acquireGate(paths);
   try {
-    if (await assertMaintenance(paths)) throw new ArchiveMaintenanceError();
+    // Plugins start concurrently, so the Drive plugin's startup recovery can
+    // hold maintenance while another plugin asks for a writer. That recovery
+    // belongs to this process and finishes on its own: wait instead of failing.
+    let maintenance;
+    while ((maintenance = await assertMaintenance(paths))?.recovery && maintenance.pid === process.pid) {
+      const release = releaseGate;
+      releaseGate = null;
+      await release();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      releaseGate = await acquireGate(paths);
+    }
+    if (maintenance) throw new ArchiveMaintenanceError();
     const owner = randomUUID();
     let generation = null;
     try {
@@ -170,7 +181,7 @@ async function acquireWriter(dataDir) {
     const record = { kind: "writer", pid: process.pid, owner, createdAt: Date.now(), generation };
     await writeExclusiveJson(path.join(paths.leases, `${owner}.json`), record);
     return { paths, owner, generation };
-  } finally { await releaseGate(); }
+  } finally { await releaseGate?.(); }
 }
 
 async function releaseWriter(lease) {
@@ -248,6 +259,11 @@ export function createArchiveAdmissionMiddleware(dataDir) {
     const url = new URL(req.url || "/", "http://localhost");
     if (!url.pathname.startsWith("/api/") || url.pathname === "/api/google-drive/status" || url.pathname.startsWith("/api/google-drive/")) return next();
     void withArchiveWriteLease(root, () => new Promise((resolve) => {
+      // The client can hang up while the lease is being acquired (a page
+      // reload aborts its in-flight fetches). Its close event has then already
+      // fired, so waiting for it would hold this lease, and block every later
+      // maintenance, forever.
+      if (res.closed || res.destroyed) { resolve(); return; }
       let settled = false;
       const finish = () => { if (!settled) { settled = true; resolve(); } };
       res.once?.("finish", finish);

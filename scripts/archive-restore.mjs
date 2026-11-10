@@ -306,8 +306,13 @@ export async function recoverArchiveRestore({ dataDir, worker, onRename, onJourn
   }, { recovery: true });
 }
 
-export function createGoogleDriveArchiveManager({ dataDir, service, worker, now = Date.now, onJournalSave, onRename, onDurability } = {}) {
-  const root = path.resolve(dataDir), actions = new Map(); let operation = null, activeActionToken = null, busy = false;
+// Maintenance blocks every archive request while it waits for in-flight
+// writers. A user-started operation gives up instead of freezing the app.
+const ACTIVATION_DRAIN_MS = 20_000;
+const RESTORE_DRAIN_MS = 60_000;
+
+export function createGoogleDriveArchiveManager({ dataDir, service, worker, now = Date.now, onJournalSave, onRename, onDurability, activationDrainMs = ACTIVATION_DRAIN_MS, restoreDrainMs = RESTORE_DRAIN_MS } = {}) {
+  const root = path.resolve(dataDir), actions = new Map(); let operation = null, activeActionToken = null, busy = false, activating = false;
   const resume = async (a) => { if (a.previousMode.enabled && !a.previousMode.paused) { const t = await service.getTarget(); if (["targetFingerprint", "connectionGeneration", "accountId", "folderId", "driveId"].every((k) => (t[k] ?? null) === (a.target[k] ?? null))) await worker.resume(); } };
   async function prune() {
     const expired = [];
@@ -366,14 +371,15 @@ export function createGoogleDriveArchiveManager({ dataDir, service, worker, now 
       if (choice !== "use-drive") {
         if (a.kind !== "activation") throw Object.assign(new Error("Manual restore requires a Drive archive"), { code: "sync_conflict", status: 409 });
         actions.delete(actionToken); activeActionToken = null;
+        activating = true;
         try {
-          const result = await withArchiveMaintenance(root, () => worker.commitArchiveChoice({ evidenceId: a.evidenceId, source: "feature04", confirmed: true, choice }));
+          const result = await withArchiveMaintenance(root, () => worker.commitArchiveChoice({ evidenceId: a.evidenceId, source: "feature04", confirmed: true, choice }), { waitMs: activationDrainMs });
           return { status: "complete", backupEnabled: result.backupEnabled };
         } catch (error) {
           await worker.cancelPreview(a.evidenceId).catch(() => {});
           await resume(a).catch(() => {});
           throw error;
-        }
+        } finally { activating = false; }
       }
       const transactionId = randomUUID();
       let authorization;
@@ -444,7 +450,7 @@ export function createGoogleDriveArchiveManager({ dataDir, service, worker, now 
         await worker.finishRestore({ transactionId: id, restoreAuthorizationId: auth.restoreAuthorizationId, expectedProof: expectedRestoreProof(journal) });
         await cleanup(root, journal, onDurability);
         return { archiveGeneration };
-      });
+      }, { waitMs: restoreDrainMs });
       operation = { operationId, stage: "complete", progress: 100, startedAt, error: null };
       return result;
     } catch (e) {
@@ -487,7 +493,7 @@ export function createGoogleDriveArchiveManager({ dataDir, service, worker, now 
         } else await worker.recoverOrphanRestoreAuthorization?.({ transactionId: id });
       }
       catch (failure) { operation = { operationId, stage: "recovery_required", progress: operation?.progress || 0, startedAt, error: "archive_control_invalid" }; throw failure; }
-      operation = { operationId, stage: "failed", progress: operation?.progress || 0, startedAt, error: ["archive_invalid", "snapshot_changed", "target_changed", "sync_conflict"].includes(e.code) ? e.code : "remote_unavailable" }; throw e;
+      operation = { operationId, stage: "failed", progress: operation?.progress || 0, startedAt, error: ["archive_invalid", "snapshot_changed", "target_changed", "sync_conflict", "archive_maintenance"].includes(e.code) ? e.code : "remote_unavailable" }; throw e;
     }
   }
   async function status() {
@@ -497,7 +503,7 @@ export function createGoogleDriveArchiveManager({ dataDir, service, worker, now 
       const candidate = JSON.parse(await readFile(path.join(root, "archive-metadata.json"), "utf8")).archiveGeneration;
       if (Number.isSafeInteger(candidate) && candidate >= 1) archiveGeneration = candidate;
     } catch {}
-    return { maintenance: { active: maintenance.active, error: maintenance.error || null }, archiveGeneration, restore: operation };
+    return { maintenance: { active: maintenance.active, error: maintenance.error || null, activation: activating }, archiveGeneration, restore: operation };
   }
   return Object.freeze({ preview, choose, status });
 }

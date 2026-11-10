@@ -1,23 +1,23 @@
-export const GOOGLE_DRIVE_OUTAGE_NOTICE = "Le modifiche vengono salvate sul computer. Quando il collegamento sarà ripristinato, l’archivio locale sovrascriverà quello su Google Drive.";
+export const GOOGLE_DRIVE_OUTAGE_NOTICE = "Google Drive non è raggiungibile. Le modifiche restano salvate sul computer e verranno caricate su Drive appena torna la connessione.";
 
 const SAFE_ERRORS = Object.freeze({
   configuration_incomplete: "Completa la configurazione Google Drive nel file .env e riavvia l’app.",
   configuration_invalid: "La configurazione Google Drive non è valida. Controlla le quattro variabili nel file .env.",
-  private_state_invalid: "Lo stato privato Google Drive non è leggibile. I dati dell’archivio non sono stati modificati.",
+  private_state_invalid: "Non riesco a leggere le impostazioni Google Drive salvate su questo computer. I dati dell’archivio non sono stati toccati.",
   reconnect_required: "La sessione Google Drive è scaduta. Ricollega l’account.",
-  target_changed: "La configurazione o la destinazione Google Drive è cambiata. Verifica di nuovo la cartella.",
+  target_changed: "L’account o la cartella Google Drive sono cambiati. Verifica di nuovo l’accesso.",
   google_unavailable: "Google Drive non è raggiungibile in questo momento.",
   google_permission_denied: "Questo account non può accedere alla cartella Google Drive configurata.",
   folder_access_denied: "La cartella configurata non è accessibile o non consente le operazioni richieste.",
-  folder_read_denied: "Google Drive non ha completato la lettura della cartella. Non è stata considerata vuota.",
+  folder_read_denied: "Google Drive non ha completato la lettura della cartella, quindi non la considero vuota. Riprova.",
   folder_write_denied: "La cartella Google Drive non consente di aggiungere l’archivio.",
   incomplete_drive_listing: "Google Drive non ha completato l’elenco della cartella. Riprova la verifica.",
-  archive_invalid: "L’archivio selezionato è incompleto o non supera la verifica. I dati locali sono rimasti al loro posto.",
-  remote_unavailable: "L’archivio Google Drive non è disponibile o non supera la verifica.",
-  snapshot_changed: "L’archivio è cambiato dopo l’anteprima. Crea una nuova anteprima prima di continuare.",
-  sync_conflict: "L’anteprima è scaduta o i dati sono cambiati. Crea una nuova anteprima.",
-  archive_maintenance: "L’archivio è occupato da un’operazione di ripristino. Riprova tra poco.",
-  archive_control_invalid: "Il controllo del ripristino richiede attenzione. Le modifiche sono temporaneamente sospese.",
+  archive_invalid: "La copia scelta è incompleta o danneggiata. I dati sul computer non sono stati toccati.",
+  remote_unavailable: "La copia su Google Drive non è raggiungibile o è danneggiata.",
+  snapshot_changed: "I dati sono cambiati nel frattempo. Riprova per vedere la situazione aggiornata.",
+  sync_conflict: "La scelta è scaduta o i dati sono cambiati. Riprova per vedere la situazione aggiornata.",
+  archive_maintenance: "L’archivio è occupato da un’altra operazione, per esempio una generazione ancora in corso. Riprova tra poco.",
+  archive_control_invalid: "Il ripristino si è interrotto e richiede un recupero. Le modifiche restano sospese: vedi docs/google-drive-operations.md.",
   cross_origin_request: "La richiesta deve provenire da questa applicazione.",
   oauth_denied: "L’autorizzazione Google Drive è stata annullata.",
   oauth_scope_insufficient: "Google non ha concesso i permessi richiesti. Ricollega l’account e verifica i permessi.",
@@ -30,6 +30,8 @@ const UNREACHABLE_ERRORS = new Set([
 ]);
 
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+// After this long an action says it is slow and that Settings can be closed.
+const SLOW_ACTION_MS = 12_000;
 const TERMINAL_RESTORE_STAGES = new Set(["complete", "failed", "recovery_required"]);
 
 function messageFor(error, fallback = "L’operazione Google Drive non è riuscita. Riprova.") {
@@ -88,6 +90,7 @@ function presentStatus(raw, archive = null) {
     } : null,
     maintenance: {
       active: archiveSource.maintenance?.active === true,
+      activation: archiveSource.maintenance?.activation === true,
       error: archiveSource.maintenance?.error ? messageFor({ code: archiveSource.maintenance.error }) : null,
     },
     archiveGeneration: Number.isSafeInteger(archiveSource.archiveGeneration) ? archiveSource.archiveGeneration : null,
@@ -161,6 +164,8 @@ export function createGoogleDriveStorageController({
     preview: null,
     restoreOperation: null,
     confirmation: null,
+    slow: false,
+    notice: null,
   };
   const subscribers = new Set();
   let started = false;
@@ -344,7 +349,8 @@ export function createGoogleDriveStorageController({
     if (snapshot.busy) return false;
     const actionId = ++actionSequence;
     lifecycle += 1;
-    publish({ busy: name, actionError: null });
+    publish({ busy: name, slow: false, actionError: null, notice: null });
+    const slowTimer = setTimeoutFn(() => { if (isCurrentAction(actionId)) publish({ slow: true }); }, SLOW_ACTION_MS);
     try {
       const result = await work(actionId);
       if (actionId !== actionSequence || stopped) return false;
@@ -353,8 +359,9 @@ export function createGoogleDriveStorageController({
       if (actionId === actionSequence && !stopped) publish({ actionError: messageFor(error) });
       return false;
     } finally {
+      clearTimeoutFn(slowTimer);
       if (actionId === actionSequence && !stopped) {
-        publish({ busy: null });
+        publish({ busy: null, slow: false });
         if (refresh) void poll().finally(scheduleNextPoll);
       }
     }
@@ -420,7 +427,8 @@ export function createGoogleDriveStorageController({
       try {
         response = await send(route, { method: "POST", body: JSON.stringify({ actionToken: owned.actionToken, choice }) });
       } catch (error) {
-        if (["sync_conflict", "snapshot_changed", "target_changed", "archive_invalid"].includes(error?.code)) {
+        // The server consumed the preview for all of these, so it cannot be retried.
+        if (["sync_conflict", "snapshot_changed", "target_changed", "archive_invalid", "archive_maintenance"].includes(error?.code)) {
           try { await cancelServerPreview(owned); } catch {}
           clearPreview({ actionError: messageFor(error) });
         }
@@ -435,7 +443,7 @@ export function createGoogleDriveStorageController({
         trackedOperationTerminal = false;
         publish({ preview: null, confirmation: null, actionError: null, restoreOperation: { stage: "running", progress: 0, startedAt: null, error: null, active: true } });
       } else {
-        publish({ preview: null, confirmation: null, actionError: null, restoreOperation: null });
+        publish({ preview: null, confirmation: null, actionError: null, restoreOperation: null, notice: result.status === "complete" ? "activated" : null });
       }
       return true;
     });
@@ -491,8 +499,25 @@ export function createGoogleDriveStorageController({
     });
   }
 
+  /**
+   * Stops waiting for the running action without undoing it. The request
+   * keeps going on the server and its outcome arrives through polling; a
+   * preview that is still being prepared is cancelled when it arrives.
+   */
+  function abandonAction() {
+    const choosing = snapshot.busy === "choice";
+    actionSequence += 1;
+    lifecycle += 1;
+    if (choosing) { currentPreview = null; previewTargetKey = null; }
+    publish({ busy: null, slow: false, ...(choosing ? { preview: null, confirmation: null } : {}) });
+    void poll().finally(scheduleNextPoll);
+  }
+
+  // Settings can always be closed: only a preview cancellation is waited for,
+  // because closing is what asked for it.
   async function requestClose() {
-    if (snapshot.busy) return false;
+    if (snapshot.busy === "cancel-preview") return closeAfterCancel || false;
+    if (snapshot.busy) { abandonAction(); return true; }
     if (!currentPreview) return true;
     if (closeAfterCancel) return false;
     publish({ busy: "cancel-preview", actionError: null });
@@ -508,8 +533,9 @@ export function createGoogleDriveStorageController({
     return closeAfterCancel;
   }
 
-  function confirmAction(name) { publish({ confirmation: name }); }
+  function confirmAction(name) { publish({ confirmation: name, notice: null }); }
   function clearConfirmation() { publish({ confirmation: null }); }
+  function clearNotice() { publish({ notice: null }); }
 
   function stop() {
     stopped = true;
@@ -527,7 +553,7 @@ export function createGoogleDriveStorageController({
 
   return Object.freeze({
     getSnapshot, subscribe, start, stop, poll, openPreview, choose, startOAuth, verify, disable, disconnect,
-    requestClose, confirmAction, clearConfirmation,
+    requestClose, confirmAction, clearConfirmation, clearNotice,
   });
 }
 

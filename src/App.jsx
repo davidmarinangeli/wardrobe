@@ -637,7 +637,7 @@ export function App() {
             loading={!archiveMaintenanceActive && !error}
             error={error}
             empty={archiveMaintenanceActive}
-            emptyMessage="L’archivio è in manutenzione. Puoi controllare l’operazione da Settings › Archive."
+            emptyMessage="È in corso un’operazione sull’archivio: il guardaroba torna disponibile appena finisce. Dettagli in Settings › Archive."
             noun="archive"
           />
         ) : view === "overview" ? (

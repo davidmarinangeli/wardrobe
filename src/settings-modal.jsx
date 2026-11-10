@@ -70,7 +70,9 @@ export function SettingsModal({ open, tab, onTabChange, onClose, aiSetup, aiBadg
           overlayClassName="onboarding-overlay settings-overlay"
           entryClassName="onboarding-entry settings-entry"
           panelClassName="onboarding settings-panel"
-          closeDisabled={Boolean(snapshot.busy)}
+          // Closing never waits on a Drive action (it keeps running on the
+          // server); only a preview cancellation that closing started does.
+          closeDisabled={snapshot.busy === "cancel-preview"}
           swipeToClose={!snapshot.preview}
           focusTrap
         >
@@ -109,14 +111,14 @@ export function SettingsModal({ open, tab, onTabChange, onClose, aiSetup, aiBadg
           {/* Kept mounted while hidden, so switching tabs mid-preview loses nothing. */}
           <div id="settings-panel-archive" role="tabpanel" aria-labelledby="settings-tab-archive" hidden={tab !== "archive"}>
             {archiveDisabled ? (
-              <div className="settings-archive-off">
+              <div className="settings-archive-off" lang="it">
                 <p className="onboarding-eyebrow">Archive</p>
-                <h3>Google Drive isn’t set up</h3>
+                <h3>Google Drive non è configurato</h3>
                 <p>
-                  Your archive stays on this computer. To keep a copy on Google Drive, set{" "}
+                  L’archivio resta su questo computer. Per tenerne una copia su Google Drive, imposta{" "}
                   <code>GOOGLE_DRIVE_CLIENT_ID</code>, <code>GOOGLE_DRIVE_CLIENT_SECRET</code>,{" "}
-                  <code>GOOGLE_DRIVE_REDIRECT_URI</code> and <code>GOOGLE_DRIVE_FOLDER_ID</code> in <code>.env</code>,
-                  then restart the app. The steps are in <code>docs/google-drive-operations.md</code>.
+                  <code>GOOGLE_DRIVE_REDIRECT_URI</code> e <code>GOOGLE_DRIVE_FOLDER_ID</code> nel file <code>.env</code>,
+                  poi riavvia l’app. I passaggi sono in <code>docs/google-drive-operations.md</code>.
                 </p>
               </div>
             ) : (

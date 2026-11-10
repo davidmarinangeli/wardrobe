@@ -24,7 +24,21 @@
   padding: 40px 38px 32px;
   background: var(--paper);
   box-shadow: var(--shadow-lg);
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--wash-3) transparent;
 }
+
+/* Same slim, trackless thumb as the item sheet, inset from the rounded corners. */
+.viewer.onboarding::-webkit-scrollbar { width: 8px; }
+.viewer.onboarding::-webkit-scrollbar-track { background: transparent; margin-block: 16px; }
+.viewer.onboarding::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: var(--r-full);
+  background: var(--wash-3);
+  background-clip: padding-box;
+}
+.viewer.onboarding::-webkit-scrollbar-corner { background: transparent; }
 
 .onboarding-dots {
   display: flex;

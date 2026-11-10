@@ -424,7 +424,7 @@ test("a new operation replaces a tracked terminal restore without accepting stal
   restore = { operationId: "restore-operation-two", stage: "failed", progress: 42, error: "archive_invalid" };
   await controller.poll();
   assert.equal(controller.getSnapshot().restoreOperation.stage, "failed");
-  assert.match(controller.getSnapshot().restoreOperation.error, /incompleto|verifica/i);
+  assert.match(controller.getSnapshot().restoreOperation.error, /incomplet|danneggiat/i);
   assert.doesNotMatch(JSON.stringify(controller.getSnapshot()), /restore-operation-one|restore-operation-two/);
   controller.stop();
 });
@@ -481,5 +481,117 @@ test("StrictMode stop and restart reads fresh status after the prior lifecycle d
   await Promise.all([firstStart, restarted]);
   assert.equal(statusReads, 2);
   assert.equal(controller.getSnapshot().status.connected, true, "the restarted lifecycle publishes its own snapshot");
+  controller.stop();
+});
+
+function previewFixture(actionToken = "private-choice-token") {
+  return {
+    actionToken, decision: "local_to_empty", choices: ["use-local", "cancel"],
+    local: { valid: true, populated: true, files: 2, bytes: 128 }, remote: { valid: true, empty: true, files: 0, bytes: 0 },
+  };
+}
+
+test("closing Settings while a choice is in flight stops waiting without undoing it", async () => {
+  const choice = deferred();
+  const choices = [];
+  let polls = 0;
+  const controller = testController(async (url, options = {}) => {
+    if (url.endsWith("/api/google-drive/status")) { polls += 1; return response(driveStatus()); }
+    if (url.endsWith("/api/google-drive/archive/status")) return response(archiveStatus());
+    if (url.endsWith("/api/google-drive/archive/activation/preview")) return response(previewFixture());
+    if (url.endsWith("/api/google-drive/archive/activation/choice")) { choices.push(JSON.parse(options.body).choice); return choice.promise; }
+    throw new Error(`Unexpected fixture request: ${url}`);
+  });
+
+  await controller.start();
+  await controller.openPreview("activation");
+  await new Promise((resolve) => setImmediate(resolve));
+  const choosing = controller.choose("use-local");
+  assert.equal(controller.getSnapshot().busy, "choice");
+  const pollsBefore = polls;
+  assert.equal(await controller.requestClose(), true, "a running choice never traps the person in Settings");
+  assert.equal(controller.getSnapshot().busy, null);
+  assert.equal(controller.getSnapshot().preview, null);
+  assert.ok(polls > pollsBefore, "the outcome is picked up by polling instead");
+  choice.resolve(response({ status: "complete", backupEnabled: true }));
+  assert.equal(await choosing, false);
+  assert.deepEqual(choices, ["use-local"], "closing never cancels a choice that was already confirmed");
+  assert.equal(controller.getSnapshot().preview, null, "the late answer reopens nothing");
+  controller.stop();
+});
+
+test("closing Settings while a preview is prepared cancels that preview when it arrives", async () => {
+  const preview = deferred();
+  const previewRequested = deferred();
+  const cancellations = [];
+  const controller = testController(async (url, options = {}) => {
+    if (url.endsWith("/api/google-drive/status")) return response(driveStatus());
+    if (url.endsWith("/api/google-drive/archive/status")) return response(archiveStatus());
+    if (url.endsWith("/api/google-drive/archive/activation/preview")) { previewRequested.resolve(); return preview.promise; }
+    if (url.endsWith("/api/google-drive/archive/activation/choice")) { cancellations.push(JSON.parse(options.body)); return response({ status: "cancelled" }); }
+    throw new Error(`Unexpected fixture request: ${url}`);
+  });
+
+  await controller.start();
+  const opening = controller.openPreview("activation");
+  assert.equal(controller.getSnapshot().busy, "activation-preview");
+  await previewRequested.promise;
+  assert.equal(await controller.requestClose(), true);
+  preview.resolve(response(previewFixture("late-token")));
+  assert.equal(await opening, false);
+  assert.deepEqual(cancellations, [{ actionToken: "late-token", choice: "cancel" }], "the server preview is released, not left holding sync paused");
+  assert.equal(controller.getSnapshot().preview, null);
+  controller.stop();
+});
+
+test("an activation refused while the archive is busy drops the consumed preview and asks to retry", async () => {
+  const controller = testController(async (url, options = {}) => {
+    if (url.endsWith("/api/google-drive/status")) return response(driveStatus());
+    if (url.endsWith("/api/google-drive/archive/status")) return response(archiveStatus());
+    if (url.endsWith("/api/google-drive/archive/activation/preview")) return response(previewFixture());
+    if (url.endsWith("/api/google-drive/archive/activation/choice")) {
+      return JSON.parse(options.body).choice === "cancel" ? response({ status: "cancelled" }) : response({ error: { code: "archive_maintenance" } }, 503);
+    }
+    throw new Error(`Unexpected fixture request: ${url}`);
+  });
+
+  await controller.start();
+  await controller.openPreview("activation");
+  assert.equal(await controller.choose("use-local"), false);
+  assert.equal(controller.getSnapshot().preview, null);
+  assert.match(controller.getSnapshot().actionError, /occupato/);
+  controller.stop();
+});
+
+test("a slow action says so, and a completed activation leaves a notice", async () => {
+  const timers = [];
+  const choice = deferred();
+  const controller = createGoogleDriveStorageController({
+    request: async (url) => {
+      if (url.endsWith("/api/google-drive/status")) return response(driveStatus());
+      if (url.endsWith("/api/google-drive/archive/status")) return response(archiveStatus());
+      if (url.endsWith("/api/google-drive/archive/activation/preview")) return response(previewFixture());
+      if (url.endsWith("/api/google-drive/archive/activation/choice")) return choice.promise;
+      throw new Error(`Unexpected fixture request: ${url}`);
+    },
+    navigate() {},
+    setTimeoutFn: (fn, ms) => { timers.push({ fn, ms }); return timers.length; },
+    clearTimeoutFn() {},
+    getWindow: () => null,
+  });
+
+  await controller.start();
+  await controller.openPreview("activation");
+  const registered = timers.length;
+  const choosing = controller.choose("use-local");
+  const slowTimer = timers.slice(registered).find((timer) => timer.ms < 60_000);
+  assert.ok(slowTimer, "the action arms a slow notice");
+  assert.equal(controller.getSnapshot().slow, false);
+  slowTimer.fn();
+  assert.equal(controller.getSnapshot().slow, true);
+  choice.resolve(response({ status: "complete", backupEnabled: true }));
+  assert.equal(await choosing, true);
+  assert.equal(controller.getSnapshot().slow, false);
+  assert.equal(controller.getSnapshot().notice, "activated");
   controller.stop();
 });
