@@ -237,7 +237,8 @@ function sessionUrlIsSafe(value, operation = null) {
     return url.protocol === "https:" && url.origin === "https://www.googleapis.com"
       && url.pathname === expectedPath && !url.username && !url.password && !url.hash
       && ids.length === 1 && Boolean(ids[0]) && ids[0].length <= 1024 && !/[\0\r\n]/.test(ids[0])
-      && [...url.searchParams.keys()].every((key) => key === "upload_id" || key === "uploadType");
+      // Google echoes the request's query (supportsAllDrives, fields) and adds its own (session_crd).
+      && (!url.searchParams.has("uploadType") || url.searchParams.get("uploadType") === "resumable");
   } catch { return false; }
 }
 function validateLoadedState(state) {

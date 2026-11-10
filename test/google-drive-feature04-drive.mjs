@@ -122,7 +122,7 @@ export function makeDrive(rootId = ROOT_ID) {
     async startResumableUpload({ name, mimeType, size, parentId, id, fileId, appProperties }) {
       counters.starts += 1;
       const uploadId = makeId();
-      const sessionUrl = `https://www.googleapis.com/upload/drive/v3/files${fileId ? `/${encodeURIComponent(fileId)}` : ""}?uploadType=resumable&upload_id=${uploadId}`;
+      const sessionUrl = `https://www.googleapis.com/upload/drive/v3/files${fileId ? `/${encodeURIComponent(fileId)}` : ""}?uploadType=resumable&supportsAllDrives=true&fields=id&upload_id=${uploadId}&session_crd=fake`;
       sessions.set(uploadId, { name, mimeType, size, parentId, id: fileId || id, fileId: fileId || null, appProperties, bytes: Buffer.alloc(0) });
       return { sessionUrl };
     },
