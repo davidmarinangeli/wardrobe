@@ -376,7 +376,9 @@ export function createGoogleDriveService({ root = process.cwd(), env = process.e
       payloadBody = JSON.stringify(body);
       if (!Object.keys(headers).some((key) => key.toLowerCase() === "content-type")) requestHeaders["Content-Type"] = "application/json";
     }
-    const response = await fetchWithTimeout(fetchImpl, target, { method, headers: requestHeaders, body: payloadBody });
+    // Resumable uploads answer 308 ("Resume Incomplete") with no Location; redirect: "error" turns that into a network error.
+    const redirect = responseType === "upload" ? "manual" : "error";
+    const response = await fetchWithTimeout(fetchImpl, target, { method, headers: requestHeaders, body: payloadBody, redirect });
     await assertCurrent();
     if (responseType === "upload") {
       if (response.status === 308 || response.status === 404 || response.status === 410) {

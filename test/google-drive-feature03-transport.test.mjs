@@ -78,6 +78,8 @@ function createTransportMock() {
       return new Response(null, { status: 200, headers: { Location: location } });
     }
     if (url.href === SESSION_URL && init.method === "PUT") {
+      // Real fetch rejects any 3xx, Location or not, under redirect: "error".
+      if (init.redirect === "error") throw new TypeError("fetch failed", { cause: new Error("unexpected redirect") });
       if (nextUploadResponse) {
         const response = nextUploadResponse;
         nextUploadResponse = null;
@@ -148,7 +150,7 @@ describe("bounded Google Drive resumable transport", () => {
     mock.setNextUploadResponse(new Response(null, { status: 302, headers: { Location: "https://attacker.example/" } }));
     await assert.rejects(client.queryResumableUpload({ sessionUrl: started.sessionUrl, total: 100, parentId: ROOT_ID }), { code: "google_unavailable" });
     const request = mock.calls.find((call) => call.url === SESSION_URL && call.method === "PUT");
-    assert.equal(request.redirect, "error");
+    assert.equal(request.redirect, "manual");
     assert.equal(mock.calls.some((call) => call.url.startsWith("https://attacker.example/")), false);
   });
 
