@@ -1081,10 +1081,9 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
     try {
       let probe = await client.queryResumableUpload({ sessionUrl, total: size, parentId, fileId: existingId || undefined });
       if (probe.complete) return finish(probe);
-      const priorOffset = Number.isSafeInteger(operation.offset) ? operation.offset : 0;
       offset = probe.offset;
       operation = { ...operation, offset };
-      state.progress.currentBytes = Math.max(0, Math.min(state.progress.totalBytes, state.progress.currentBytes + offset - priorOffset));
+      recordProgress(state, { relativePath, offset });
       state.operations[operationKey] = operation;
       await writeState(state);
     } catch (error) {
@@ -1122,10 +1121,9 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
       if (!Number.isSafeInteger(confirmed) || confirmed < offset || confirmed > offset + length) throw new GoogleDriveSyncError("upload_failed", undefined, { retryable: true });
       noProgress = confirmed === offset ? noProgress + 1 : 0;
       if (noProgress > 2) throw new GoogleDriveSyncError("upload_failed", undefined, { retryable: true });
-      const previousOffset = offset;
       offset = confirmed;
       operation = { ...operation, sessionUrl, offset, lastOffset: offset };
-      state.progress.currentBytes = Math.max(0, Math.min(state.progress.totalBytes, state.progress.currentBytes + offset - previousOffset));
+      recordProgress(state, { relativePath, offset });
       state.operations[operationKey] = operation;
       await writeState(state);
     }
@@ -1140,7 +1138,6 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
     const expected = { size: localEntry.size, sha256: localEntry.sha256 };
     if (existing && await verifiedRemoteFile(client, existing, expected)) {
       candidate.files[relativePath] = { id: existing.id, size: expected.size, sha256: expected.sha256, parentId };
-      state.progress.currentFiles += 1;
       return existing;
     }
     const operationKey = sha256(JSON.stringify({
@@ -1167,7 +1164,6 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
       if (!await verifiedRemoteFile(client, copied, expected)) throw new GoogleDriveSyncError("remote_checksum_mismatch");
       candidate.files[relativePath] = { id: copied.id, size: expected.size, sha256: expected.sha256, parentId };
       state.operations[operationKey] = { ...operation, complete: true, parentId, relativePath, sha256: localEntry.sha256, size: localEntry.size };
-      state.progress.currentFiles += 1;
       await writeState(state);
       return copied;
     }
@@ -1179,9 +1175,17 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
       name: path.posix.basename(relativePath), relativePath, parentId, digest: expected, mimeType, operationKey, existing,
     });
     candidate.files[relativePath] = { id: uploaded.id, size: expected.size, sha256: expected.sha256, parentId };
-    state.progress.currentFiles += 1;
     await writeState(state);
     return uploaded;
+  }
+
+  // Derived from the files the candidate already holds plus the upload in flight,
+  // so a single-chunk upload still counts its bytes and a resumed run that
+  // re-verifies earlier files does not count them twice.
+  function recordProgress(state, inFlight = null) {
+    const done = Object.entries(state.candidate?.files || {}).filter(([relativePath]) => relativePath !== inFlight?.relativePath);
+    state.progress.currentFiles = Math.min(state.progress.totalFiles, done.length);
+    state.progress.currentBytes = Math.min(state.progress.totalBytes, done.reduce((sum, [, file]) => sum + file.size, inFlight?.offset || 0));
   }
 
   async function cleanupArchiveMembers(client, cleanup) {
@@ -1620,7 +1624,7 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
       const parentKey = path.posix.dirname(entry.path);
       const parentId = directories.get(parentKey === "." ? "" : parentKey) || snapshot.id;
       await ensureRemoteFile(client, state, target, epoch, candidate, parentId, entry.path, entry, staged.directory, oldFiles);
-      state.progress.currentFiles = Math.min(state.progress.totalFiles, state.progress.currentFiles);
+      recordProgress(state);
       await writeState(state);
     }
     const manifestBytes = Buffer.from(`${JSON.stringify(staged.inventory, null, 2)}\n`);
@@ -2211,6 +2215,20 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
     }));
   }
 
+  // Skips the backoff wait without resetting it, so a retry that fails again
+  // keeps growing the delay instead of hammering Drive. The upload itself runs
+  // in the background, like after enabling: its progress arrives through status.
+  async function retryNow() {
+    await serialize(() => withWriterLock(async () => {
+      const state = await readState();
+      if (!state.enabled || state.paused || !state.retry?.at) return;
+      state.retry = { ...state.retry, at: null };
+      await writeState(state);
+    }));
+    queueMicrotask(() => { void runOnce().catch(() => {}); });
+    return getSafeStatus();
+  }
+
   async function disable() {
     const before = await readState();
     if (before.restoreAuthorization?.active || [...restoreAuthorizations.values()].some((authorization) => authorization.active)) {
@@ -2666,6 +2684,7 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
     authorizeRestore,
     pauseAndDrain,
     resume,
+    retryNow,
     disable,
     invalidateAfterRestore,
     completeRestore,

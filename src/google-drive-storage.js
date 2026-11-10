@@ -320,7 +320,8 @@ export function createGoogleDriveStorageController({
   function scheduleNextPoll() {
     if (!started || stopped) return;
     if (timer !== null) clearTimeoutFn(timer);
-    const delay = snapshot.restoreOperation?.active || snapshot.status?.maintenance.active ? 1_500 : 12_000;
+    const uploading = snapshot.status?.backupEnabled && snapshot.status.syncState === "syncing";
+    const delay = snapshot.restoreOperation?.active || snapshot.status?.maintenance.active || uploading ? 1_500 : 12_000;
     timer = setTimeoutFn(async () => {
       await poll();
       scheduleNextPoll();
@@ -474,6 +475,13 @@ export function createGoogleDriveStorageController({
     });
   }
 
+  async function retrySync() {
+    return runAction("retry", async () => {
+      await send("/api/google-drive/archive/retry", { method: "POST", body: JSON.stringify({}) });
+      return true;
+    });
+  }
+
   async function disable() {
     return runAction("disable", async (actionId) => {
       if (!(await clearPriorPreview())) return false;
@@ -553,7 +561,7 @@ export function createGoogleDriveStorageController({
   }
 
   return Object.freeze({
-    getSnapshot, subscribe, start, stop, poll, openPreview, choose, startOAuth, verify, disable, disconnect,
+    getSnapshot, subscribe, start, stop, poll, openPreview, choose, startOAuth, verify, retrySync, disable, disconnect,
     requestClose, confirmAction, clearConfirmation, clearNotice,
   });
 }

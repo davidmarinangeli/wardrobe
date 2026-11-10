@@ -22,19 +22,23 @@
 .drive-account__title { justify-content: flex-start; gap: 10px; }
 .drive-account__title h3,
 .drive-section-heading h3 { margin-bottom: 0; }
-.drive-account__details { display: grid; gap: 10px; margin: 0; padding: 14px 15px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--paper-raised); }
+.drive-section-heading__actions { display: flex; align-items: center; gap: 8px; }
+.drive-account__card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 10px 16px; padding: 14px 10px 10px 15px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--paper-raised); }
+.drive-account__card .drive-disconnect { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; margin-bottom: -8px; padding-inline: 10px; white-space: nowrap; }
+.drive-account__details { display: grid; gap: 10px; margin: 0; }
 .drive-account__details > div { display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: center; gap: 10px; font-size: 13px; }
 .drive-account__details dt { display: grid; place-items: center; color: var(--muted); }
 .drive-account__details dd { margin: 0; overflow-wrap: anywhere; color: var(--ink); font-weight: 500; }
 .drive-account__email { color: var(--ink-soft); font-weight: 400; }
 .drive-account__details .drive-dot.is-ok { background: var(--success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 22%, transparent); }
+/* While retrying it shrinks to a circle around the spinner. */
+.drive-settings .drive-retry { flex: none; min-height: 34px; padding: 7px 13px; white-space: nowrap; }
+.drive-settings .drive-retry[aria-busy="true"] { width: 34px; padding: 0; }
 .drive-actions,
 .drive-preview__choices { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .drive-actions button,
 .drive-preview__choices button,
 .drive-restore > button { min-height: 37px; }
-/* Destructive, so it sits apart from the connect/verify pair instead of trailing them. */
-.drive-actions .drive-disconnect { margin-left: auto; padding-inline: 12px; }
 
 /* The shared buttons have no disabled look, so a locked button read as one that
    ignored the click. A busy button keeps full strength: it is working, not off. */
@@ -99,8 +103,6 @@
 .drive-operation.is-error { border-color: color-mix(in srgb, var(--error) 45%, var(--line)); }
 .drive-settings__footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 5px; }
 .drive-settings__footer a { color: var(--ink); font-size: 12px; text-decoration-thickness: 1px; text-underline-offset: 3px; }
-.drive-refresh { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 50%; background: transparent; color: var(--ink); cursor: pointer; }
-.drive-refresh:disabled { opacity: .45; cursor: not-allowed; }
 .drive-spinner { flex: none; animation: drive-spinner 1s linear infinite; }
 @keyframes drive-spinner { to { transform: rotate(360deg); } }
 .drive-offline-notice {
@@ -122,6 +124,8 @@
 
 @media (max-width: 430px) {
   .drive-restore { grid-template-columns: 1fr; }
+  .drive-account__card { grid-template-columns: 1fr; }
+  .drive-account__card .drive-disconnect { justify-self: end; margin-bottom: 0; }
   .drive-preview__counts > div { grid-template-columns: 96px minmax(0, 1fr); }
   .drive-settings__footer { align-items: flex-start; flex-direction: column; }
 }

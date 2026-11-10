@@ -6,7 +6,7 @@ import "./settings-modal.css";
 
 const TABS = [
   { id: "ai", label: "AI" },
-  { id: "archive", label: "Archive" },
+  { id: "archive", label: "Cloud backup" },
 ];
 
 /**

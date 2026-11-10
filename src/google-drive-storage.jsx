@@ -55,7 +55,7 @@ function previewPlan(preview) {
       body: !preview.local.valid
         ? "L’archivio sul computer è danneggiato e verrà sostituito per intero dalla copia su Drive."
         : localFull
-          ? "Tutti i dati sul computer (guardaroba, outfit, foto, preferenze e cronologia) verranno sostituiti dalla copia su Drive. Le copie non vengono unite."
+          ? "Tutti i dati sul computer (guardaroba, outfit, foto, preferenze e cronologia) verranno sostituiti dalla copia su Drive. Quello che c’è solo sul computer andrà perso."
           : "Il computer non ha ancora dati: verrà copiato qui l’archivio su Drive.",
       note: "Il backup resta come l’hai impostato. Se qualcosa va storto, i dati attuali restano al loro posto.",
       action: can("use-drive") ? { ...replaceLocal(localFull || !preview.local.valid ? "Sostituisci i dati sul computer" : "Ripristina da Drive", localFull || !preview.local.valid), busyLabel: "Avvio del ripristino…" } : null,
@@ -74,7 +74,7 @@ function previewPlan(preview) {
     case "different":
       return {
         title: "Le due copie sono diverse",
-        body: "Scegli quale tenere. L’altra verrà sostituita per intero: le copie non vengono unite.",
+        body: "Scegli quale tenere. L’altra verrà sostituita per intero e quello che c’è solo lì andrà perso.",
         options: [
           can("use-local") && { title: "Tieni la copia del computer", detail: "I dati su Drive vengono sostituiti.", action: { ...activate("use-local", "Sostituisci i dati su Drive"), danger: true } },
           can("use-drive") && { title: "Tieni la copia su Drive", detail: "I dati sul computer vengono sostituiti.", action: replaceLocal("Sostituisci i dati sul computer", true) },
@@ -279,7 +279,7 @@ export function ArchiveSettings({ controller, snapshot, open }) {
       <header className="drive-settings__intro">
         <h2>Il tuo archivio</h2>
         <p>Wardrobe salva tutto su questo computer. Con il backup attivo, Google Drive ne tiene una copia completa e aggiornata.</p>
-        <p>Puoi aprire Wardrobe da più browser e vedrai sempre gli stessi dati. Un’altra installazione di Wardrobe ha invece un archivio separato: le due copie non vengono unite.</p>
+        <p>Puoi aprire Wardrobe da più browser e vedrai sempre gli stessi dati. Un’altra installazione di Wardrobe ha invece un archivio separato, che non si sincronizza con questo.</p>
       </header>
 
       {snapshot.statusError && <p className="drive-alert" role="status">{snapshot.statusError}</p>}
@@ -323,28 +323,34 @@ export function ArchiveSettings({ controller, snapshot, open }) {
           <h3 id="drive-account-heading">Account Google Drive</h3>
         </div>
         {status?.account ? (
-          <dl className="drive-account__details">
-            <div>
-              <dt><User size={16} aria-hidden="true" /><span className="sr-only">Account</span></dt>
-              <dd>
-                {status.account.name || status.account.email || "Account collegato"}
-                {status.account.name && status.account.email && <span className="drive-account__email"> — {status.account.email}</span>}
-              </dd>
-            </div>
-            <div>
-              <dt><Folder size={16} aria-hidden="true" /><span className="sr-only">Cartella</span></dt>
-              <dd>{status.folder?.name ? `/${status.folder.name}` : "Non disponibile"}</dd>
-            </div>
-            <div>
-              <dt>
-                <span className={`drive-dot${status.reconnectRequired || (status.connected && !folderReady) ? " is-warn" : status.connected ? " is-ok" : ""}`} aria-hidden="true" />
-                <span className="sr-only">Stato</span>
-              </dt>
-              <dd>{status.reconnectRequired ? "Da ricollegare" : status.connected ? (folderReady ? "Collegato" : "Cartella non accessibile") : "Non collegato"}</dd>
-            </div>
-          </dl>
+          <div className="drive-account__card">
+            <dl className="drive-account__details">
+              <div>
+                <dt><User size={16} aria-hidden="true" /><span className="sr-only">Account</span></dt>
+                <dd>
+                  {status.account.name || status.account.email || "Account collegato"}
+                  {status.account.name && status.account.email && <span className="drive-account__email"> — {status.account.email}</span>}
+                </dd>
+              </div>
+              <div>
+                <dt><Folder size={16} aria-hidden="true" /><span className="sr-only">Cartella</span></dt>
+                <dd>{status.folder?.name ? `/${status.folder.name}` : "Non disponibile"}</dd>
+              </div>
+              <div>
+                <dt>
+                  <span className={`drive-dot${status.reconnectRequired || (status.connected && !folderReady) ? " is-warn" : status.connected ? " is-ok" : ""}`} aria-hidden="true" />
+                  <span className="sr-only">Stato</span>
+                </dt>
+                <dd>{status.reconnectRequired ? "Da ricollegare" : status.connected ? (folderReady ? "Collegato" : "Cartella non accessibile") : "Non collegato"}</dd>
+              </div>
+            </dl>
+            <button className="delete-button drive-disconnect" type="button" disabled={accountLocked} onClick={() => controller.confirmAction("disconnect")}>
+              <SignOut size={15} aria-hidden="true" />
+              Scollega account
+            </button>
+          </div>
         ) : <p className="drive-hint">Nessun account collegato.</p>}
-        <div className="drive-actions">
+        {(status && (!status.connected || status.reconnectRequired) || needsVerify) && <div className="drive-actions">
           {status && (!status.connected || status.reconnectRequired) && (
             <button className="primary-button" type="button" disabled={accountLocked} aria-busy={busy === "connect"} onClick={() => void controller.startOAuth()}>
               {busy === "connect" ? spinner : <LinkSimple size={15} aria-hidden="true" />}
@@ -357,13 +363,7 @@ export function ArchiveSettings({ controller, snapshot, open }) {
               {busy === "verify" ? "Verifica…" : "Verifica accesso"}
             </button>
           )}
-          {status?.account && (
-            <button className="delete-button drive-disconnect" type="button" disabled={accountLocked} onClick={() => controller.confirmAction("disconnect")}>
-              <SignOut size={15} aria-hidden="true" />
-              Scollega account
-            </button>
-          )}
-        </div>
+        </div>}
         {snapshot.confirmation === "disconnect" && (
           <div className="drive-confirm" role="group" aria-labelledby="drive-disconnect-title">
             <strong id="drive-disconnect-title">{status?.backupEnabled ? "Disattivare il backup e scollegare l’account?" : "Scollegare questo account?"}</strong>
@@ -384,7 +384,28 @@ export function ArchiveSettings({ controller, snapshot, open }) {
       <section className="drive-backup" aria-labelledby="drive-backup-heading">
         <div className="drive-section-heading">
           <h3 id="drive-backup-heading" ref={backupHeadingRef} tabIndex={-1}>Backup su Google Drive</h3>
-          <button className="drive-refresh" type="button" onClick={() => void controller.poll()} disabled={Boolean(busy)} aria-label="Aggiorna stato"><ArrowClockwise size={17} /></button>
+          <div className="drive-section-heading__actions">
+            {status?.backupEnabled && status.retryAt && !status.syncPaused && (
+              <button className="secondary-button drive-retry" type="button" disabled={blocked} aria-busy={busy === "retry"} aria-label={busy === "retry" ? "Riprovo…" : undefined} onClick={() => void controller.retrySync()}>
+                {busy === "retry" ? spinner : <><ArrowClockwise size={15} aria-hidden="true" />Riprova ora</>}
+              </button>
+            )}
+            {!snapshot.preview && snapshot.confirmation !== "disable" && (
+              <div className="drive-actions">
+                {status?.backupEnabled ? (
+                  <button className="secondary-button" type="button" disabled={blocked} onClick={() => controller.confirmAction("disable")}>
+                    <HardDrive size={15} aria-hidden="true" />
+                    Disattiva backup
+                  </button>
+                ) : (
+                  <button className="primary-button" type="button" disabled={!status || blocked || !hasVerifiedFolder} aria-busy={busy === "activation-preview"} onClick={() => void controller.openPreview("activation")}>
+                    {busy === "activation-preview" ? spinner : <CloudArrowUp size={15} aria-hidden="true" />}
+                    {busy === "activation-preview" ? "Controllo le copie…" : "Attiva backup"}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
         <p className="drive-backup__state"><span className={`drive-dot is-${backup.tone}`} aria-hidden="true" />{backup.label}</p>
         {backup.detail && <p className="drive-hint">{backup.detail}</p>}
@@ -402,21 +423,6 @@ export function ArchiveSettings({ controller, snapshot, open }) {
         <p className="drive-last-backup">{status?.lastCompletedBackup?.completedAt
           ? <>Ultimo backup completato: <strong>{formatBackupDate(status.lastCompletedBackup.completedAt)}</strong> · {formatCount(status.lastCompletedBackup.fileCount)} file · {formatArchiveBytes(status.lastCompletedBackup.totalBytes)}</>
           : "Nessun backup completato finora."}</p>
-        {!snapshot.preview && snapshot.confirmation !== "disable" && (
-          <div className="drive-actions">
-            {status?.backupEnabled ? (
-              <button className="secondary-button" type="button" disabled={blocked} onClick={() => controller.confirmAction("disable")}>
-                <HardDrive size={15} aria-hidden="true" />
-                Disattiva backup
-              </button>
-            ) : (
-              <button className="primary-button" type="button" disabled={!status || blocked || !hasVerifiedFolder} aria-busy={busy === "activation-preview"} onClick={() => void controller.openPreview("activation")}>
-                {busy === "activation-preview" ? spinner : <CloudArrowUp size={15} aria-hidden="true" />}
-                {busy === "activation-preview" ? "Controllo le copie…" : "Attiva backup"}
-              </button>
-            )}
-          </div>
-        )}
         {!status?.backupEnabled && !hasVerifiedFolder && (
           <p className="drive-hint">{status?.connected && !status.reconnectRequired
             ? "La cartella Google Drive non è accessibile: verifica l’accesso qui sopra."
@@ -442,7 +448,7 @@ export function ArchiveSettings({ controller, snapshot, open }) {
       <section className="drive-restore" aria-labelledby="drive-restore-heading">
         <div>
           <h3 id="drive-restore-heading">Ripristina da Google Drive</h3>
-          <p>Sostituisce tutti i dati sul computer con la copia su Drive. Le copie non vengono unite.</p>
+          <p>Sostituisce tutti i dati sul computer con la copia su Drive. Quello che c’è solo sul computer va perso.</p>
         </div>
         <button className="secondary-button" type="button" disabled={!hasVerifiedFolder || blocked || Boolean(snapshot.preview)} aria-busy={busy === "restore-preview"} onClick={() => void controller.openPreview("restore")}>
           {busy === "restore-preview" ? spinner : <CloudArrowDown size={16} aria-hidden="true" />}

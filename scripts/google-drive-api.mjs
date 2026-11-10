@@ -365,7 +365,7 @@ export function googleDriveApi(options = {}) {
         ["/api/google-drive/archive/activation/choice", "activation"],
         ["/api/google-drive/archive/restore/confirm", "restore"],
       ]);
-      if (previewRoutes.has(route) || choiceRoutes.has(route) || route === "/api/google-drive/archive/disable") {
+      if (previewRoutes.has(route) || choiceRoutes.has(route) || route === "/api/google-drive/archive/disable" || route === "/api/google-drive/archive/retry") {
         if (method !== "POST") return json(res, 405, { error: { code: "method_not_allowed", message: "Metodo non consentito.", retryable: false } });
         if (!service.callbackOrigin) {
           const status = await service.getStatus();
@@ -375,6 +375,7 @@ export function googleDriveApi(options = {}) {
         const body = await readJsonBody(req);
         if (previewRoutes.has(route)) return json(res, 200, await archiveManager.preview(previewRoutes.get(route)));
         if (choiceRoutes.has(route)) return json(res, 202, await archiveManager.choose({ ...body, operation: choiceRoutes.get(route) }));
+        if (route === "/api/google-drive/archive/retry") return json(res, 200, await syncWorker.retryNow());
         return json(res, 200, await syncWorker.disable());
       }
 
