@@ -98,11 +98,11 @@ function validateUploadSessionUrl(value, fileId = null) {
   let url;
   try { url = new URL(value); } catch { fail("invalid_upload_session", "Google Drive returned an invalid upload session"); }
   const ids = url.searchParams.getAll("upload_id");
-  const extra = [...url.searchParams.keys()].filter((key) => !["upload_id", "uploadType"].includes(key));
+  // Google echoes the request's query (supportsAllDrives, fields) and adds its own (session_crd).
   const expectedPath = fileId ? `/upload/drive/v3/files/${encodeURIComponent(fileId)}` : "/upload/drive/v3/files";
   if (url.protocol !== "https:" || url.origin !== "https://www.googleapis.com"
       || url.pathname !== expectedPath || url.username || url.password || url.hash
-      || ids.length !== 1 || !ids[0] || ids[0].length > 1024 || /[\0\r\n]/.test(ids[0]) || extra.length
+      || ids.length !== 1 || !ids[0] || ids[0].length > 1024 || /[\0\r\n]/.test(ids[0])
       || (url.searchParams.has("uploadType") && url.searchParams.get("uploadType") !== "resumable")) {
     fail("invalid_upload_session", "Google Drive returned an invalid upload session");
   }

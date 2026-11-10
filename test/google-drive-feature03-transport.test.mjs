@@ -118,6 +118,19 @@ describe("bounded Google Drive resumable transport", () => {
     assert.equal(mock.calls.find((call) => call.url === SESSION_URL).method, "PUT");
   });
 
+  it("accepts the query parameters Google echoes on the session URL", async () => {
+    const root = await tempRoot();
+    const mock = createTransportMock();
+    const { service, target } = await connectedService(root, mock);
+    const client = await service.getClient(target);
+    const echoed = "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true&fields=id&upload_id=session_12345&session_crd=abc";
+    mock.setNextLocation(echoed);
+    const started = await client.startResumableUpload({
+      name: "archive.json", mimeType: "application/json", size: 100, parentId: ROOT_ID, id: "generated_12345",
+    });
+    assert.equal(started.sessionUrl, echoed);
+  });
+
   it("rejects foreign session URLs and does not follow upload redirects", async () => {
     const root = await tempRoot();
     const mock = createTransportMock();
