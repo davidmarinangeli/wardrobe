@@ -1,5 +1,7 @@
 import { forwardRef, useCallback, useState } from "react";
 import { Image } from "@unpic/react";
+import { useBrowserState } from "./browser-state.js";
+import { archiveImageSource } from "./archive-image-source.js";
 
 const IPX_OPTIONS = { ipx: { baseURL: "/_ipx" } };
 const DEFAULT_BREAKPOINTS = [160, 240, 320, 480, 640, 800, 960, 1280];
@@ -8,6 +10,8 @@ function sourcePath(src) {
   if (!src || typeof src !== "string") return src;
   return src.split(/[?#]/, 1)[0];
 }
+
+export { archiveImageSource } from "./archive-image-source.js";
 
 export const OptimizedImage = forwardRef(function OptimizedImage({
   src,
@@ -21,7 +25,9 @@ export const OptimizedImage = forwardRef(function OptimizedImage({
   onLoad,
   ...props
 }, ref) {
-  const normalizedSource = sourcePath(src);
+  const { state: browserState } = useBrowserState();
+  const generationSource = archiveImageSource(src, browserState?.archiveGeneration);
+  const normalizedSource = sourcePath(generationSource);
 
   // Large photos (modeled shots are ~1264x848) stream in top-down. Without a
   // loaded flag the card sits half-painted for seconds and reads as broken;
@@ -43,7 +49,7 @@ export const OptimizedImage = forwardRef(function OptimizedImage({
   const shared = { "data-loaded": loaded || undefined, onLoad: handleLoad };
 
   if (!normalizedSource || normalizedSource.startsWith("data:") || normalizedSource.startsWith("blob:") || normalizedSource.startsWith("/api/")) {
-    return <img ref={markIfCached} src={src} alt={alt} sizes={sizes} loading={loading || (priority ? "eager" : "lazy")} decoding={decoding || "async"} {...shared} {...props} />;
+    return <img ref={markIfCached} src={generationSource} alt={alt} sizes={sizes} loading={loading || (priority ? "eager" : "lazy")} decoding={decoding || "async"} {...shared} {...props} />;
   }
 
   return (

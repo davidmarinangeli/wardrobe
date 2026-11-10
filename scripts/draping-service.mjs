@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { buildDrapePath, drapeDefs, DRAPE_GROUND, DRAPE_SETS, findCandidate } from "../shared/draping.mjs";
+import { readReferenceBytes } from "./archive-store.mjs";
 
 export { DRAPE_SETS, findCandidate };
 
@@ -58,24 +59,11 @@ async function detectNeck(pngBuffer) {
   };
 }
 
-async function loadPortraitSource(root) {
-  const facePath = process.env.WARDROBE_FACE_REFERENCE
-    ? path.resolve(root, process.env.WARDROBE_FACE_REFERENCE)
-    : path.resolve(root, "data/model-reference-face.png");
-
-  try {
-    const stat = await fs.stat(facePath);
-    return { file: facePath, stat, isFaceReference: true };
-  } catch {}
-
-  const modelPath = process.env.WARDROBE_MODEL_REFERENCE
-    ? path.resolve(root, process.env.WARDROBE_MODEL_REFERENCE)
-    : path.resolve(root, "data/model-reference.png");
-  try {
-    const stat = await fs.stat(modelPath);
-    return { file: modelPath, stat, isFaceReference: false };
-  } catch {}
-
+async function loadPortraitSource(root, { dataDir, setting }) {
+  const face = await readReferenceBytes({ root, dataDir, setting, kind: "face" });
+  if (face) return { ...face, stat: await fs.stat(face.path), isFaceReference: true };
+  const model = await readReferenceBytes({ root, dataDir, setting, kind: "full" });
+  if (model) return { ...model, stat: await fs.stat(model.path), isFaceReference: false };
   throw new Error("No face or model reference photo found in the data directory");
 }
 
@@ -84,8 +72,10 @@ async function loadPortraitSource(root) {
  * writes it once to `outputDir`. Re-runs only when the source photo changes —
  * the browser recolours the drape itself, so nothing else needs rasterising.
  */
-export async function prepareSubject(root, outputDir) {
-  const source = await loadPortraitSource(root);
+export async function prepareSubject(root, outputDir, options = {}) {
+  const setting = options.setting || ((name, fallback = "") => process.env[name] || fallback);
+  const dataDir = options.dataDir || path.resolve(root, setting("WARDROBE_DATA_DIR", "data"));
+  const source = await loadPortraitSource(root, { dataDir, setting });
   const signature = `${source.file}:${source.stat.mtimeMs}:${source.stat.size}:v2`;
   const manifestPath = path.join(outputDir, MANIFEST_FILE);
 
@@ -99,10 +89,10 @@ export async function prepareSubject(root, outputDir) {
 
   await fs.mkdir(outputDir, { recursive: true });
 
-  const metadata = await sharp(source.file).metadata();
+  const metadata = await sharp(source.data).metadata();
   // Trim the dead headroom above the hair so the face fills the frame.
   const trimTop = Math.round((metadata.height || 0) * 0.03);
-  let pipeline = sharp(source.file);
+  let pipeline = sharp(source.data);
   if (trimTop > 0 && metadata.width && metadata.height) {
     pipeline = pipeline.extract({
       left: 0,
@@ -159,8 +149,8 @@ export function drapeOverlaySvg(width, height, neck, color) {
  * Flattens the portrait under one fabric colour. Only used when a comparison is
  * sent to the vision model — the interactive view never needs this.
  */
-export async function renderDrapedPortrait(root, outputDir, color) {
-  const subject = await prepareSubject(root, outputDir);
+export async function renderDrapedPortrait(root, outputDir, color, options = {}) {
+  const subject = await prepareSubject(root, outputDir, options);
   const portrait = await fs.readFile(path.join(outputDir, SUBJECT_FILE));
   const overlay = Buffer.from(
     drapeOverlaySvg(subject.width, subject.height, subject.neck, color)

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { createArchiveRequestHandler } from "./archive-coordinator.mjs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import {
@@ -12,6 +13,8 @@ import {
 } from "./import-job-api.mjs";
 import { SEASONS } from "../shared/color-seasons.mjs";
 import { prepareSubject, renderDrapedPortrait, DRAPE_SETS } from "./draping-service.mjs";
+import { readReferenceBytes } from "./archive-store.mjs";
+import { markBrowserStateFields } from "./browser-state-api.mjs";
 
 function sanitizeHex(hex, fallback = "#888888") {
   const match = String(hex || "").match(/#[0-9a-fA-F]{6}\b/i);
@@ -366,15 +369,9 @@ export function colorProfileApi(options = {}) {
 
   async function getReferenceImage() {
     const face = await loadFaceReference(root, setting);
-    if (face?.data) return { data: face.data, mime: face.mime || "image/png", isFaceCrop: true };
-
-    const modelPath = path.resolve(root, setting("WARDROBE_MODEL_REFERENCE", "data/model-reference.png"));
-    try {
-      const data = await readFile(modelPath);
-      return { data, mime: "image/png", isFaceCrop: false };
-    } catch {
-      return null;
-    }
+    if (face?.data) return { ...face, isFaceCrop: true };
+    const model = await readReferenceBytes({ root, dataDir, setting, kind: "full" });
+    return model ? { ...model, isFaceCrop: false } : null;
   }
 
   async function handler(req, res, next) {
@@ -430,7 +427,7 @@ export function colorProfileApi(options = {}) {
       // the portrait and where its neck is. One image, cached on disk.
       if (url.pathname === "/api/color-profile/drapes" && req.method === "GET") {
         const publicDrapesDir = path.resolve(root, "public/drapes");
-        const subject = await prepareSubject(root, publicDrapesDir);
+        const subject = await prepareSubject(root, publicDrapesDir, { dataDir, setting });
         return json(res, 200, { subject, sets: DRAPE_SETS });
       }
 
@@ -450,7 +447,7 @@ export function colorProfileApi(options = {}) {
             id: candidate.id,
             name: candidate.name,
             type: candidate.type,
-            buffer: await renderDrapedPortrait(root, publicDrapesDir, color),
+            buffer: await renderDrapedPortrait(root, publicDrapesDir, color, { dataDir, setting }),
           });
         }
 
@@ -569,6 +566,7 @@ export function colorProfileApi(options = {}) {
         };
 
         await atomicJson(cacheFile, profile);
+        await markBrowserStateFields(dataDir, ["colorProfile"]);
         return json(res, 200, { profile, cached: false });
       }
 
@@ -586,6 +584,7 @@ export function colorProfileApi(options = {}) {
         };
 
         await atomicJson(cacheFile, updated);
+        await markBrowserStateFields(dataDir, ["colorProfile"]);
         return json(res, 200, { saved: true, profile: updated });
       }
 
@@ -603,7 +602,7 @@ export function colorProfileApi(options = {}) {
       root = config.root;
       dataDir = path.resolve(root, setting("WARDROBE_DATA_DIR", "data"));
     },
-    configureServer(server) { server.middlewares.use(handler); },
-    configurePreviewServer(server) { server.middlewares.use(handler); },
+    configureServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },
+    configurePreviewServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },
   };
 }

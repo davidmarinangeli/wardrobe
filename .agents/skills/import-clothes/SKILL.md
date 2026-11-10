@@ -11,7 +11,7 @@ Turn photos of worn clothing into source-faithful transparent catalog PNGs and m
 
 Obtain the source-image folder unless the user already supplied it. Resolve relative paths from the repository root. Confirm this is the Wardrobe repository by checking for `package.json`, `scripts/import-job-api.mjs`, and `data/` in `.gitignore`.
 
-At the start, check for the identity reference at `data/model-reference.png` or the local path configured by `WARDROBE_MODEL_REFERENCE`. If neither exists, ask: `Please provide a clear PNG reference photo of yourself for the modeled wardrobe images. What is its local path?` Do not begin modeled generation until the user supplies it. Keep the image local and never add it to Git.
+Resolve the archive directory as `path.resolve(repo, WARDROBE_DATA_DIR || 'data')`. Check for the identity reference at `<archive>/model-reference.png` or the local path configured by `WARDROBE_MODEL_REFERENCE`. If neither exists, ask: `Please provide a clear PNG reference photo of yourself for the modeled wardrobe images. What is its local path?` Do not begin modeled generation until the user supplies it. Keep the image local and never add it to Git.
 
 Default to direct database import when the user asks to add clothes to Wardrobe. If they only request cutouts, ask for a new output-folder name instead and skip the database step.
 
@@ -51,6 +51,14 @@ Keep all intermediate files under `$WORK`. Delete it only after delivery succeed
 
 Use `rg --files` first. Include JPEG, PNG, WebP, HEIC/HEIF, TIFF, BMP, and AVIF. Exclude `data/`, `dist/`, `node_modules/`, and `.git/`.
 
+For a Wardrobe database import, capture all source photos before creating working copies, crops, or generated images. From the repository root run:
+
+```bash
+node scripts/capture-import-sources.mjs --input "$INPUT" --output "$WORK/source-capture.json"
+```
+
+The capture manifest also records `provenanceGeneration`. Copy that exact integer to the top level of the final v2 `$WORK/manifest.json`; it pins all later AI results to the archive generation seen before generation began. The deterministic importer acquires the archive writer lease and rejects the manifest if a restore changed that generation. The command walks nested folders and records each exact relative `sourceRef` (including subfolders, so repeated basenames remain distinct) plus its archive-relative `originals/` path, size, SHA-256, MIME type, and filename. Keep these descriptors in `$WORK/manifest.json`: put every source used by an accepted item in its `originalSources` array, keep full relative names in `sourceRefs`, and set `references[].original` to the matching `sourceRef`. The deterministic importer verifies the checksum and resolves that exact source reference; never resolve by basename. The captured original is already durable under the configured `WARDROBE_DATA_DIR`, so do not remove or rewrite it during cleanup. For cutout-only delivery, skip archive capture.
+
 Create upright RGB JPEG working copies at quality 95 or better without upscaling. Make labeled contact sheets of at most 12 photos and inspect every sheet. Inventory every deliberately worn top, jacket, bottom, accessory, and pair of shoes.
 
 ### 2. Build the manifest
@@ -73,7 +81,8 @@ description or image is identical.
       "secondaryColor": "#f2efe6",
       "tags": ["knit", "fair isle", "zip"],
       "status": "accepted",
-      "sourceRefs": ["IMG_1284.jpg", "IMG_1289.jpg"],
+      "sourceRefs": ["a/IMG_1284.jpg", "b/IMG_1289.jpg"],
+      "originalSources": [{"sourceRef": "a/IMG_1284.jpg", "path": "originals/<sha256>.jpg", "size": 12345, "sha256": "<64-hex-sha256>", "mime": "image/jpeg", "filename": "IMG_1284.jpg"}],
       "unknowns": [],
       "variants": [{
         "id": "navy-fair-isle-cardigan-1-standard",
@@ -82,13 +91,13 @@ description or image is identical.
         "origin": "photo",
         "file": "navy-fair-isle-cardigan.png",
         "modeledFile": "navy-fair-isle-cardigan.png",
-        "sourceRefs": ["IMG_1284.jpg"],
+        "sourceRefs": ["a/IMG_1284.jpg"],
         "approvalStatus": "approved",
         "assetRevision": 1
       }],
       "references": [{
         "id": "navy-fair-isle-cardigan-reference-1",
-        "original": "IMG_1284.jpg",
+        "original": "a/IMG_1284.jpg",
         "role": "view",
         "scope": "item",
         "distinctive": false,
@@ -154,9 +163,9 @@ Inspect checkerboard contact sheets of at most 12 items and compare sensitive re
 
 ### 7. Generate modeled photos
 
-Use `data/model-reference.png` as the identity reference unless `WARDROBE_MODEL_REFERENCE` points to another local PNG. If neither exists, ask the user for a clear reference photo before continuing. Never add that photo to Git.
+Use `<archive>/model-reference.png` as the identity reference unless `WARDROBE_MODEL_REFERENCE` points to another local PNG. If neither exists, ask the user for a clear reference photo before continuing. Never add that photo to Git.
 
-Also check for a close-up face/headshot reference at `data/model-reference-face.png` (or `WARDROBE_FACE_REFERENCE`). It's optional, but strongly recommended: a full-body reference alone usually leaves the face as a tiny fraction of the frame, which is the most common cause of identity drift across generations. If it exists, include it as an additional identity image alongside the full-body reference. If it doesn't exist, proceed with the full-body reference alone and mention to the user that adding a face closeup would likely improve consistency.
+Also check for a close-up face/headshot reference at `<archive>/model-reference-face.png` (or `WARDROBE_FACE_REFERENCE`). It's optional, but strongly recommended: a full-body reference alone usually leaves the face as a tiny fraction of the frame, which is the most common cause of identity drift across generations. If it exists, include it as an additional identity image alongside the full-body reference. If it doesn't exist, proceed with the full-body reference alone and mention to the user that adding a face closeup would likely improve consistency.
 
 For every accepted cutout, use Imagegen with the identity image(s) first — full-body reference, then the face closeup if present — and the exact garment PNG last. Save a horizontal 3:2 PNG as `$WORK/modeled/SLUG.png` and set `modeledFile` to `SLUG.png` in the manifest.
 
@@ -189,7 +198,7 @@ node .agents/skills/import-clothes/scripts/import-to-wardrobe.mjs \
   --manifest "$WORK/manifest.json"
 ```
 
-The script validates the cutouts and modeled PNGs, copies them into `data/imported/`, and atomically updates `data/library.json`. It uses each manifest record's immutable `importId` for record identity, never the cutout's pixel hash. Rerunning the same manifest updates the same record and assets without creating duplicates; distinct `importId` values remain distinct even when their PNG bytes are identical. A legacy manifest that predates `importId` may use the old cutout-hash identity solely for compatibility with records already imported by that version; do not omit `importId` from new manifests.
+The script reads `WARDROBE_DATA_DIR` (default `data`), verifies every declared original against its archive path, size, and SHA-256, preserves historical source labels when an old manifest has no captured bytes, copies cutouts and modeled PNGs into the configured archive, and atomically updates `library.json`. It uses each manifest record's immutable `importId` for record identity, never the cutout's pixel hash. Rerunning the same manifest updates the same record and assets without creating duplicates; distinct `importId` values remain distinct even when their PNG bytes are identical. A legacy manifest that predates `importId` may use the old cutout-hash identity solely for compatibility with records already imported by that version; do not omit `importId` from new manifests.
 
 For large batches, `scripts/bulk-import.mjs --prepare --manifest ...` writes
 this v2 manifest and review assets first. Set only approved records to
@@ -197,7 +206,7 @@ this v2 manifest and review assets first. Set only approved records to
 variant is written. Each detection is present as its own manifest record,
 including when its name, crop, or pixels match another record.
 
-Restart the dev server only if the running app does not pick up the database change, then verify the new item count at `/api/import/wardrobe` and visually inspect the gallery.
+Restart the dev server only if the running app does not pick up the database change, then verify the new item count at `/api/import/wardrobe` and visually inspect the gallery. New source references resolve through the archive asset route after the archive is copied to another installation; historical filename-only references remain provenance labels and are reported as unavailable rather than treated as local media.
 
 For cutout-only delivery, create the requested new child folder under the repository root and copy only accepted PNGs into it. Do not write the database.
 

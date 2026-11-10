@@ -3,7 +3,7 @@ import { Broom, Gear, Lightbulb, Palette } from "@phosphor-icons/react";
 import { WardrobeImportFlow } from "./import-flow.jsx";
 import { api } from "./api.js";
 import { buildOutfitIndex } from "../shared/outfit-index.mjs";
-import { ColorProfileModal, SEASONS, itemMatchesPalette, readColorProfile } from "./color-profile.jsx";
+import { ColorProfileModal, SEASONS, itemMatchesPalette } from "./color-profile.jsx";
 import { Outfits } from "./outfits.jsx";
 import { Mirror } from "./mirror.jsx";
 import { Inspo } from "./inspo.jsx";
@@ -20,8 +20,10 @@ import { BottomNav } from "./components/BottomNav.jsx";
 import { MobileCompactBar, MobileHeadRow, useMobileHeaderScroll } from "./components/MobileHeader.jsx";
 import { useChromeScroll } from "./hooks/useChromeScroll.js";
 import "./components/mobile-chrome.css";
-import { DISMISS_KEY as ONBOARDING_DISMISS_KEY, Onboarding, RESUME_KEY as ONBOARDING_RESUME_KEY, SWITCHED_KEY as PROVIDER_SWITCHED_KEY } from "./onboarding.jsx";
+import { Onboarding, RESUME_KEY as ONBOARDING_RESUME_KEY, SWITCHED_KEY as PROVIDER_SWITCHED_KEY } from "./onboarding.jsx";
 import { resolveOutfitPieces } from "../shared/wardrobe-model.mjs";
+import { ensureBrowserStateReady, refreshBrowserState, updateBrowserState, useBrowserState } from "./browser-state.js";
+import { SettingsModal } from "./settings-modal.jsx";
 
 const EMPTY_OUTFIT_INDEX = { outfits: {}, byItem: {} };
 const VIEW_TITLES = {
@@ -31,54 +33,9 @@ const VIEW_TITLES = {
   inspo: "Inspo",
 };
 
-const STORAGE_KEY = "open-wardrobe-edits-v1";
-const DELETED_STORAGE_KEY = "open-wardrobe-deleted-v1";
-
-function readEdits() {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-  } catch {
-    return {};
-  }
-}
-
-
-function persistEdit(item) {
-  const edits = readEdits();
-  edits[item.id] = {
-    name: item.name || "",
-    part: item.part,
-    color: item.color || null,
-    secondaryColor: item.secondaryColor || null,
-    tags: item.tags || [],
-  };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(edits));
-}
-
-function removePersistedEdit(id) {
-  const edits = readEdits();
-  delete edits[id];
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(edits));
-}
-
-function readDeletedItems() {
-  try {
-    const value = JSON.parse(localStorage.getItem(DELETED_STORAGE_KEY) || "[]");
-    return new Set(Array.isArray(value) ? value : []);
-  } catch {
-    return new Set();
-  }
-}
-
-function persistDeletedItem(id) {
-  const deleted = readDeletedItems();
-  deleted.add(id);
-  localStorage.setItem(DELETED_STORAGE_KEY, JSON.stringify([...deleted]));
-}
-
-// A developer setting, findable but quiet: a small dot on the gear button
-// reporting the current Gemini mode, nothing more. The actual switch lives in
-// Settings (Onboarding's DoneStep) — see AiModeToggle there.
+// A developer setting, findable but quiet: a small dot on the gear button and
+// the AI tab reporting the current Gemini mode, nothing more. The actual switch
+// lives in the AI tab of Settings — see AiModeToggle in onboarding.jsx.
 function AiModeBadge({ setup }) {
   if (!setup || setup.provider !== "gemini") return null;
   const missingKey = setup.mode === "test" ? !setup.hasTestKey : !setup.hasProdKey;
@@ -120,12 +77,19 @@ export function App() {
     setSelectedId(id);
   }, []);
   const [loading, setLoading] = useState(true);
+  const [loadedArchiveGeneration, setLoadedArchiveGeneration] = useState(null);
   const [error, setError] = useState("");
-  const [colorProfile, setColorProfile] = useState(() => readColorProfile());
+  const [colorProfile, setColorProfile] = useState(null);
+  const browserStateSnapshot = useBrowserState();
+  const browserState = browserStateSnapshot.state;
   const [showColorQuiz, setShowColorQuiz] = useState(false);
   const [onlyMatches, setOnlyMatches] = useState(false);
   const [aiSetup, setAiSetup] = useState(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  // Which Settings tab is open ("ai" | "archive"), or null when Settings is closed.
+  const [settingsTab, setSettingsTab] = useState(null);
+  const [settingsReturnToWizard, setSettingsReturnToWizard] = useState(false);
+  const [archiveMaintenanceActive, setArchiveMaintenanceActive] = useState(false);
   const [showInspoImporter, setShowInspoImporter] = useState(false);
   const [showOutfitBuilder, setShowOutfitBuilder] = useState(false);
   const [showOutfitSuggestions, setShowOutfitSuggestions] = useState(false);
@@ -142,10 +106,16 @@ export function App() {
   const [retiredItems, setRetiredItems] = useState([]);
   const [wear, setWear] = useState(null);
   const [showDeclutter, setShowDeclutter] = useState(false);
+  const observedArchiveGeneration = useRef(null);
+  const initialArchiveLoadStarted = useRef(false);
+  const currentArchiveGeneration = useRef(browserState?.archiveGeneration ?? 0);
+  currentArchiveGeneration.current = browserState?.archiveGeneration ?? 0;
+  const archiveReady = browserStateSnapshot.status === "ready" && !loading && !archiveMaintenanceActive
+    && loadedArchiveGeneration === (browserState?.archiveGeneration ?? 0);
 
   useEffect(() => {
     if (view !== "overview") setOverviewSelectionCount(0);
-  }, [view]);
+  }, [view, browserState?.archiveGeneration]);
 
   useEffect(() => {
     if (view !== "wardrobe") return undefined;
@@ -153,19 +123,23 @@ export function App() {
     // Silent on failure: the count is an enrichment, and a piece with no
     // outfits looks exactly like a piece whose index didn't load — neither is
     // an error worth putting in front of someone.
+    const generation = currentArchiveGeneration.current;
     api("/api/outfits/index")
-      .then((payload) => { if (!cancelled) setOutfitIndex(buildOutfitIndex(payload.outfits)); })
+      .then((payload) => { if (!cancelled && generation === currentArchiveGeneration.current) setOutfitIndex(buildOutfitIndex(payload.outfits)); })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [view]);
+  }, [view, browserState?.archiveGeneration]);
 
   // Refetched whenever it is missing — on mount, on returning to the wardrobe,
   // and after a triage decision nulls it. Silent on failure: the hot card simply
   // does not appear, which is the same thing the user sees when there is nothing
   // to say, and neither is an error worth interrupting them for.
-  const refreshWear = useCallback(() => api("/api/preferences/wear")
-    .then(setWear)
-    .catch(() => {}), []);
+  const refreshWear = useCallback(() => {
+    const generation = currentArchiveGeneration.current;
+    return api("/api/preferences/wear")
+      .then((profile) => { if (generation === currentArchiveGeneration.current) setWear(profile); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (wear || view !== "wardrobe") return undefined;
@@ -181,18 +155,34 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    const acceptedResults = new Set([
+      "connected", "oauth_state_invalid", "oauth_denied", "oauth_code_missing", "oauth_scope_insufficient",
+      "oauth_refresh_missing", "configuration_incomplete", "configuration_invalid", "private_state_invalid",
+      "target_changed", "reconnect_required", "google_unavailable", "google_permission_denied", "folder_access_denied",
+    ]);
+    const url = new URL(window.location.href);
+    const result = url.searchParams.get("googleDrive");
+    if (!acceptedResults.has(result)) return;
+    url.searchParams.delete("googleDrive");
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+    setShowOnboarding(false);
+    setSettingsReturnToWizard(false);
+    setSettingsTab("archive");
+  }, []);
+
+  useEffect(() => {
     if (!aiSetup || loading) return;
     // A provider switch reloads the page mid-Settings; bring Settings back so
     // the switch can be confirmed where it was made. The picker clears the key.
     if (sessionStorage.getItem(PROVIDER_SWITCHED_KEY)) {
-      setShowOnboarding(true);
+      setSettingsTab("ai");
       return;
     }
     if (aiSetup.ready) return;
     const resuming = sessionStorage.getItem(ONBOARDING_RESUME_KEY) === "1";
-    const dismissed = localStorage.getItem(ONBOARDING_DISMISS_KEY) === "1";
+    const dismissed = browserState?.onboardingDismissed === true;
     if (resuming || (!dismissed && items.length === 0)) setShowOnboarding(true);
-  }, [aiSetup, loading, items.length]);
+  }, [aiSetup, loading, items.length, browserState]);
 
   const setAiMode = useCallback(async (mode) => {
     const response = await fetch("/api/import/mode", {
@@ -206,31 +196,33 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/import/wardrobe", { cache: "no-store" })
-      .then((response) => {
-        if (!response.ok) throw new Error("Could not load the wardrobe.");
-        return response.json();
-      })
-      .then((loadedItems) => {
-        const edits = readEdits();
-        const deleted = readDeletedItems();
-        const visibleItems = loadedItems
-          .filter((item) => !deleted.has(item.id))
-          .map((item) => ({ ...item, ...(edits[item.id] || {}) }));
-        // No status at all is the same fact as "active": an item that was never
-        // triaged and one triaged back are indistinguishable, by design.
-        setItems(visibleItems.filter((item) => !item.status || item.status === "active"));
-        setRetiredItems(visibleItems.filter((item) => item.status && item.status !== "active"));
-      })
-      .catch((requestError) => setError(requestError.message))
-      .finally(() => setLoading(false));
-  }, []);
+    let cancelled = false;
+    (async () => {
+      await ensureBrowserStateReady();
+      if (cancelled) return;
+      if (initialArchiveLoadStarted.current) return;
+      initialArchiveLoadStarted.current = true;
+      const generation = currentArchiveGeneration.current;
+      const loadedItems = await api("/api/import/wardrobe", { cache: "no-store" });
+      if (cancelled || generation !== currentArchiveGeneration.current) return;
+      setItems(loadedItems.filter((item) => !item.status || item.status === "active"));
+      setRetiredItems(loadedItems.filter((item) => item.status && item.status !== "active"));
+      setLoadedArchiveGeneration(generation);
+    })()
+      .catch((requestError) => { if (!cancelled) setError(requestError.message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [browserState?.archiveGeneration]);
 
   // Sync color profile from server database on mount
   useEffect(() => {
+    if (!browserState) return undefined;
+    let cancelled = false;
+    const generation = browserState.archiveGeneration;
     fetch("/api/color-profile/status", { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
+        if (cancelled || generation !== currentArchiveGeneration.current) return;
         if (data?.hasProfile && data.profile?.season) {
           const resolvedSeason = SEASONS[data.profile.season] || SEASONS[data.profile.parentSeason] || SEASONS["autumn-deep"];
           const fullProfile = {
@@ -240,13 +232,61 @@ export function App() {
             palette: Array.isArray(data.profile.palette) && data.profile.palette.length ? data.profile.palette : (resolvedSeason.palette || []),
           };
           setColorProfile(fullProfile);
-          try {
-            localStorage.setItem("open-wardrobe-color-profile-v1", JSON.stringify(fullProfile));
-          } catch {}
-        }
+        } else setColorProfile(null);
       })
       .catch(() => {});
-  }, []);
+    return () => { cancelled = true; };
+  }, [browserState?.revision, browserState?.archiveGeneration]);
+
+  useEffect(() => {
+    const generation = browserState?.archiveGeneration;
+    if (!generation) return undefined;
+    if (observedArchiveGeneration.current === null) {
+      observedArchiveGeneration.current = generation;
+      return undefined;
+    }
+    if (observedArchiveGeneration.current === generation) return undefined;
+    observedArchiveGeneration.current = generation;
+    // Local state can include references to records that no longer exist in
+    // the selected archive. Clear every domain cache and open surface before
+    // reloading so no dialog or background closure can keep rendering it.
+    setItems([]);
+    setLoading(true);
+    setError("");
+    setLoadedArchiveGeneration(null);
+    setRetiredItems([]);
+    setOutfitIndex(EMPTY_OUTFIT_INDEX);
+    setWear(null);
+    setColorProfile(null);
+    setSelectedId(null);
+    setOpenedFrom(null);
+    setOpenedVariantId(null);
+    setOpenOutfitId(null);
+    setOnlyMatches(false);
+    setOverviewSelectionCount(0);
+    setShowColorQuiz(false);
+    setShowDeclutter(false);
+    setShowInspoImporter(false);
+    setShowOutfitBuilder(false);
+    setShowOutfitSuggestions(false);
+    let cancelled = false;
+    Promise.all([
+      api("/api/import/wardrobe", { cache: "no-store" }),
+      api("/api/outfits/index", { cache: "no-store" }),
+      api("/api/preferences/wear", { cache: "no-store" }),
+    ]).then(([loadedItems, outfitPayload, wearProfile]) => {
+      if (cancelled || generation !== currentArchiveGeneration.current) return;
+      setItems(loadedItems.filter((item) => !item.status || item.status === "active"));
+      setRetiredItems(loadedItems.filter((item) => item.status && item.status !== "active"));
+      setOutfitIndex(buildOutfitIndex(outfitPayload.outfits));
+      setWear(wearProfile);
+      setLoadedArchiveGeneration(generation);
+      setLoading(false);
+      setSelectedId(null);
+      setOpenOutfitId(null);
+    }).catch((requestError) => { if (!cancelled) { setError(requestError.message); setLoading(false); } });
+    return () => { cancelled = true; };
+  }, [browserState?.archiveGeneration]);
 
   const selectedItem = items.find((item) => item.id === selectedId) || null;
 
@@ -370,53 +410,77 @@ export function App() {
   };
 
   const saveItem = async (updatedItem) => {
+    const generation = currentArchiveGeneration.current;
     try {
       const response = await fetch(`/api/wardrobe/items/${encodeURIComponent(updatedItem.id)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: updatedItem.name, part: updatedItem.part, color: updatedItem.color, secondaryColor: updatedItem.secondaryColor, tags: updatedItem.tags }) });
       if (!response.ok) throw new Error("Could not save wardrobe item.");
       updatedItem = await response.json();
     } catch (requestError) {
-      setError(requestError.message);
+      if (generation === currentArchiveGeneration.current) setError(requestError.message);
       return;
     }
+    if (generation !== currentArchiveGeneration.current) return;
     setItems((current) => current.map((item) => item.id === updatedItem.id ? updatedItem : item));
-    persistEdit(updatedItem);
   };
 
   const applyBulkItemUpdates = useCallback((updatedItems) => {
+    if (currentArchiveGeneration.current !== (browserState?.archiveGeneration ?? 0)) return;
     const updates = new Map(updatedItems.map((item) => [item.id, item]));
     setItems((current) => current.map((item) => updates.has(item.id) ? updates.get(item.id) : item));
+  }, [browserState?.archiveGeneration]);
+
+  const deleteItem = async (id) => {
+    const generation = currentArchiveGeneration.current;
     try {
-      const edits = readEdits();
-      for (const item of updatedItems) {
-        edits[item.id] = {
-          name: item.name || "",
-          part: item.part,
-          color: item.color || null,
-          secondaryColor: item.secondaryColor || null,
-          tags: item.tags || [],
-        };
-      }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(edits));
-    } catch {
-      // The server is authoritative; a full local cache must not leave React stale.
+      await api(`/api/wardrobe/items/${encodeURIComponent(id)}`, { method: "DELETE" });
+    } catch (requestError) {
+      if (generation === currentArchiveGeneration.current) setError(requestError.message);
+      return;
+    }
+    if (generation !== currentArchiveGeneration.current) return;
+    setItems((current) => current.filter((item) => item.id !== id));
+    setSelectedId(null);
+  };
+
+  const dismissOnboarding = useCallback(async () => {
+    try {
+      await updateBrowserState("onboardingDismissed", true);
+      setShowOnboarding(false);
+    } catch (requestError) {
+      setError(requestError.message);
     }
   }, []);
 
-  const deleteItem = async (id) => {
-    if (id.startsWith("import-")) {
-      try {
-        const response = await fetch(`/api/import/wardrobe/${id}`, { method: "DELETE" });
-        if (!response.ok && response.status !== 404) throw new Error("Could not delete the imported item.");
-      } catch (requestError) {
-        setError(requestError.message);
-        return;
-      }
+  const openSettings = useCallback(() => {
+    setSettingsReturnToWizard(false);
+    setShowOnboarding(false);
+    setSettingsTab("ai");
+  }, []);
+
+  const openArchiveFromWizard = useCallback(() => {
+    setSettingsReturnToWizard(true);
+    setSettingsTab("archive");
+  }, []);
+
+  const closeSettings = useCallback(() => {
+    setSettingsTab(null);
+    setShowOnboarding(settingsReturnToWizard);
+    setSettingsReturnToWizard(false);
+  }, [settingsReturnToWizard]);
+
+  const onArchiveChanged = useCallback(async () => {
+    setError("");
+    if (loadedArchiveGeneration === null || error) {
+      initialArchiveLoadStarted.current = false;
+      setLoading(true);
     }
-    setItems((current) => current.filter((item) => item.id !== id));
-    removePersistedEdit(id);
-    persistDeletedItem(id);
-    setSelectedId(null);
-  };
+    try { await refreshBrowserState(); } catch { /* The settings surface keeps the safe status error visible. */ }
+  }, [loadedArchiveGeneration, error]);
+
+  const onArchiveMaintenanceChange = useCallback((active) => {
+    setArchiveMaintenanceActive(active);
+    if (active) setError("");
+  }, []);
 
   /**
    * Move a piece between the wardrobe and a pile. Never deletes: the photos stay
@@ -425,6 +489,7 @@ export function App() {
    * a jacket. Reversible in one tap from the piles.
    */
   const setItemStatus = useCallback(async (id, status) => {
+    const generation = currentArchiveGeneration.current;
     let updated;
     try {
       updated = await api(`/api/import/wardrobe/${id}`, {
@@ -432,14 +497,15 @@ export function App() {
         body: JSON.stringify({ status }),
       });
     } catch (requestError) {
-      setError(requestError.message);
+      if (generation === currentArchiveGeneration.current) setError(requestError.message);
       return;
     }
+    if (generation !== currentArchiveGeneration.current) return;
 
     const active = !updated.status || updated.status === "active";
     // Local edits are an overlay the server knows nothing about, so they have to
     // be re-applied here or a rename would silently revert on the way to a pile.
-    const merged = { ...updated, ...(readEdits()[id] || {}) };
+    const merged = updated;
 
     setItems((current) => {
       const without = current.filter((item) => item.id !== id);
@@ -461,10 +527,12 @@ export function App() {
   }, [refreshWear]);
 
   const addImportedItem = useCallback((newItem) => {
+    if (currentArchiveGeneration.current !== (browserState?.archiveGeneration ?? 0)) return;
     setItems((current) => current.some((item) => item.id === newItem.id) ? current : [...current, newItem]);
-  }, []);
+  }, [browserState?.archiveGeneration]);
 
   const generateModeledPhoto = useCallback(async (item, tier, prompt, variantId = item.defaultVariantId) => {
+    const generation = currentArchiveGeneration.current;
     const response = await fetch(`/api/wardrobe/items/${encodeURIComponent(item.id)}/variants/${encodeURIComponent(variantId)}/modeled`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -472,6 +540,7 @@ export function App() {
     });
     const value = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(value.error || "Could not start generating a model photo.");
+    if (generation !== currentArchiveGeneration.current) return;
     setItems((current) => current.map((existing) => existing.id === item.id
       ? { ...existing, ...value, variants: value.variants || existing.variants }
       : existing));
@@ -497,7 +566,7 @@ export function App() {
   const premiumAllowed = !aiSetup || aiSetup.provider !== "gemini" || aiSetup.mode === "prod";
 
   return (
-    <div className={`app-shell${selectedItem ? " has-selection" : ""}`}>
+    <div key={browserState?.archiveGeneration ?? 0} className={`app-shell${selectedItem ? " has-selection" : ""}`}>
       <MobileCompactBar
         title={VIEW_TITLES[view] || "Wardrobe"}
         barRef={barRef}
@@ -517,7 +586,7 @@ export function App() {
               the second slot swaps between Mirror (Wardrobe/Inspo) and
               Suggest outfit (Outfits) entirely, since those aren't the same
               action wearing a different label. */}
-          <div className="top-actions" ref={topActionsRef} data-hidden="false" data-overview-selection={view === "overview" && overviewSelectionCount > 0 ? "true" : "false"}>
+          {!archiveMaintenanceActive && <div className="top-actions" ref={topActionsRef} data-hidden="false" data-overview-selection={view === "overview" && overviewSelectionCount > 0 ? "true" : "false"}>
             <WardrobeImportFlow
               onGarmentApproved={addImportedItem}
               externalSetup={aiSetup}
@@ -547,8 +616,8 @@ export function App() {
               // button does when its whole branch mounts.
               <Mirror key={view} items={items} />
             )}
-          </div>
-          <button type="button" className="setup-trigger" onClick={() => setShowOnboarding(true)} aria-label="Open setup guide">
+          </div>}
+          <button type="button" className="setup-trigger" onClick={openSettings} aria-label="Open settings">
             <Gear size={16} />
             <AiModeBadge setup={aiSetup} />
           </button>
@@ -558,12 +627,20 @@ export function App() {
       <div className="app-shell__page">
         <MobileHeadRow
           title={VIEW_TITLES[view] || "Wardrobe"}
-          onSettings={() => setShowOnboarding(true)}
+          onSettings={openSettings}
           badge={<AiModeBadge setup={aiSetup} />}
           largeRef={largeRef}
         />
 
-        {view === "overview" ? (
+        {!archiveReady ? (
+          <PageStatus
+            loading={!archiveMaintenanceActive && !error}
+            error={error}
+            empty={archiveMaintenanceActive}
+            emptyMessage="È in corso un’operazione sull’archivio: il guardaroba torna disponibile appena finisce. Dettagli in Settings › Archive."
+            noun="archive"
+          />
+        ) : view === "overview" ? (
           <Overview
             items={items}
             premiumAllowed={premiumAllowed}
@@ -591,6 +668,7 @@ export function App() {
           onCloseSuggestions={() => setShowOutfitSuggestions(false)}
           openOutfitId={openOutfitId}
           onOutfitOpened={() => setOpenOutfitId(null)}
+          archiveGeneration={browserState?.archiveGeneration}
         />
       ) : (
         <PageShell
@@ -652,15 +730,15 @@ export function App() {
 
       <BottomNav view={view} onSelect={setView} navRef={bottomNavRef} />
 
-      {selectedItem && <ItemViewer item={selectedItem} openedFrom={openedFrom} initialVariantId={openedVariantId} onClose={() => setSelectedId(null)} onSave={saveItem} onDelete={deleteItem} onGenerateModeled={generateModeledPhoto} premiumAllowed={premiumAllowed} provider={aiSetup?.provider ?? null} outfits={selectedItemOutfits} onOpenOutfit={openOutfit} />}
-      {showColorQuiz && (
+      {archiveReady && selectedItem && <ItemViewer item={selectedItem} openedFrom={openedFrom} initialVariantId={openedVariantId} onClose={() => setSelectedId(null)} onSave={saveItem} onDelete={deleteItem} onGenerateModeled={generateModeledPhoto} premiumAllowed={premiumAllowed} provider={aiSetup?.provider ?? null} outfits={selectedItemOutfits} onOpenOutfit={openOutfit} />}
+      {archiveReady && showColorQuiz && (
         <ColorProfileModal
           initialProfile={colorProfile}
           onClose={() => setShowColorQuiz(false)}
           onSave={(profile) => { setColorProfile(profile); setShowColorQuiz(false); }}
         />
       )}
-      {showDeclutter && (
+      {archiveReady && showDeclutter && (
         <DeclutterPanel
           wear={wear}
           itemsById={declutterItemsById}
@@ -671,14 +749,28 @@ export function App() {
         />
       )}
 
-      {showOnboarding && (
+      {(showOnboarding || settingsReturnToWizard) && (
         <Onboarding
           setup={aiSetup}
           onSetupChange={setAiSetup}
           onModeChange={setAiMode}
-          onClose={() => setShowOnboarding(false)}
+          onClose={dismissOnboarding}
+          onOpenStorage={openArchiveFromWizard}
+          active={showOnboarding && !settingsTab}
         />
       )}
+      <SettingsModal
+        open={settingsTab !== null}
+        tab={settingsTab ?? "ai"}
+        onTabChange={setSettingsTab}
+        onClose={closeSettings}
+        aiSetup={aiSetup}
+        aiBadge={<AiModeBadge setup={aiSetup} />}
+        onAiSetupChange={setAiSetup}
+        onAiModeChange={setAiMode}
+        onArchiveChanged={onArchiveChanged}
+        onMaintenanceChange={onArchiveMaintenanceChange}
+      />
     </div>
   );
 }

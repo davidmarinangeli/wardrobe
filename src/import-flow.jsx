@@ -182,7 +182,7 @@ export function WardrobeImportFlow({ onGarmentApproved, externalSetup, idleLabel
       setAnalyzingFiles((current) => [...current, file]);
       try {
         const imageDataUrl = await fileToDataUrl(file);
-        const result = await api(API, { method: "POST", body: JSON.stringify({ imageDataUrl, metadata: { name: file.name.replace(/\.[^.]+$/, "") } }) });
+        const result = await api(API, { method: "POST", body: JSON.stringify({ imageDataUrl, filename: file.name, metadata: { name: file.name.replace(/\.[^.]+$/, "") } }) });
         const createdJobs = result.jobs || [result];
         if (!createdJobs.length && result.noClothingDetected) {
           setNotice({ tone: "complete", text: "No clothing detected", detail: `We couldn’t find a distinct wearable item in ${file.name}. Try a clearer or more tightly framed image.` });

@@ -20,6 +20,7 @@ import { PageShell } from "./components/PageShell.jsx";
 import { PageStatus } from "./components/PageStatus.jsx";
 import { useViewerKeyboard } from "./hooks/useViewerKeyboard.js";
 import { useWornToday } from "./hooks/useWornToday.js";
+import { updateBrowserSet, useBrowserState } from "./browser-state.js";
 import "./outfits.css";
 import "./suggestions.css";
 
@@ -120,7 +121,7 @@ function scatteredPieces(outfitId, pieces) {
       maxHeight: isFull ? "82%" : "68%",
       maxWidth: "68%",
     };
-    return <img key={item.id} className="outfit-card-hover-piece outfit-card-solo-piece" src={item.image || item.thumbnail} alt="" style={style} />;
+    return <OptimizedImage key={item.id} className="outfit-card-hover-piece outfit-card-solo-piece" src={item.image || item.thumbnail} alt="" style={style} />;
   }
   const seenByPart = {};
   return pieces.map((item) => {
@@ -132,7 +133,7 @@ function scatteredPieces(outfitId, pieces) {
     if (slot.bottom != null) style.bottom = slot.bottom;
     if (slot.left != null) style.left = slot.left;
     if (slot.right != null) style.right = slot.right;
-    return <img key={item.id} className="outfit-card-hover-piece" src={item.image || item.thumbnail} alt="" style={style} />;
+    return <OptimizedImage key={item.id} className="outfit-card-hover-piece" src={item.image || item.thumbnail} alt="" style={style} />;
   });
 }
 
@@ -342,7 +343,7 @@ function OutfitBuilder({ items, initialOutfit, onCancel, onSave }) {
   return typeof document !== "undefined" ? createPortal(content, document.body) : content;
 }
 
-function OutfitCard({ outfit, itemMap, onOpen, wornToday, onWear }) {
+function OutfitCard({ outfit, itemMap, onOpen, wornToday, wearReady, onWear }) {
   const pieces = resolveOutfitPieces(outfit, itemMap);
   const hasModeledImage = Boolean(outfit.modeledImage);
   const processing = outfit.modeledStatus === "processing";
@@ -380,7 +381,8 @@ function OutfitCard({ outfit, itemMap, onOpen, wornToday, onWear }) {
     <button
       type="button"
       className={`outfit-worn-btn${wornToday ? " is-worn" : ""}`}
-      onClick={() => !wornToday && onWear(outfit)}
+      onClick={() => wearReady && !wornToday && onWear(outfit)}
+      disabled={!wearReady || wornToday}
       aria-pressed={wornToday}
       aria-label={wornToday ? `${outfit.name}: logged as worn today` : `Log ${outfit.name} as worn today`}
       title={wornToday ? "Worn today" : "I wore this today"}
@@ -392,7 +394,7 @@ function OutfitCard({ outfit, itemMap, onOpen, wornToday, onWear }) {
   );
 }
 
-function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateModeled, onRename, premiumAllowed, provider, openedFrom, wornToday, onWear }) {
+function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateModeled, onRename, premiumAllowed, provider, openedFrom, wornToday, wearReady, onWear }) {
   const closeButtonRef = useRef(null);
   const pieces = resolveOutfitPieces(outfit, itemMap);
   const [note, setNote] = useState("");
@@ -401,7 +403,7 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
   const [generateError, setGenerateError] = useState("");
   // The chip the refine composer grows out of and shrinks back into.
   const refineChipRef = useRef(null);
-  const { tier, tiers, chooseTier } = useRememberedTier(provider, premiumAllowed);
+  const { tier, tiers, chooseTier, tierReady, tierStateError } = useRememberedTier(provider, premiumAllowed);
   const hasModeledImage = Boolean(outfit.modeledImage);
   const processing = outfit.modeledStatus === "processing";
 
@@ -440,11 +442,13 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
       icon={<Sparkle size={16} weight="bold" aria-hidden="true" />}
       label="Generate model photo"
       busy={busy}
+      disabled={!tierReady}
       onGenerate={generate}
       tier={tier}
       tiers={tiers}
       onTierChange={chooseTier}
       premiumAllowed={premiumAllowed}
+      tierStateError={tierStateError}
     />
   );
 
@@ -471,6 +475,7 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
             tiers={tiers}
             onTierChange={chooseTier}
             premiumAllowed={premiumAllowed}
+            disabled={!tierReady}
           />
         </ModeledHero>
       ) : (
@@ -523,25 +528,14 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
           onDelete={() => onDelete(outfit.id)}
           onCancel={() => onEdit(outfit)}
           cancelLabel={<><PencilSimple size={15} weight="regular" aria-hidden="true" /> Edit</>}
-          onConfirm={() => !wornToday && onWear(outfit)}
-          confirmDisabled={wornToday}
+          onConfirm={() => wearReady && !wornToday && onWear(outfit)}
+          confirmDisabled={!wearReady || wornToday}
           confirmIcon={<CheckCircle size={15} weight={wornToday ? "fill" : "regular"} aria-hidden="true" />}
           confirmLabel={wornToday ? "Worn today" : "Wore it today"}
         />
       </div>
     </ViewerPanel>
   );
-}
-
-const NUDGE_DISMISS_KEY = "open-wardrobe-nudges-dismissed-v1";
-
-function readDismissedNudges() {
-  try {
-    const value = JSON.parse(localStorage.getItem(NUDGE_DISMISS_KEY) || "[]");
-    return new Set(Array.isArray(value) ? value : []);
-  } catch {
-    return new Set();
-  }
 }
 
 // One nudge at a time, on the page gutter, with the action it is asking for
@@ -551,17 +545,23 @@ function readDismissedNudges() {
 // is the primary in the top bar, and a button pointing at another button is the
 // same problem wearing a different hat.
 function SuggestionNudges({ items, colorProfile, onOpenColorQuiz }) {
-  const [dismissed, setDismissed] = useState(readDismissedNudges);
+  const [dismissError, setDismissError] = useState("");
+  const browserState = useBrowserState();
+  const dismissed = useMemo(() => new Set(browserState.state?.dismissedNudges || []), [browserState.state?.dismissedNudges]);
 
-  const dismiss = (id) => setDismissed((current) => {
-    const next = new Set(current).add(id);
-    // Persisted, so a dismissal survives a reload. A banner that comes back
-    // every time the page mounts is how a nudge turns into nagging.
-    try { localStorage.setItem(NUDGE_DISMISS_KEY, JSON.stringify([...next])); } catch { /* private mode */ }
-    return next;
-  });
+  const dismiss = async (id) => {
+    if (!browserState.ready) return;
+    setDismissError("");
+    try {
+      await updateBrowserSet("dismissedNudges", id, true);
+    } catch (error) {
+      setDismissError(error.message);
+    }
+  };
 
-  if (!items) return null;
+  if (!items || !browserState.ready) return (dismissError || browserState.error?.message)
+    ? <p className="status error" role="alert">{dismissError || browserState.error.message}</p>
+    : null;
 
   // Coverage, not category: a wardrobe of dresses can already make complete
   // outfits, so telling it that it "has no bottoms" would be both wrong and a
@@ -588,12 +588,13 @@ function SuggestionNudges({ items, colorProfile, onOpenColorQuiz }) {
     });
   }
 
-  if (!nudges.length) return null;
+  if (!nudges.length) return dismissError ? <p className="status error" role="alert">{dismissError}</p> : null;
 
   const nudge = nudges[0];
 
   return (
     <aside className="nudge-banner" key={nudge.id}>
+      {dismissError && <p className="status error" role="alert">{dismissError}</p>}
       <span className="nudge-banner__icon" aria-hidden="true">
         {nudge.icon === 'palette' ? <Palette size={16} weight="regular" /> : <Sparkle size={16} weight="regular" />}
       </span>
@@ -603,7 +604,7 @@ function SuggestionNudges({ items, colorProfile, onOpenColorQuiz }) {
           {nudge.actionLabel}
         </button>
       )}
-      <button type="button" className="nudge-banner__dismiss" onClick={() => dismiss(nudge.id)} aria-label="Dismiss">
+      <button type="button" className="nudge-banner__dismiss" onClick={() => dismiss(nudge.id)} disabled={!browserState.ready} aria-label="Dismiss">
         <X size={16} />
       </button>
     </aside>
@@ -615,12 +616,12 @@ function SuggestionNudges({ items, colorProfile, onOpenColorQuiz }) {
 // there's exactly one "add" and one "AI action" button per view, not a
 // second pair duplicated on the page itself. builderOutfit (which outfit,
 // if any, is being edited) stays local — the topbar doesn't need to know.
-export function Outfits({ items, premiumAllowed = true, provider = null, colorProfile, onOpenColorQuiz, showBuilder, onOpenBuilder, onCloseBuilder, showSuggestions, onCloseSuggestions, openOutfitId, onOutfitOpened }) {
+export function Outfits({ items, premiumAllowed = true, provider = null, colorProfile, onOpenColorQuiz, showBuilder, onOpenBuilder, onCloseBuilder, showSuggestions, onCloseSuggestions, openOutfitId, onOutfitOpened, archiveGeneration }) {
   const [outfits, setOutfits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [builderOutfit, setBuilderOutfit] = useState(null);
-  const { isWornToday, logWear } = useWornToday();
+  const { isWornToday, logWear, error: wearError, ready: wearReady } = useWornToday();
   const [viewingOutfitId, setViewingOutfitId] = useState(null);
   const [openedFrom, setOpenedFrom] = useState(null);
 
@@ -629,7 +630,7 @@ export function Outfits({ items, premiumAllowed = true, provider = null, colorPr
       .then(setOutfits)
       .catch((requestError) => setError(requestError.message))
       .finally(() => setLoading(false));
-  }, []);
+  }, [archiveGeneration]);
 
   // Arriving from a wardrobe piece ("in 3 looks" -> this outfit). The id is set
   // before this tab has finished loading its outfits, which is fine: the viewer
@@ -722,7 +723,7 @@ export function Outfits({ items, premiumAllowed = true, provider = null, colorPr
     >
       <PageStatus
         loading={loading}
-        error={error}
+        error={error || wearError}
         empty={!items.length}
         emptyMessage="Import some wardrobe pieces first, then come back to build outfits."
         filterEmpty={!!items.length && !outfits.length}
@@ -741,6 +742,7 @@ export function Outfits({ items, premiumAllowed = true, provider = null, colorPr
               itemMap={itemMap}
               onOpen={(id, element) => { setOpenedFrom(element); setViewingOutfitId(id); }}
               wornToday={isWornToday(outfit.id)}
+              wearReady={wearReady}
               onWear={logWear}
             />
           ))}
@@ -760,6 +762,7 @@ export function Outfits({ items, premiumAllowed = true, provider = null, colorPr
           premiumAllowed={premiumAllowed}
           provider={provider}
           wornToday={isWornToday(viewingOutfit.id)}
+          wearReady={wearReady}
           onWear={logWear}
         />
       )}

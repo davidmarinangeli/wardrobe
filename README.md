@@ -148,9 +148,11 @@ Open [localhost:5173](http://localhost:5173). On first run, a setup wizard opens
 2. **Add your key** — pasted into the wizard, saved straight into `.env` on your machine, dev server restarts itself.
 3. **Drop in a reference photo** — a clear, full-body photo of yourself (a face close-up is optional but recommended).
 
-That's it — the importer unlocks and you can drag, paste, or choose a photo to bring in your first piece. Reopen the wizard any time from the gear icon in the header, to switch providers, add a face reference, or check your setup.
+That's it — the importer unlocks and you can drag, paste, or choose a photo to bring in your first piece. These steps are for AI imports and generated photos; open the **Archive / Google Drive** shortcut at any wizard step to configure storage without an AI key. Afterwards, the gear icon opens **Settings**: the **AI** tab switches providers, adds keys, flips the Gemini TEST/PROD mode and replaces the reference photos.
 
 Prefer to do it by hand? Copy `.env.example` to `.env`, add `OPENAI_API_KEY` (or your provider's key), and place a PNG reference photo at `data/model-reference.png` — the wizard is just a friendlier way to do the same thing.
+
+Google Drive archive settings live in the **Archive** tab of **Settings** (gear icon), or the shortcut in the wizard. The tab stays greyed out until the four `GOOGLE_DRIVE_*` values are set in `.env`. Drive connection and backup are opt-in; connecting does not turn synchronization on. See [Google Drive archive setup and recovery](docs/google-drive-operations.md) for OAuth configuration, what is copied, and restore behavior. No AI key is needed to configure or use storage.
 
 ## More setup options
 

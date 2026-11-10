@@ -4,9 +4,12 @@ import path from "node:path";
 import sharp from "sharp";
 import { atomicJson } from "./import-job-api.mjs";
 import { normalizeItemV2, variantApprovedImage } from "../shared/wardrobe-model.mjs";
+import { catalogForHttp } from "../shared/portable-assets.mjs";
 import { buildCheatSheetLayout, CHEAT_SHEET_LAYOUT_VERSION, CHEAT_SHEET_MAX_HEIGHT, CHEAT_SHEET_EXPORT_WIDTH, CHEAT_SHEET_MIN_LOGICAL_HEIGHT, normalizeCheatSheetScale } from "../shared/cheat-sheet-layout.mjs";
 import { buildCheatSheetBeautifyPrompt, CHEAT_SHEET_DESCRIPTION_LIMIT, CHEAT_SHEET_PROMPT_LIMIT, DEFAULT_CHEAT_SHEET_BEAUTIFY_PROMPT } from "../shared/cheat-sheet-prompt.mjs";
 import { cheatSheetImageSettings, generateCheatSheetImage } from "./cheat-sheet-beautify.mjs";
+import { inspectArchiveCatalogs, mimeForExtension, reportSkippedArchiveStartup, resolveArchiveFile } from "./archive-store.mjs";
+import { createArchiveRequestHandler, ensureArchiveRecovered, trackArchivePromise, withArchiveWriteLease } from "./archive-coordinator.mjs";
 
 const API_ROOT = "/api/cheat-sheets";
 const ASSET_ROOT = `${API_ROOT}/assets`;
@@ -18,7 +21,7 @@ function json(res, status, value) {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
-  res.end(JSON.stringify(value));
+  res.end(JSON.stringify(catalogForHttp(value)));
 }
 
 async function readBody(req) {
@@ -80,6 +83,10 @@ export function cheatSheetsApi(options = {}) {
     return next;
   };
 
+  function presentSheet(sheet) {
+    return running.has(sheet.id) ? { ...sheet, beautifyStatus: "processing" } : sheet;
+  }
+
   async function loadSheets() {
     try {
       const value = JSON.parse(await readFile(sheetsFile, "utf8"));
@@ -127,9 +134,8 @@ export function cheatSheetsApi(options = {}) {
       if (!variant) throw Object.assign(new Error(`Variant ${piece.variantId} no longer exists. Remove or replace it.`), { status: 409 });
       const image = variantApprovedImage(item, piece.variantId);
       if (!image) throw Object.assign(new Error(`${item.name} has no approved cutout for this variant`), { status: 409 });
-      const filename = path.basename(new URL(image, "http://localhost").pathname);
       let bytes;
-      try { bytes = await readFile(path.join(libraryAssetDir, filename)); }
+      try { bytes = await readFile(await resolveArchiveFile(dataDir, image)); }
       catch (error) {
         if (error.code === "ENOENT") throw Object.assign(new Error(`${item.name} has a missing cutout. Retry it or remove it.`), { status: 409 });
         throw error;
@@ -271,7 +277,7 @@ export function cheatSheetsApi(options = {}) {
     const isCurrent = (sheet) => sheet?.revision === source.revision
       && sheet.beautifyJobId === source.beautifyJobId && sheet.originalImage === source.originalImage;
     try {
-      const data = await readFile(path.join(assetDir, path.basename(source.originalImage)));
+      const data = await readFile(await resolveArchiveFile(dataDir, source.originalImage));
       const { width, height } = await sharp(data).metadata();
       const prompt = buildCheatSheetBeautifyPrompt({ ...source, prompt: source.beautifyPrompt, width, height });
       const generated = await generateImage({ data, prompt, width, height, settings });
@@ -324,9 +330,10 @@ export function cheatSheetsApi(options = {}) {
       if (running.has(id)) throw Object.assign(new Error("This cheat sheet is already being beautified."), { status: 409 });
       const sheet = { ...current, beautifyPrompt: prompt.trim(), beautifyTier: settings.tier, beautifyStatus: "processing", beautifyError: null, beautifyJobId: randomUUID() };
       await saveSheets(sheets.map((entry) => entry.id === id ? sheet : entry));
-      const task = beautifySheet(sheet, settings).catch((error) => {
+      let task;
+      task = trackArchivePromise(dataDir, () => beautifySheet(sheet, settings)).catch((error) => {
         console.error("Could not persist cheat sheet beautification status:", error.message);
-      }).finally(() => running.delete(id));
+      }).finally(() => { if (running.get(id) === task) running.delete(id); });
       running.set(id, task);
       return sheet;
     });
@@ -339,18 +346,19 @@ export function cheatSheetsApi(options = {}) {
     try {
       if (url.pathname === API_ROOT && req.method === "GET") {
         const sheets = await loadSheets();
-        return json(res, 200, { sheets: [...sheets].sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))) });
+        return json(res, 200, { sheets: sheets.map(presentSheet).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))) });
       }
       if (url.pathname === API_ROOT && req.method === "POST") {
         const rendered = await validateAndCompose(await readBody(req));
         const sheet = await serialize(() => publishRendered(rendered));
         return json(res, 201, { sheet });
       }
-      const assetMatch = url.pathname.match(/^\/api\/cheat-sheets\/assets\/([\w.-]+)$/i);
+      const assetMatch = url.pathname.match(/^\/api\/cheat-sheets\/assets\/(.+)$/i);
       if (assetMatch && req.method === "GET") {
         const filename = path.basename(assetMatch[1]);
-        const bytes = await readFile(path.join(assetDir, filename));
-        res.setHeader("Content-Type", "image/png");
+        const file = await resolveArchiveFile(dataDir, url.pathname);
+        const bytes = await readFile(file);
+        res.setHeader("Content-Type", mimeForExtension(path.extname(file).toLowerCase()));
         res.setHeader("Cache-Control", "no-store");
         if (url.searchParams.get("download") === "1") {
           const requestedName = url.searchParams.get("name") || filename;
@@ -371,7 +379,7 @@ export function cheatSheetsApi(options = {}) {
 
       if (req.method === "GET") {
         const sheet = (await loadSheets()).find((entry) => entry.id === id);
-        return sheet ? json(res, 200, { sheet }) : json(res, 404, { error: "Cheat sheet not found" });
+        return sheet ? json(res, 200, { sheet: presentSheet(sheet) }) : json(res, 404, { error: "Cheat sheet not found" });
       }
       if (req.method === "PUT") {
         const input = await readBody(req);
@@ -414,16 +422,24 @@ export function cheatSheetsApi(options = {}) {
       sheetsFile = path.join(dataDir, "cheat-sheets.json");
       libraryAssetDir = path.join(dataDir, "imported");
       assetDir = path.join(dataDir, "cheat-sheets-assets");
-      await mkdir(dataDir, { recursive: true });
-      await mkdir(assetDir, { recursive: true });
-      const sheets = await loadSheets();
-      if (sheets.some((sheet) => sheet.beautifyStatus === "processing")) {
-        await saveSheets(sheets.map((sheet) => sheet.beautifyStatus === "processing"
-          ? { ...sheet, beautifyStatus: "error", beautifyError: "Generation was interrupted when the server restarted. Try again." }
-          : sheet));
-      }
+      await withArchiveWriteLease(dataDir, async () => {
+        await ensureArchiveRecovered(dataDir);
+        const preflight = await inspectArchiveCatalogs(dataDir);
+        if (!preflight.valid) {
+          reportSkippedArchiveStartup("cheat-sheet restart recovery", preflight);
+          return;
+        }
+        await mkdir(dataDir, { recursive: true });
+        await mkdir(assetDir, { recursive: true });
+        const sheets = await loadSheets();
+        if (sheets.some((sheet) => sheet.beautifyStatus === "processing")) {
+          await saveSheets(sheets.map((sheet) => sheet.beautifyStatus === "processing"
+            ? { ...sheet, beautifyStatus: "error", beautifyError: "Generation was interrupted when the server restarted. Try again." }
+            : sheet));
+        }
+      });
     },
-    configureServer(server) { server.middlewares.use(handler); },
-    configurePreviewServer(server) { server.middlewares.use(handler); },
+    configureServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },
+    configurePreviewServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },
   };
 }

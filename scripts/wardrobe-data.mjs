@@ -2,6 +2,8 @@ import { copyFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { migrateLibrary, migrateOutfits } from "../shared/wardrobe-model.mjs";
 import { mutateLibrary } from "../shared/wardrobe-library.mjs";
+import { withArchiveWriteLease } from "./archive-coordinator.mjs";
+import { inspectArchiveCatalogs, reportSkippedArchiveStartup } from "./archive-store.mjs";
 
 async function readArray(file) {
   try {
@@ -34,7 +36,12 @@ async function backupOnce(file) {
  * before either file changes and never overwritten, making retries idempotent
  * and giving a user a recoverable v1 snapshot.
  */
-export async function migrateDataDirectory(dataDir, { backup = true } = {}) {
+async function migrateDataDirectoryInsideLease(dataDir, { backup = true } = {}) {
+  const preflight = await inspectArchiveCatalogs(dataDir);
+  if (!preflight.valid) {
+    reportSkippedArchiveStartup("catalog migration", preflight);
+    return { changed: false, skipped: true, reason: "archive_catalog_invalid", invalidCatalogs: preflight.invalidCatalogs };
+  }
   await mkdir(dataDir, { recursive: true });
   const libraryFile = path.join(dataDir, "library.json");
   const outfitsFile = path.join(dataDir, "outfits.json");
@@ -73,4 +80,8 @@ export async function migrateDataDirectory(dataDir, { backup = true } = {}) {
     outfits: migratedOutfits.outfits,
     backups,
   };
+}
+
+export async function migrateDataDirectory(dataDir, options = {}) {
+  return withArchiveWriteLease(dataDir, () => migrateDataDirectoryInsideLease(dataDir, options));
 }

@@ -12,8 +12,16 @@ import { cheatSheetsApi, cheatSheetSourceFingerprint } from "../scripts/cheat-sh
 import { atomicJson } from "../scripts/import-job-api.mjs";
 import { buildCheatSheetLayout } from "../shared/cheat-sheet-layout.mjs";
 import { cheatSheetSourceFingerprint as clientSourceFingerprint } from "../src/cheat-sheet-renderer.js";
+import { buildArchiveInventory, validateArchive } from "../scripts/archive-store.mjs";
+import { archivePathFromAsset } from "../shared/portable-assets.mjs";
 
 if (!globalThis.crypto) Object.defineProperty(globalThis, "crypto", { value: webcrypto });
+
+const activeMiddlewareTasks = new Set();
+
+async function drainMiddlewareTasks() {
+  while (activeMiddlewareTasks.size) await Promise.allSettled([...activeMiddlewareTasks]);
+}
 
 async function pluginMiddleware(plugin, root) {
   let middleware;
@@ -27,13 +35,20 @@ async function request(middleware, url, method = "GET", value) {
   const req = Readable.from(value === undefined ? [] : [Buffer.from(JSON.stringify(value))]);
   req.url = url;
   req.method = method;
+  let resolveResponse;
+  let rejectResponse;
+  const responseEnded = new Promise((resolve, reject) => { resolveResponse = resolve; rejectResponse = reject; });
   const response = {
     statusCode: 200,
     headers: {},
     setHeader(name, content) { this.headers[name.toLowerCase()] = content; },
-    end(body = Buffer.alloc(0)) { this.body = body; },
+    end(body = Buffer.alloc(0)) { this.body = body; resolveResponse(); },
   };
-  await middleware(req, response, () => { response.statusCode = 404; response.end(); });
+  const task = Promise.resolve().then(() => middleware(req, response, () => { response.statusCode = 404; response.end(); }));
+  activeMiddlewareTasks.add(task);
+  task.finally(() => activeMiddlewareTasks.delete(task)).catch(() => {});
+  task.catch(rejectResponse);
+  await responseEnded;
   const body = Buffer.isBuffer(response.body) ? response.body : Buffer.from(response.body || "");
   const type = response.headers["content-type"] || "";
   return { status: response.statusCode, response, value: type.includes("application/json") ? JSON.parse(body.toString("utf8")) : body };
@@ -43,13 +58,20 @@ const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
 async function beautifyFixture(t, generateImage, extraOptions = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "wardrobe-beautify-"));
-  t.after(() => rm(root, { recursive: true, force: true }));
-  await mkdir(path.join(root, "imported"));
+  const pendingProviderReleases = new Set();
+  let cleaningUp = false;
+  t.after(async () => {
+    cleaningUp = true;
+    for (const release of pendingProviderReleases) release();
+    await drainMiddlewareTasks();
+    await rm(root, { recursive: true, force: true });
+  });
+  await mkdir(path.join(root, "imported", "nested"), { recursive: true });
   const cutout = await sharp({ create: { width: 20, height: 30, channels: 4, background: "#406090" } }).png().toBuffer();
-  await writeFile(path.join(root, "imported", "shirt.png"), cutout);
+  await writeFile(path.join(root, "imported", "nested", "shirt.png"), cutout);
   const item = {
     id: "shirt", name: "Blue shirt", part: "upperbody", defaultVariantId: "standard", references: [],
-    variants: [{ id: "standard", name: "Standard", approvalStatus: "approved", assetRevision: 1, cutout: { image: "/api/import/library/shirt.png", status: "current", revision: 1 } }],
+    variants: [{ id: "standard", name: "Standard", approvalStatus: "approved", assetRevision: 1, cutout: { image: "/api/import/library/nested/shirt.png", status: "current", revision: 1 } }],
   };
   await writeFile(path.join(root, "library.json"), JSON.stringify([item]));
   const pieces = [{ itemId: "shirt", variantId: "standard" }];
@@ -62,7 +84,27 @@ async function beautifyFixture(t, generateImage, extraOptions = {}) {
   const middleware = await pluginMiddleware(cheatSheetsApi({ ...extraOptions, env: { WARDROBE_DATA_DIR: root, OPENAI_API_KEY: "fixture-key", AI_PROVIDER: "openai", ...extraOptions.env }, generateImage }), root);
   const created = await request(middleware, "/api/cheat-sheets", "POST", payload);
   assert.equal(created.status, 201);
-  return { root, middleware, sheet: created.value.sheet, payload, sources };
+  return {
+    root, middleware, sheet: created.value.sheet, payload, sources,
+    registerProviderCleanup(release) {
+      if (cleaningUp) { release(); return () => {}; }
+      pendingProviderReleases.add(release);
+      return () => pendingProviderReleases.delete(release);
+    },
+  };
+}
+
+function deferredProviderResult(registerCleanup, resolve, value) {
+  let settled = false;
+  let unregister = () => {};
+  const release = () => {
+    if (settled) return;
+    settled = true;
+    unregister();
+    resolve(value);
+  };
+  unregister = registerCleanup(release);
+  return release;
 }
 
 async function waitFor(check) {
@@ -83,7 +125,8 @@ async function waitForStatus(middleware, id, status) {
 
 test("cheat sheet API composes, revisions, downloads and deletes local sheets", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "wardrobe-cheat-sheets-"));
-  const imported = path.join(root, "imported");
+  t.after(async () => { await drainMiddlewareTasks(); await rm(root, { recursive: true, force: true }); });
+  const imported = path.join(root, "imported", "nested");
   await mkdir(imported, { recursive: true });
   let cutout = await sharp({ create: { width: 24, height: 36, channels: 4, background: { r: 40, g: 90, b: 140, alpha: 1 } } }).png().toBuffer();
   await writeFile(path.join(imported, "shirt.png"), cutout);
@@ -96,10 +139,10 @@ test("cheat sheet API composes, revisions, downloads and deletes local sheets", 
     variants: [{
       id: "shirt-default",
       name: "Standard",
-      image: "/api/import/library/shirt.png",
+      image: "/api/import/library/nested/shirt.png",
       approvalStatus: "approved",
       assetRevision: 7,
-      cutout: { image: "/api/import/library/shirt.png", status: "current", revision: 3 },
+      cutout: { image: "/api/import/library/nested/shirt.png", status: "current", revision: 3 },
     }],
     references: [],
   };
@@ -285,11 +328,13 @@ test("AI finish preserves the original, includes context, supports retry and inv
   const calls = [];
   let fail = false;
   let complete;
+  let registerProviderCleanup = () => () => {};
   const fixture = await beautifyFixture(t, async (input) => {
     calls.push(input);
     if (fail) throw new Error("Fixture provider failed");
-    return new Promise((resolve) => { complete = () => resolve(generated); });
+    return new Promise((resolve) => { complete = deferredProviderResult(registerProviderCleanup, resolve, generated); });
   });
+  registerProviderCleanup = fixture.registerProviderCleanup;
   const { middleware, root, sheet, payload, sources } = fixture;
   const endpoint = `/api/cheat-sheets/${sheet.id}/beautify`;
   const original = (await request(middleware, sheet.originalImage)).value;
@@ -427,11 +472,14 @@ test("a late AI result cannot overwrite a newer sheet edit", async (t) => {
   const generated = await sharp({ create: { width: 12, height: 15, channels: 3, background: "#777" } }).png().toBuffer();
   let complete;
   let calls = 0;
-  const { middleware, sheet, root, payload, sources } = await beautifyFixture(t, async () => {
+  let registerProviderCleanup = () => () => {};
+  const fixture = await beautifyFixture(t, async () => {
     calls += 1;
     if (calls > 1) throw new Error("Generation probe");
-    return new Promise((resolve) => { complete = () => resolve(generated); });
+    return new Promise((resolve) => { complete = deferredProviderResult(registerProviderCleanup, resolve, generated); });
   });
+  registerProviderCleanup = fixture.registerProviderCleanup;
+  const { middleware, sheet, root, payload, sources } = fixture;
   const endpoint = `/api/cheat-sheets/${sheet.id}/beautify`;
   await request(middleware, endpoint, "POST", { expectedRevision: 1 });
   await waitFor(() => complete);
@@ -486,4 +534,24 @@ test("deleting a beautified sheet removes both versions and thumbnails", async (
   assert.equal((await request(middleware, finished.aiImage)).status, 404);
   assert.equal((await request(middleware, finished.originalImage)).status, 404);
   assert.deepEqual(await readdir(path.join(root, "cheat-sheets-assets")), []);
+});
+
+test("archive validation inventories every cheat sheet image and catches missing AI thumbnails", async (t) => {
+  const generated = await sharp({ create: { width: 12, height: 15, channels: 3, background: "#777" } }).png().toBuffer();
+  const { middleware, sheet, root } = await beautifyFixture(t, async () => generated);
+  await request(middleware, `/api/cheat-sheets/${sheet.id}/beautify`, "POST", { expectedRevision: 1 });
+  const finished = await waitForStatus(middleware, sheet.id, "ready");
+
+  const inventory = await buildArchiveInventory(root);
+  for (const field of ["originalImage", "thumbnailImage", "aiImage", "aiThumbnailImage"]) {
+    const archivePath = archivePathFromAsset(finished[field]);
+    assert.ok(inventory.files.some((entry) => entry.path === archivePath), `${field} is inventoried`);
+  }
+  assert.equal((await validateArchive(root, inventory)).valid, true);
+
+  const missingPath = archivePathFromAsset(finished.aiThumbnailImage);
+  await rm(path.join(root, ...missingPath.split("/")));
+  const incomplete = await validateArchive(root, await buildArchiveInventory(root));
+  assert.equal(incomplete.valid, false);
+  assert.ok(incomplete.errors.some((error) => error.includes(`Missing referenced media: ${missingPath}`)));
 });

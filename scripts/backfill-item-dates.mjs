@@ -22,11 +22,23 @@ import { readFile, writeFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { atomicJson } from "./import-job-api.mjs";
+import { withArchiveWriteLease } from "./archive-coordinator.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DATA_DIR = path.resolve(ROOT, process.env.WARDROBE_DATA_DIR || "data");
 const LIBRARY = path.join(DATA_DIR, "library.json");
 const REVIEW_FILE = path.join(DATA_DIR, "backfill-item-dates.review.json");
+
+async function archiveGeneration() {
+  let generation = 0;
+  for (const name of ["archive-metadata.json", "browser-state.json"]) {
+    try {
+      const value = JSON.parse(await readFile(path.join(DATA_DIR, name), "utf8"));
+      if (Number.isSafeInteger(value?.archiveGeneration) && value.archiveGeneration > generation) generation = value.archiveGeneration;
+    } catch (error) { if (error.code !== "ENOENT") throw error; }
+  }
+  return generation;
+}
 
 /**
  * Earliest trustworthy timestamp on the cutout. birthtime is the right answer
@@ -46,12 +58,21 @@ async function importedAt(id) {
 
 async function main() {
   const apply = process.argv.includes("--apply");
+  const provenanceGeneration = await archiveGeneration();
   const items = JSON.parse(await readFile(LIBRARY, "utf8"));
 
   if (apply) {
     let review;
     try { review = JSON.parse(await readFile(REVIEW_FILE, "utf8")); }
     catch { console.error(`No review file at ${REVIEW_FILE}. Run without --apply first.`); process.exit(1); }
+
+    if (Number.isSafeInteger(review.provenanceGeneration)
+        ? review.provenanceGeneration !== provenanceGeneration
+        : provenanceGeneration > 1) {
+      console.error("Review is stale or has no archive-generation provenance. Run the report again for the current archive.");
+      process.exitCode = 1;
+      return;
+    }
 
     const dates = new Map(review.changes.map((change) => [change.id, change.createdAt]));
     let written = 0;
@@ -87,8 +108,8 @@ async function main() {
     for (const item of unresolved) console.log(`  ${item.id}  ${item.name}`);
   }
 
-  await writeFile(REVIEW_FILE, `${JSON.stringify({ generatedAt: new Date().toISOString(), changes }, null, 2)}\n`);
+  await writeFile(REVIEW_FILE, `${JSON.stringify({ generatedAt: new Date().toISOString(), provenanceGeneration, changes }, null, 2)}\n`);
   console.log(`\nReview written to ${path.relative(ROOT, REVIEW_FILE)}. Re-run with --apply to write them.`);
 }
 
-main().catch((error) => { console.error(error); process.exit(1); });
+withArchiveWriteLease(DATA_DIR, () => main()).catch((error) => { console.error(error); process.exit(1); });
