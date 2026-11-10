@@ -775,7 +775,9 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
     await currentTarget(target);
     const client = await service.getClient(target);
     await currentTarget(target);
-    return new Proxy(client, {
+    // The real client is frozen, and a Proxy may not replace a frozen method
+    // with a wrapper, so trap a plain copy instead.
+    return new Proxy({ ...client }, {
       get(source, key) {
         const method = source[key];
         if (typeof method !== "function") return method;

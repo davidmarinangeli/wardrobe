@@ -349,6 +349,17 @@ describe("persistent Google Drive archive sync", () => {
     assert.deepEqual(drive.counters, { createFolder: 0, createFile: 0, updateFile: 0, copyFile: 0, deleteFile: 0, chunks: 0, starts: 0, maxChunkBytes: 0 });
   });
 
+  it("reads Drive through a frozen client like the real one", async () => {
+    const root = await temporaryRoot();
+    const dataDir = await prepareArchive(root);
+    const drive = makeDrive();
+    const { service, worker } = setup(dataDir, drive);
+    service.getClient = async () => Object.freeze({ ...drive.client });
+    const preview = await worker.preview();
+    assert.equal(preview.remote.valid, true, preview.remote.errorCode);
+    assert.equal(preview.remote.empty, true);
+  });
+
   it("publishes a portable pointer only after nested media and inventory verify", async () => {
     const root = await temporaryRoot();
     const dataDir = await prepareArchive(root);
