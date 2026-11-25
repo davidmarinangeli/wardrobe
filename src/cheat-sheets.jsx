@@ -7,7 +7,7 @@ import { GenerateButton, useRememberedTier } from "./components/ModelPhotoContro
 import { CATEGORY_LABEL, WARDROBE_TYPES } from "./categories.js";
 import { useIsPhone } from "./hooks/useIsPhone.js";
 import { initialVariantForPiece, variantImage, variantOwnImage } from "../shared/wardrobe-model.mjs";
-import { buildOverviewIndex, filterOverviewIndex } from "../shared/overview-index.mjs";
+import { buildOverviewIndex, filterByPart, filterOverviewIndex } from "../shared/overview-index.mjs";
 import { cheatSheetSourceFingerprint, renderCheatSheet } from "./cheat-sheet-renderer.js";
 import { CHEAT_SHEET_LAYOUT_VERSION, CHEAT_SHEET_MAX_PIECE_SCALE, CHEAT_SHEET_MIN_PIECE_SCALE, CHEAT_SHEET_PIECE_SCALE_STEP, normalizeCheatSheetScale } from "../shared/cheat-sheet-layout.mjs";
 import { CHEAT_SHEET_DESCRIPTION_LIMIT, CHEAT_SHEET_PROMPT_LIMIT, DEFAULT_CHEAT_SHEET_BEAUTIFY_PROMPT } from "../shared/cheat-sheet-prompt.mjs";
@@ -205,7 +205,7 @@ function FullscreenCheatSheetViewer({ title, versionLabel, isDraft, children, on
 const PiecePicker = forwardRef(function PiecePicker({ items, selected, onToggle, query, onQuery, category, onCategory, disabled }, searchRef) {
   const index = useMemo(() => buildOverviewIndex(items), [items]);
   const filtered = useMemo(() => filterOverviewIndex(index, query), [index, query]);
-  const visible = category === "all" ? filtered : filtered.filter(({ item }) => item.part === category);
+  const visible = filterByPart(filtered, category);
   return (
     <div className="cheat-picker">
       <div className="cheat-picker__heading"><span className="cheat-editor__eyebrow">Wardrobe</span><h3>Add pieces</h3></div>

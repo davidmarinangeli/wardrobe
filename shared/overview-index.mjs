@@ -288,6 +288,12 @@ export function filterByTags(entries, tags) {
   });
 }
 
+/** The category chip's predicate: keep entries whose item is that garment part. "all" or empty → unchanged. */
+export function filterByPart(entries, part) {
+  if (!part || part === "all") return entries;
+  return entries.filter((entry) => entry.item?.part === part);
+}
+
 function compareEntries(first, second) {
   if (first.area === "accessories" && (first.subtype.id === "headwear") !== (second.subtype.id === "headwear")) {
     return first.subtype.id === "headwear" ? -1 : 1;

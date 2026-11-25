@@ -591,6 +591,8 @@ export function App() {
               onGarmentApproved={addImportedItem}
               externalSetup={aiSetup}
               idleLabel={view === "inspo" ? "Add Inspo" : view === "outfits" ? "Add outfit" : undefined}
+              idleDisabled={view === "outfits" && !items.length}
+              idleHint="Add pieces to your wardrobe first"
               onIdleActivate={
                 view === "inspo" ? () => setShowInspoImporter(true)
                 : view === "outfits" ? () => setShowOutfitBuilder(true)

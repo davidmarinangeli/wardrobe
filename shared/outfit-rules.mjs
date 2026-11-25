@@ -28,3 +28,12 @@ export function isPieceBlocked(item, blocked) {
   if (!part || part.layer) return false;
   return Boolean(blocked?.has(part.coverage));
 }
+
+/**
+ * Why a blocked piece can't join, for its title. Null when it isn't blocked.
+ * A full-length selection blocks the halves; a picked half blocks full pieces.
+ */
+export function blockedReason(item, blocked) {
+  if (!isPieceBlocked(item, blocked)) return null;
+  return blocked.has("full") ? "a top or bottom is already picked" : "a full-length piece already covers this";
+}

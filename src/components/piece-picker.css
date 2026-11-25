@@ -1,0 +1,186 @@
+/* Full-screen piece picker (PiecePicker.jsx). Selectors on the overlay, entry
+   and panel carry two classes each so they beat both the base .viewer rules
+   and mobile-chrome.css's `.viewer-overlay .viewer` (0,2,0) whatever the
+   import order. */
+
+.viewer-overlay.piece-picker-overlay { justify-content: center; }
+.viewer-overlay.piece-picker-overlay .viewer-entry.piece-picker-entry { width: 100%; height: 100%; max-height: 100%; }
+.viewer-overlay.piece-picker-overlay .viewer.piece-picker-panel { height: 100%; max-height: 100%; padding: 0; overflow: hidden; touch-action: auto; }
+.piece-picker-panel > .viewer-icon-close { top: 16px; right: 20px; width: 44px; height: 44px; }
+
+.piece-picker { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+
+/* ─── Header ─────────────────────────────────────────────────────────────── */
+.piece-picker__header { display: flex; align-items: center; gap: 14px; min-height: 76px; padding: 14px 20px 14px 28px; border-bottom: 1px solid var(--line); }
+.piece-picker__title { margin: 0; overflow: hidden; color: var(--ink); font-size: 22px; font-weight: 500; letter-spacing: -.03em; text-overflow: ellipsis; white-space: nowrap; }
+.piece-picker__count { margin-left: auto; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.piece-picker__confirm { flex: none; min-height: 44px; }
+.piece-picker__close-spacer { flex: 0 0 44px; }
+
+/* ─── Filters ────────────────────────────────────────────────────────────── */
+.piece-picker__filters { display: grid; gap: 10px; padding: 16px 24px; border-bottom: 1px solid var(--line); }
+.piece-picker__search { width: 100%; min-width: 0; min-height: 44px; padding: 11px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--paper-raised); color: var(--ink-soft); font: inherit; font-size: 14px; }
+.piece-picker__search:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
+.piece-picker__chips { display: flex; gap: 6px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.piece-picker__chips::-webkit-scrollbar { display: none; }
+.piece-picker__chip { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 16px; border: 1px solid var(--line); border-radius: var(--r-full); background: var(--paper-raised); color: var(--ink-soft); font: inherit; font-size: 12px; white-space: nowrap; cursor: pointer; transition: background var(--dur-pop) var(--ease-out), border-color var(--dur-pop) var(--ease-out), color var(--dur-pop) var(--ease-out); }
+.piece-picker__chip.is-active { border-color: var(--ink); background: var(--ink); color: var(--paper-raised); }
+.piece-picker__chip-count { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.piece-picker__chip.is-active .piece-picker__chip-count { color: inherit; opacity: .7; }
+.piece-picker__chip:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
+
+/* ─── Body: grid + side panel ────────────────────────────────────────────── */
+.piece-picker__body { display: grid; grid-template-columns: minmax(0, 1fr) 340px; flex: 1; min-height: 0; }
+.piece-picker__grid-pane { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 20px 24px 32px; }
+.piece-picker__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 20px 14px; align-items: start; }
+.piece-picker__side { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 20px; border-left: 1px solid var(--line); }
+.piece-picker__side-content { display: flex; flex-direction: column; gap: 18px; }
+.piece-picker__side-content[hidden] { display: none; }
+.piece-picker__footer { display: grid; gap: 10px; }
+.piece-picker__tray-toggle { display: none; }
+
+.piece-picker__empty { display: grid; justify-items: center; gap: 12px; padding: 64px 16px; color: var(--muted); text-align: center; }
+.piece-picker__empty p { margin: 0; font-size: 14px; }
+
+/* ─── Cards: aligned with .overview-card ─────────────────────────────────── */
+.piece-picker__card { display: grid; gap: 8px; min-width: 0; }
+.piece-picker__card-button { display: grid; gap: 8px; width: 100%; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.piece-picker__art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: .9;
+  padding: var(--item-pad);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-md);
+  background: var(--glass-card);
+  box-shadow: var(--glass-edge), var(--shadow-sm);
+  overflow: hidden;
+  transition:
+    transform var(--dur-panel) var(--ease-out),
+    box-shadow var(--dur-panel) var(--ease-out),
+    background var(--dur-panel) var(--ease-out),
+    border-color var(--dur-pop) var(--ease-out);
+}
+.piece-picker__art img { width: 100%; height: 100%; object-fit: contain; filter: var(--shadow-contact); -webkit-user-drag: none; }
+.piece-picker__art[data-part="shoes"] img,
+.piece-picker__art[data-part="socks"] img { max-height: 62%; }
+.piece-picker__art[data-part="accessories_up"] img { max-height: 68%; }
+.piece-picker__check {
+  position: absolute;
+  z-index: 2;
+  top: 9px;
+  left: 9px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(46, 42, 38, .19);
+  border-radius: var(--r-full);
+  background: rgba(251, 247, 240, .95);
+  box-shadow: var(--shadow-xs);
+  color: transparent;
+  transition: background var(--dur-pop) var(--ease-out), color var(--dur-pop) var(--ease-out), border-color var(--dur-pop) var(--ease-out);
+}
+.piece-picker__card.is-selected .piece-picker__check { border-color: var(--accent); background: var(--accent); color: var(--paper-raised); }
+.piece-picker__card.is-selected .piece-picker__art { border-color: var(--accent-warm); box-shadow: var(--glass-edge), 0 0 0 1px var(--accent-warm), var(--shadow-sm); }
+.piece-picker__label { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 0 1px; }
+.piece-picker__name { overflow: hidden; color: var(--ink-soft); font-size: 12px; font-weight: 500; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+.piece-picker__type { color: var(--muted); font-size: 9px; font-weight: 450; letter-spacing: .05em; text-transform: uppercase; }
+.piece-picker__card-button:focus-visible { outline: none; }
+.piece-picker__card-button:focus-visible .piece-picker__art { outline: 2px solid var(--accent-warm); outline-offset: 3px; }
+.piece-picker__card:not(.is-blocked) .piece-picker__card-button:active .piece-picker__art { transform: scale(.97); }
+
+/* Greyed rather than hidden: the piece is still in the wardrobe, it just can't
+   join this selection. The title says why. */
+.piece-picker__card.is-blocked .piece-picker__card-button { cursor: not-allowed; }
+.piece-picker__card.is-blocked .piece-picker__art,
+.piece-picker__card.is-blocked .piece-picker__label { opacity: .32; filter: grayscale(1); }
+
+@media (hover: hover) and (pointer: fine) {
+  .piece-picker__card:not(.is-blocked) .piece-picker__card-button:hover .piece-picker__art {
+    transform: translateY(-3px);
+    background: var(--glass-card-hover);
+    border-color: var(--glass-border-hover);
+    box-shadow: var(--glass-edge), var(--shadow-md);
+  }
+  .piece-picker__card.is-selected:not(.is-blocked) .piece-picker__card-button:hover .piece-picker__art { border-color: var(--accent-warm); }
+  .piece-picker__chip:not(.is-active):hover { border-color: var(--accent-warm); }
+}
+
+/* Variant thumbnails, from the old builder's .builder-variant-picker. */
+.piece-picker__variants { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.piece-picker__variants::-webkit-scrollbar { display: none; }
+.piece-picker__variants button {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--paper-raised);
+  color: var(--ink-soft);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    border-color var(--dur-pop) var(--ease-out),
+    box-shadow var(--dur-pop) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
+}
+.piece-picker__variants button img { width: 100%; height: 100%; object-fit: contain; }
+.piece-picker__variants button.is-active { border-color: var(--accent-warm); box-shadow: 0 0 0 1px var(--accent-warm); color: var(--ink); }
+.piece-picker__variants button:active { transform: scale(.94); }
+.piece-picker__variants button:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
+.piece-picker__variant-pending { color: var(--muted); font-size: 13px; font-weight: 500; }
+
+@media (prefers-reduced-motion: reduce) {
+  .piece-picker__art,
+  .piece-picker__variants button { transition: none; }
+  .piece-picker__card .piece-picker__card-button:active .piece-picker__art,
+  .piece-picker__variants button:active { transform: none; }
+}
+@media (prefers-reduced-motion: reduce) and (hover: hover) and (pointer: fine) {
+  .piece-picker__card:not(.is-blocked) .piece-picker__card-button:hover .piece-picker__art { transform: none; }
+}
+
+/* ─── Phone: full-screen page with a bottom tray ─────────────────────────── */
+@media (max-width: 860px) {
+  .viewer-overlay.piece-picker-overlay { align-items: stretch; padding: 0; }
+  .viewer-overlay.piece-picker-overlay .viewer-entry.piece-picker-entry { height: 100dvh; max-height: 100dvh; }
+  .viewer-overlay.piece-picker-overlay .viewer.piece-picker-panel { height: 100%; max-height: 100%; border-radius: 0 !important; overflow: hidden; touch-action: auto; }
+  .piece-picker-panel > .viewer-icon-close { top: max(10px, env(safe-area-inset-top)); right: 12px; }
+
+  .piece-picker__header { gap: 10px; min-height: 64px; padding: max(10px, env(safe-area-inset-top)) 12px 10px 16px; }
+  .piece-picker__title { font-size: 18px; }
+  .piece-picker__filters { gap: 8px; padding: 12px 16px; }
+  .piece-picker__search { font-size: 16px; }
+
+  .piece-picker__body { display: flex; flex-direction: column; }
+  .piece-picker__grid-pane { flex: 1; padding: 14px 16px 20px; }
+  .piece-picker__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 10px; }
+
+  .piece-picker__side { flex: none; display: flex; flex-direction: column; max-height: 60dvh; padding: 0 16px max(12px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); border-left: 0; background: var(--paper-warm); }
+  .piece-picker__tray-toggle { display: flex; align-items: center; justify-content: space-between; flex: none; width: 100%; min-height: 48px; padding: 0; border: 0; background: transparent; color: var(--ink-soft); font: inherit; font-size: 13px; font-weight: 550; cursor: pointer; }
+  .piece-picker__tray-toggle:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: -2px; }
+  .piece-picker__tray-caret { transition: transform var(--dur-pop) var(--ease-out); }
+  .piece-picker__side.is-open .piece-picker__tray-caret { transform: rotate(180deg); }
+  .piece-picker__side-content { gap: 14px; padding-bottom: 4px; }
+  /* Expanded, the name and Save error come first: they're what the tray was opened for. */
+  .piece-picker__footer { order: -1; }
+}
+
+@media (max-width: 420px) {
+  .piece-picker__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 400px) {
+  .piece-picker__count { display: none; }
+  .piece-picker__confirm { margin-left: auto; }
+}
+
+@media (max-width: 860px) and (prefers-reduced-motion: reduce) {
+  .piece-picker__tray-caret { transition: none; }
+}

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildOverviewIndex, buildOverviewSections, commonOverviewTags, filterByTags, filterOverviewIndex } from "../shared/overview-index.mjs";
+import { buildOverviewIndex, buildOverviewSections, commonOverviewTags, filterByPart, filterByTags, filterOverviewIndex } from "../shared/overview-index.mjs";
 
 const item = (id, name, part = "upperbody", tags = [], color = null) => ({ id, name, part, tags, color });
 const find = (items, query) => filterOverviewIndex(buildOverviewIndex(items), query).map((entry) => entry.id);
@@ -135,4 +135,16 @@ test("filterByTags keeps entries carrying every tag, ignoring case and whitespac
 
   assert.deepEqual(ids(index), before);
   assert.deepEqual(tags, ["linen", "summer"]);
+});
+
+test("filterByPart keeps one garment part; all or empty returns the entries unchanged", () => {
+  const index = buildOverviewIndex([
+    item("a", "Shirt", "upperbody", []),
+    item("b", "Trousers", "lowerbody", []),
+    item("c", "Tee", "upperbody", []),
+  ]);
+  assert.equal(filterByPart(index, "all"), index);
+  assert.equal(filterByPart(index, ""), index);
+  assert.deepEqual(filterByPart(index, "upperbody").map((entry) => entry.id), ["a", "c"]);
+  assert.deepEqual(filterByPart(index, "dress"), []);
 });

@@ -1,18 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { ArrowCounterClockwise, Check, Palette, PencilSimple, Sparkle, SpinnerGap, X } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, Palette, PencilSimple, Sparkle, SpinnerGap, X } from "@phosphor-icons/react";
 import { CheckCircle } from "@phosphor-icons/react";
 import { OptimizedImage } from "./OptimizedImage.jsx";
 import { api } from "./api.js";
-import { OUTFIT_CATEGORIES as CATEGORIES } from "./categories.js";
 import { GARMENT_PART_MAP } from "../shared/garments.mjs";
-import { blockedCoverages, isPieceBlocked } from "../shared/outfit-rules.mjs";
-import { initialVariantForPiece, resolveOutfitPieces, variantImage, variantOwnImage } from "../shared/wardrobe-model.mjs";
+import { migrateOutfit, resolveOutfitPieces } from "../shared/wardrobe-model.mjs";
 import { GenerateButton, RefineComposer, StageChip, StageError, StageStatus, useRememberedTier } from "./components/ModelPhotoControls.jsx";
 import { SuggestionPanel } from "./suggestions.jsx";
-import { useSheetGesture } from "./hooks/useSheetGesture.js";
-import { useIsPhone } from "./hooks/useIsPhone.js";
 import { OutfitStack } from "./components/OutfitStack.jsx";
+import { PiecePicker } from "./components/PiecePicker.jsx";
 import { ViewerPanel } from "./components/ViewerPanel.jsx";
 import { ModeledHero } from "./components/ModeledHero.jsx";
 import { PanelActions } from "./components/PanelActions.jsx";
@@ -153,173 +149,61 @@ function OutfitFlatLay({ outfitId, pieces }) {
   return <div className="outfit-card-flatlay">{scatteredPieces(outfitId, pieces)}</div>;
 }
 
-function OutfitBuilder({ items, initialOutfit, onCancel, onSave }) {
-  const [name, setName] = useState(initialOutfit?.name || "");
-  const [selected, setSelected] = useState(() => new Map(
-    (initialOutfit?.pieces || (initialOutfit?.itemIds || []).map((itemId) => ({ itemId, variantId: null }))).map((piece) => [piece.itemId, piece.variantId]),
-  ));
+// Create and edit both go through the shared picker; the name and its error
+// live here, in the picker's footer.
+function OutfitPicker({ items, outfit, onCancel, onSave }) {
+  const [name, setName] = useState(outfit?.name || "");
   const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const sheetRef = useRef(null);
-  const overlayRef = useRef(null);
-  const closeButtonRef = useRef(null);
-  const isPhone = useIsPhone();
-  const { dragHandlers } = useSheetGesture({
-    sheetRef,
-    overlayRef,
-    enabled: isPhone,
-    onDismiss: onCancel,
+  // Snapshot at mount. `items` holds active pieces only (App.jsx), so retired
+  // pieces can't be shown, but the server validates against the full library
+  // and accepts them. Dropping them would change the lineup, and the server
+  // would then wipe the modeled photo, description and tags
+  // (scripts/outfits-api.mjs normalizeOutfit). Send them back unchanged.
+  const [{ initialSelection, hidden }] = useState(() => {
+    const all = outfit ? migrateOutfit(outfit, items).pieces : [];
+    const ids = new Set(items.map((item) => item.id));
+    return {
+      initialSelection: all.filter((piece) => ids.has(piece.itemId)),
+      hidden: all.filter((piece) => !ids.has(piece.itemId)),
+    };
   });
 
-  useViewerKeyboard(onCancel, closeButtonRef);
-
-  const itemsByCategory = useMemo(() => {
-    const groups = Object.fromEntries(CATEGORIES.map((category) => [category.id, []]));
-    for (const item of items) if (groups[item.part]) groups[item.part].push(item);
-    return groups;
-  }, [items]);
-
-  const toggleItem = (itemId) => {
-    setSelected((current) => {
-      const next = new Map(current);
-      if (next.has(itemId)) next.delete(itemId);
-      else {
-        const item = items.find((candidate) => candidate.id === itemId);
-        // Every piece lands on its default way of being worn, whatever its
-        // variant count. The previous null forced a second tap on every
-        // multi-variant piece and failed the save if it was missed — an invalid
-        // intermediate state in place of a sensible starting one.
-        next.set(itemId, initialVariantForPiece(item));
-      }
-      return next;
-    });
-  };
-
-  const selectVariant = (itemId, variantId) => setSelected((current) => new Map(current).set(itemId, variantId));
-  const selectedItems = items.filter((item) => selected.has(item.id)).map((item) => {
-    const variantId = selected.get(item.id);
-    const image = variantImage(item, variantId);
-    return { ...item, variantId, image, thumbnail: image };
-  });
-
-  const coverageBlocks = blockedCoverages(selectedItems);
-
-  const save = async () => {
+  // Rejecting (not returning quietly) keeps the picker open and opens its
+  // phone tray, where this error is shown.
+  const save = async (pieces) => {
     setError("");
-    if (!name.trim()) return setError("Give this outfit a name.");
-    if (!selectedItems.length) return setError("Pick at least one piece.");
-    setSaving(true);
+    const fail = (message) => { setError(message); throw new Error(message); };
+    if (!name.trim()) fail("Give this outfit a name.");
+    if (!pieces.length) fail("Pick at least one piece.");
     try {
-      await onSave({ name: name.trim(), pieces: [...selected.entries()].map(([itemId, variantId]) => ({ itemId, variantId })) });
+      await onSave({ name: name.trim(), pieces: [...pieces, ...hidden] });
     } catch (saveError) {
-      setError(saveError.message);
-      setSaving(false);
+      fail(saveError.message || "Could not save this outfit.");
     }
   };
 
-  const content = (
-    <div
-      ref={overlayRef}
-      className="viewer-overlay"
-      role="presentation"
-      onPointerDown={(event) => event.target === event.currentTarget && onCancel()}
-    >
-      <div className="viewer-entry outfit-builder-entry">
-        <aside
-          ref={sheetRef}
-          className="viewer outfit-builder"
-          role="dialog"
-          aria-modal="true"
-          aria-label={initialOutfit ? "Edit outfit" : "New outfit"}
-          {...(isPhone ? dragHandlers : null)}
-        >
-          <button className="icon-button viewer-icon-close" type="button" onClick={onCancel} aria-label="Close" ref={closeButtonRef}>
-            <X size={24} weight="light" aria-hidden="true" />
-          </button>
-          <div className="viewer-heading">
-            <h2>{initialOutfit ? "Edit Outfit" : "New Outfit"}</h2>
-          </div>
-
-          <div className="outfit-builder-body">
-            <label className="field">
-              <span>Name</span>
-              <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Saturday errands" />
-            </label>
-
-            <OutfitStack items={selectedItems} />
-
-            {CATEGORIES.map((category) => (
-              itemsByCategory[category.id].length > 0 && (
-                <div className="outfit-category" key={category.id}>
-                  <p className="outfit-category-label">{category.label}</p>
-                  <div className="outfit-category-row">
-                    {itemsByCategory[category.id].map((item) => {
-                      const blocked = !selected.has(item.id) && isPieceBlocked(item, coverageBlocks);
-                      return (
-                        <span className="builder-piece-option" key={item.id}>
-                          <button
-                            type="button"
-                            className={`outfit-piece${selected.has(item.id) ? " active" : ""}${blocked ? " blocked" : ""}`}
-                            onClick={() => !blocked && toggleItem(item.id)}
-                            aria-pressed={selected.has(item.id)}
-                            aria-disabled={blocked}
-                            title={blocked
-                              ? `${item.name} — a full-length piece already covers this`
-                              : item.name}
-                          >
-                            <OptimizedImage src={item.thumbnail || item.image} alt="" sizes="72px" breakpoints={[72, 108]} />
-                          </button>
-                          {selected.has(item.id) && item.variants?.length > 1 && (
-                            /* Thumbnails, not names. The difference between
-                               rolled sleeves and tucked is visual, and the 10px
-                               text pills this replaced were both unreadable and
-                               under half the 44px a finger needs. */
-                            <div className="builder-variant-picker" role="group" aria-label={`How to wear ${item.name}`}>
-                              {item.variants.map((variant) => {
-                                const thumbnail = variantOwnImage(item, variant.id);
-                                return (
-                                  <button
-                                    key={variant.id}
-                                    type="button"
-                                    className={selected.get(item.id) === variant.id ? "active" : ""}
-                                    aria-pressed={selected.get(item.id) === variant.id}
-                                    title={variant.name}
-                                    aria-label={variant.name}
-                                    onClick={() => selectVariant(item.id, variant.id)}
-                                  >
-                                    {thumbnail
-                                      ? <OptimizedImage src={thumbnail} alt="" sizes="40px" breakpoints={[40, 60, 80]} />
-                                      : <span className="builder-variant-picker__pending" aria-hidden="true">{variant.name.slice(0, 1)}</span>}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-              )
-            ))}
-
-            {error && <p className="status error outfit-error">{error}</p>}
-
-            <div className="viewer-actions">
-              <button className="secondary-button" type="button" onClick={onCancel}>Cancel</button>
-              <span className="action-spacer" />
-              <button className="primary-button" type="button" onClick={save} disabled={saving}>
-                <Check size={15} weight="bold" aria-hidden="true" /> Save
-              </button>
-            </div>
-          </div>
-        </aside>
-      </div>
-    </div>
+  return (
+    <PiecePicker
+      title={outfit ? "Edit outfit" : "New outfit"}
+      items={items}
+      initialSelection={initialSelection}
+      rules="outfit"
+      confirmLabel="Save"
+      minPieces={0}
+      renderPreview={(selectedPieces) => <OutfitStack items={selectedPieces} emptyMessage="Pick pieces to build the look." />}
+      footer={(
+        <>
+          <label className="field">
+            <span>Name</span>
+            <input value={name} maxLength={120} onChange={(event) => setName(event.target.value)} placeholder="Saturday errands" />
+          </label>
+          {error && <p className="status error outfit-error" role="alert">{error}</p>}
+        </>
+      )}
+      onConfirm={save}
+      onClose={onCancel}
+    />
   );
-
-  return typeof document !== "undefined" ? createPortal(content, document.body) : content;
 }
 
 function OutfitCard({ outfit, itemMap, onOpen, wornToday, wearReady, onWear }) {
@@ -593,8 +477,9 @@ function SuggestionNudges({ items, colorProfile, onOpenColorQuiz }) {
 // Add outfit / Suggest outfit trigger from the topbar (see App.jsx's
 // .top-actions) — showBuilder/showSuggestions are controlled from there so
 // there's exactly one "add" and one "AI action" button per view, not a
-// second pair duplicated on the page itself. builderOutfit (which outfit,
-// if any, is being edited) stays local — the topbar doesn't need to know.
+// second pair duplicated on the page itself. showBuilder opens the shared
+// PiecePicker (through OutfitPicker); builderOutfit (which outfit, if any,
+// is being edited) stays local — the topbar doesn't need to know.
 export function Outfits({ items, premiumAllowed = true, provider = null, colorProfile, onOpenColorQuiz, showBuilder, onOpenBuilder, onCloseBuilder, showSuggestions, onCloseSuggestions, openOutfitId, onOutfitOpened, archiveGeneration }) {
   const [outfits, setOutfits] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -658,10 +543,21 @@ export function Outfits({ items, premiumAllowed = true, provider = null, colorPr
   };
 
   const openEditOutfit = (outfit) => { setViewingOutfitId(null); setBuilderOutfit(outfit); onOpenBuilder(); };
-  // The topbar's "Add outfit" opens the same builder directly (see App.jsx),
+  // The topbar's "Add outfit" opens the same picker directly (see App.jsx),
   // bypassing openEditOutfit entirely — so builderOutfit must reset to null
   // on every close, or a stale edit target would linger into the next "new".
-  const closeBuilder = () => { setBuilderOutfit(null); onCloseBuilder(); };
+  // Edit is only reachable from the viewer, so closing an edit (saved or
+  // not) goes back to that viewer, like "back".
+  const closeBuilder = () => {
+    const returnId = builderOutfit?.id;
+    setBuilderOutfit(null);
+    onCloseBuilder();
+    if (returnId) { setOpenedFrom(null); setViewingOutfitId(returnId); }
+  };
+
+  // App also closes the picker itself (an archive change resets
+  // showOutfitBuilder); clear the edit target then too.
+  useEffect(() => { if (!showBuilder) setBuilderOutfit(null); }, [showBuilder]);
 
   const saveOutfit = async (draft) => {
     const saved = builderOutfit
@@ -746,7 +642,10 @@ export function Outfits({ items, premiumAllowed = true, provider = null, colorPr
         />
       )}
 
-      {showBuilder && <OutfitBuilder items={items} initialOutfit={builderOutfit} onCancel={closeBuilder} onSave={saveOutfit} />}
+      {/* Add outfit is disabled with no pieces; an edit still renders so it can be closed. */}
+      {showBuilder && (items.length > 0 || builderOutfit) && (
+        <OutfitPicker key={builderOutfit?.id || "new"} items={items} outfit={builderOutfit} onCancel={closeBuilder} onSave={saveOutfit} />
+      )}
 
       {showSuggestions && (
         <SuggestionPanel

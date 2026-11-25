@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { blockedCoverages, isPieceBlocked } from "../shared/outfit-rules.mjs";
+import { blockedCoverages, blockedReason, isPieceBlocked } from "../shared/outfit-rules.mjs";
 
 const piece = (id, part) => ({ id, part });
 const dress = piece("dress", "dress");
@@ -70,4 +70,18 @@ test("shoes and accessories never block and are never blocked", () => {
 
 test("an already-mixed selection lets the full piece win", () => {
   assert.deepEqual(blockedCoverages([dress, top]), new Set(["upper", "lower"]));
+});
+
+test("blockedReason names what blocks the piece, or null when it isn't blocked", () => {
+  assert.equal(blockedReason(top, blockedCoverages([dress])), "a full-length piece already covers this");
+  assert.equal(blockedReason(skirt, blockedCoverages([jumpsuit])), "a full-length piece already covers this");
+  assert.equal(blockedReason(dress, blockedCoverages([top])), "a top or bottom is already picked");
+  assert.equal(blockedReason(jumpsuit, blockedCoverages([shorts])), "a top or bottom is already picked");
+});
+
+test("blockedReason is null for pieces the selection doesn't block", () => {
+  assert.equal(blockedReason(jacket, blockedCoverages([dress])), null);
+  assert.equal(blockedReason(dress, blockedCoverages([dress])), null);
+  assert.equal(blockedReason(top, blockedCoverages([])), null);
+  assert.equal(blockedReason(top, undefined), null);
 });
