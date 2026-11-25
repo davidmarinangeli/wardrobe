@@ -6,6 +6,7 @@ import { OptimizedImage } from "./OptimizedImage.jsx";
 import { api } from "./api.js";
 import { OUTFIT_CATEGORIES as CATEGORIES } from "./categories.js";
 import { GARMENT_PART_MAP } from "../shared/garments.mjs";
+import { blockedCoverages, isPieceBlocked } from "../shared/outfit-rules.mjs";
 import { initialVariantForPiece, resolveOutfitPieces, variantImage, variantOwnImage } from "../shared/wardrobe-model.mjs";
 import { GenerateButton, RefineComposer, StageChip, StageError, StageStatus, useRememberedTier } from "./components/ModelPhotoControls.jsx";
 import { SuggestionPanel } from "./suggestions.jsx";
@@ -202,29 +203,7 @@ function OutfitBuilder({ items, initialOutfit, onCancel, onSave }) {
     return { ...item, variantId, image, thumbnail: image };
   });
 
-  // A dress or jumpsuit already dresses both halves, so the halves it covers
-  // stop being available — and once a top or bottom is picked, a full garment
-  // no longer fits the outfit either. Blocking the combination here is kinder
-  // than letting someone build dress-plus-trousers and discover it in the
-  // rendered photo.
-  // Layering pieces are exempt in both directions: a jacket goes over a shirt or
-  // over a dress equally well, so it never blocks and is never blocked.
-  const blockedCoverages = useMemo(() => {
-    const coverages = new Set(
-      selectedItems
-        .filter((item) => !GARMENT_PART_MAP[item.part]?.layer)
-        .map((item) => GARMENT_PART_MAP[item.part]?.coverage),
-    );
-    if (coverages.has("full")) return new Set(["upper", "lower"]);
-    if (coverages.has("upper") || coverages.has("lower")) return new Set(["full"]);
-    return new Set();
-  }, [selectedItems]);
-
-  const isBlocked = (item) => {
-    const part = GARMENT_PART_MAP[item.part];
-    if (!part || part.layer) return false;
-    return blockedCoverages.has(part.coverage);
-  };
+  const coverageBlocks = blockedCoverages(selectedItems);
 
   const save = async () => {
     setError("");
@@ -276,7 +255,7 @@ function OutfitBuilder({ items, initialOutfit, onCancel, onSave }) {
                   <p className="outfit-category-label">{category.label}</p>
                   <div className="outfit-category-row">
                     {itemsByCategory[category.id].map((item) => {
-                      const blocked = !selected.has(item.id) && isBlocked(item);
+                      const blocked = !selected.has(item.id) && isPieceBlocked(item, coverageBlocks);
                       return (
                         <span className="builder-piece-option" key={item.id}>
                           <button

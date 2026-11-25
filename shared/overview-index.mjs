@@ -273,6 +273,21 @@ export function filterOverviewIndex(index, query = "", facet = null) {
   return index.filter((entry) => matchesQuery(entry, queryGroups) && matchesFacet(entry, facet));
 }
 
+// Tag identity is trim + "en" lowercase, the same key overviewSuggestions and
+// commonOverviewTags use, so a chip from overviewSuggestions always matches the
+// pieces it counted.
+const tagKey = (tag) => (typeof tag === "string" ? tag.trim().toLocaleLowerCase("en") : "");
+
+/** Keep only entries that carry every tag (AND, case-insensitive). Empty tags → entries unchanged. */
+export function filterByTags(entries, tags) {
+  const wanted = [...new Set((Array.isArray(tags) ? tags : []).map(tagKey).filter(Boolean))];
+  if (!wanted.length) return entries;
+  return entries.filter((entry) => {
+    const own = new Set((Array.isArray(entry.item?.tags) ? entry.item.tags : []).map(tagKey));
+    return wanted.every((key) => own.has(key));
+  });
+}
+
 function compareEntries(first, second) {
   if (first.area === "accessories" && (first.subtype.id === "headwear") !== (second.subtype.id === "headwear")) {
     return first.subtype.id === "headwear" ? -1 : 1;

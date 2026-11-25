@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildOverviewIndex, buildOverviewSections, commonOverviewTags, filterOverviewIndex } from "../shared/overview-index.mjs";
+import { buildOverviewIndex, buildOverviewSections, commonOverviewTags, filterByTags, filterOverviewIndex } from "../shared/overview-index.mjs";
 
 const item = (id, name, part = "upperbody", tags = [], color = null) => ({ id, name, part, tags, color });
 const find = (items, query) => filterOverviewIndex(buildOverviewIndex(items), query).map((entry) => entry.id);
@@ -107,4 +107,32 @@ test("selected tags include only the intersection, ignoring case, whitespace, an
   assert.deepEqual(tags(index.slice(0, 2)), ["linen", "summer"]);
   assert.deepEqual(tags(index), []);
   assert.deepEqual(tags([]), []);
+});
+
+test("filterByTags keeps entries carrying every tag, ignoring case and whitespace", () => {
+  const index = buildOverviewIndex([
+    item("a", "Shirt", "upperbody", ["Linen", "work"]),
+    item("b", "Trousers", "lowerbody", ["linen", "Summer"]),
+    item("c", "Jacket", "wholebody_up", [" WORK ", "summer"]),
+    item("d", "Shoes", "shoes", []),
+  ]);
+  const ids = (entries) => entries.map((entry) => entry.id);
+  const before = ids(index);
+  const tags = ["linen", "summer"];
+
+  assert.equal(filterByTags(index, []), index);
+  assert.equal(filterByTags(index), index);
+  assert.equal(filterByTags(index, [" ", 7]), index);
+  assert.deepEqual(ids(filterByTags(index, ["linen"])), ["a", "b"]);
+  assert.deepEqual(ids(filterByTags(index, tags)), ["b"]);
+  assert.deepEqual(ids(filterByTags(index, ["work", "summer"])), ["c"]);
+  assert.deepEqual(ids(filterByTags(index, ["LINEN", " Work "])), ["a"]);
+  assert.deepEqual(ids(filterByTags(index, ["velvet"])), []);
+  assert.deepEqual(ids(filterByTags(index, ["linen", "velvet"])), []);
+  assert.deepEqual(ids(filterByTags(filterOverviewIndex(index, "shirt"), ["work"])), ["a"]);
+  assert.deepEqual(ids(filterByTags(filterOverviewIndex(index, "shirt"), ["summer"])), []);
+  assert.deepEqual(ids(filterByTags(filterOverviewIndex(index, "linen"), ["summer"])), ["b"]);
+
+  assert.deepEqual(ids(index), before);
+  assert.deepEqual(tags, ["linen", "summer"]);
 });
