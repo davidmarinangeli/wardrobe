@@ -139,7 +139,15 @@ shared/overview-index.mjs   + filterByTags
 
 ## Phases
 
-Each phase leaves the app working and ends with `npm run check` green, a manual pass in the browser at desktop and phone width, and a commit + push.
+Each phase leaves the app working and ends with `npm run check` green, a manual pass in the browser at desktop and phone width, and a commit + push. Each phase has its own spec with contracts, scope boundaries and acceptance checks:
+
+| Feature | Spec |
+| --- | --- |
+| 01 — Pure outfit rules and tag filtering | [`overview-merge-feature-01.md`](overview-merge-feature-01.md) |
+| 02 — Shared piece picker, used by outfits | [`overview-merge-feature-02.md`](overview-merge-feature-02.md) |
+| 03 — Cheat sheets on the shared picker | [`overview-merge-feature-03.md`](overview-merge-feature-03.md) |
+| 04 — Merge Outfits into Overview | [`overview-merge-feature-04.md`](overview-merge-feature-04.md) |
+| 05 — Cleanup and docs | [`overview-merge-feature-05.md`](overview-merge-feature-05.md) |
 
 1. **Pure logic.** `shared/outfit-rules.mjs` (extracted from `OutfitBuilder`, which starts using it), `filterByTags` in `shared/overview-index.mjs`. Tests in `test/outfit-rules.test.mjs` and `test/overview-index.test.mjs` (AND semantics, case-insensitive tags, empty tag list = no filter).
 2. **Shared picker, used by outfits.** Build `PiecePicker`; replace `OutfitBuilder` in the current Outfits tab for create and edit. The tab structure doesn't change yet, so the picker can be checked on its own.
