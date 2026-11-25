@@ -1,30 +1,29 @@
 import { useLayoutEffect, useRef } from "react";
-import { TShirt, SquaresFour, CoatHanger, Images } from "@phosphor-icons/react";
+import { TShirt, SquaresFour, Images } from "@phosphor-icons/react";
 import { useGlassSurface } from "../hooks/useGlassSurface.js";
 import { GlassFilter } from "./GlassFilter.jsx";
 
 /**
- * The app's four destinations, as a floating glass bar on phones.
+ * The app's three destinations, as a floating glass bar on phones.
  *
  * Navigation only. No action lives in here: an "add" control that adds a
- * garment on Wardrobe, an outfit on Outfits and a pin on Inspo is three
- * different actions wearing one icon, and putting it among the tabs implies it
- * is a fourth destination. Actions stay in the top bar, which mobile CSS
- * repositions into a floating row above this one. Settings likewise — it is
- * always-available, not somewhere you go.
+ * garment on Wardrobe and a pin on Inspo is two different actions wearing one
+ * icon, and putting it among the tabs implies it is another destination.
+ * Actions stay in the top bar, which mobile CSS repositions into a floating
+ * row above this one. Settings likewise — it is always-available, not
+ * somewhere you go.
  *
  * Hidden above the mobile breakpoint by CSS; the desktop `.app-view-switch`
  * keeps its place there.
  *
  * @param {object} props
- * @param {"wardrobe"|"overview"|"outfits"|"inspo"} props.view
+ * @param {"wardrobe"|"overview"|"inspo"} props.view
  * @param {(view: string) => void} props.onSelect
  * @param {{current: HTMLElement|null}} [props.navRef]  For useChromeScroll.
  */
 const VIEWS = [
   { id: "wardrobe", label: "Wardrobe", Icon: TShirt },
   { id: "overview", label: "Overview", Icon: SquaresFour },
-  { id: "outfits", label: "Outfits", Icon: CoatHanger },
   { id: "inspo", label: "Inspo", Icon: Images },
 ];
 
@@ -80,7 +79,7 @@ export function BottomNav({ view, onSelect, navRef: externalRef }) {
         }}
         style={glass.style}
         data-compact="false"
-        aria-label="Switch between wardrobe, overview, outfits, and inspo"
+        aria-label="Switch between wardrobe, overview, and inspo"
       >
         <span className="bottom-nav__pill" ref={pillRef} aria-hidden="true" />
         {VIEWS.map(({ id, label, Icon }) => (

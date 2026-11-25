@@ -715,6 +715,13 @@
   }
 }
 
+/* Inside Overview › Outfits. These blocks hard-code var(--page-x) gutters for
+   PageShell's unpadded .gallery-pane; .overview-page already pads by it, so
+   the section zeroes them. (0,2,0) beats the bare 640px .outfits-grid rule. */
+.outfits-section .outfits-grid { padding: 8px 0 40px; }
+.outfits-section .nudge-banner { margin: 0 0 20px; }
+.outfits-section > .status { margin-inline: 0; }
+
 @media (prefers-reduced-motion: reduce) {
   .outfit-card-hero img,
   .outfit-card-hover-pieces,

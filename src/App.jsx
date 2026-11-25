@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Broom, Gear, Lightbulb, Palette } from "@phosphor-icons/react";
+import { Broom, Gear, Palette } from "@phosphor-icons/react";
 import { WardrobeImportFlow } from "./import-flow.jsx";
 import { api } from "./api.js";
 import { buildOutfitIndex } from "../shared/outfit-index.mjs";
 import { ColorProfileModal, SEASONS, itemMatchesPalette } from "./color-profile.jsx";
-import { Outfits } from "./outfits.jsx";
 import { Mirror } from "./mirror.jsx";
 import { Inspo } from "./inspo.jsx";
 import { Overview } from "./overview.jsx";
@@ -29,7 +28,6 @@ const EMPTY_OUTFIT_INDEX = { outfits: {}, byItem: {} };
 const VIEW_TITLES = {
   wardrobe: "Wardrobe",
   overview: "Overview",
-  outfits: "Outfits",
   inspo: "Inspo",
 };
 
@@ -91,13 +89,14 @@ export function App() {
   const [settingsReturnToWizard, setSettingsReturnToWizard] = useState(false);
   const [archiveMaintenanceActive, setArchiveMaintenanceActive] = useState(false);
   const [showInspoImporter, setShowInspoImporter] = useState(false);
-  const [showOutfitBuilder, setShowOutfitBuilder] = useState(false);
-  const [showOutfitSuggestions, setShowOutfitSuggestions] = useState(false);
-  // Which saved outfits use each piece. Lives here rather than in Outfits
-  // because the wardrobe grid is the surface that asks the question, and that
-  // tab must not have to mount Outfits (or wait on the full outfit list) to
-  // answer it. Refetched on every return to the wardrobe so an outfit built in
-  // the meantime is reflected.
+  // Which Overview section is showing. Session state only, never persisted;
+  // reset to Outfits whenever you leave Overview, so it always opens there.
+  const [overviewSection, setOverviewSection] = useState("outfits");
+  // Which saved outfits use each piece. Lives here rather than in the Outfits
+  // section because the wardrobe grid is the surface that asks the question,
+  // and that view must not have to mount Overview › Outfits (or wait on the
+  // full outfit list) to answer it. Refetched on every return to the wardrobe
+  // so an outfit built in the meantime is reflected.
   const [outfitIndex, setOutfitIndex] = useState(EMPTY_OUTFIT_INDEX);
   const [openOutfitId, setOpenOutfitId] = useState(null);
   // Pieces triaged out of the wardrobe. Held apart from `items` so that every
@@ -114,7 +113,10 @@ export function App() {
     && loadedArchiveGeneration === (browserState?.archiveGeneration ?? 0);
 
   useEffect(() => {
-    if (view !== "overview") setOverviewSelectionCount(0);
+    if (view !== "overview") {
+      setOverviewSelectionCount(0);
+      setOverviewSection("outfits");
+    }
   }, [view, browserState?.archiveGeneration]);
 
   useEffect(() => {
@@ -267,8 +269,6 @@ export function App() {
     setShowColorQuiz(false);
     setShowDeclutter(false);
     setShowInspoImporter(false);
-    setShowOutfitBuilder(false);
-    setShowOutfitSuggestions(false);
     let cancelled = false;
     Promise.all([
       api("/api/import/wardrobe", { cache: "no-store" }),
@@ -312,7 +312,8 @@ export function App() {
   const openOutfit = useCallback((outfitId) => {
     setSelectedId(null);
     setOpenOutfitId(outfitId);
-    setView("outfits");
+    setOverviewSection("outfits");
+    setView("overview");
   }, []);
 
   // Your palette, as a card that actually shows the palette. It used to be a
@@ -572,52 +573,26 @@ export function App() {
         barRef={barRef}
       />
       <div className="app-top-bar">
-        <nav className="app-view-switch" aria-label="Switch between wardrobe, overview, outfits, and inspo">
+        <nav className="app-view-switch" aria-label="Switch between wardrobe, overview, and inspo">
           <button type="button" className={view === "wardrobe" ? "active" : ""} onClick={() => setView("wardrobe")} aria-pressed={view === "wardrobe"}>Wardrobe</button>
           <button type="button" className={view === "overview" ? "active" : ""} onClick={() => setView("overview")} aria-pressed={view === "overview"}>Overview</button>
-          <button type="button" className={view === "outfits" ? "active" : ""} onClick={() => setView("outfits")} aria-pressed={view === "outfits"}>Outfits</button>
           <button type="button" className={view === "inspo" ? "active" : ""} onClick={() => setView("inspo")} aria-pressed={view === "inspo"}>Inspo</button>
         </nav>
         <div className="app-top-bar__right">
-          {/* Global tools, always in the same place — but each view gets
-              exactly one "add" and one "AI action" button, not a duplicate
-              pair layered on top of the page's own. The primary action's
-              idle state relabels to whatever the current view actually adds;
-              the second slot swaps between Mirror (Wardrobe/Inspo) and
-              Suggest outfit (Outfits) entirely, since those aren't the same
-              action wearing a different label. */}
+          {/* Global tools, always in the same place: one import primary per
+              view (relabelled to Add Inspo on Inspo) and Mirror as the
+              secondary everywhere. Overview's sections carry their own
+              + Outfit / Suggest outfit / + Cheat sheet in their header rows. */}
           {!archiveMaintenanceActive && <div className="top-actions" ref={topActionsRef} data-hidden="false" data-overview-selection={view === "overview" && overviewSelectionCount > 0 ? "true" : "false"}>
             <WardrobeImportFlow
               onGarmentApproved={addImportedItem}
               externalSetup={aiSetup}
-              idleLabel={view === "inspo" ? "Add Inspo" : view === "outfits" ? "Add outfit" : undefined}
-              idleDisabled={view === "outfits" && !items.length}
-              idleHint="Add pieces to your wardrobe first"
-              onIdleActivate={
-                view === "inspo" ? () => setShowInspoImporter(true)
-                : view === "outfits" ? () => setShowOutfitBuilder(true)
-                : undefined
-              }
+              idleLabel={view === "inspo" ? "Add Inspo" : undefined}
+              onIdleActivate={view === "inspo" ? () => setShowInspoImporter(true) : undefined}
             />
-            {view === "outfits" ? (
-              <button
-                type="button"
-                className="top-action top-action--secondary ai-action"
-                onClick={() => setShowOutfitSuggestions(true)}
-                disabled={items.length < 5}
-              >
-                <Lightbulb size={17} weight="bold" aria-hidden="true" />
-                <span className="top-action__label">Suggest outfit</span>
-                <span className="ai-action-beam-mask" aria-hidden="true">
-                  <span className="ai-action-beam" />
-                </span>
-              </button>
-            ) : (
-              // Remounts on every view change (key={view}) so the spark
-              // animation replays on arrival, same as a fresh Suggest-outfit
-              // button does when its whole branch mounts.
-              <Mirror key={view} items={items} />
-            )}
+            {/* Remounts on every view change (key={view}) so the spark
+                animation replays on arrival. */}
+            <Mirror key={view} items={items} />
           </div>}
           <button type="button" className="setup-trigger" onClick={openSettings} aria-label="Open settings">
             <Gear size={16} />
@@ -653,25 +628,16 @@ export function App() {
             onOpenItem={openItem}
             onItemsUpdated={applyBulkItemUpdates}
             onSelectionChange={setOverviewSelectionCount}
+            section={overviewSection}
+            onSectionChange={setOverviewSection}
+            colorProfile={colorProfile}
+            onOpenColorQuiz={() => setShowColorQuiz(true)}
+            openOutfitId={openOutfitId}
+            onOutfitOpened={() => setOpenOutfitId(null)}
+            archiveGeneration={browserState?.archiveGeneration}
           />
         ) : view === "inspo" ? (
         <Inspo showImporter={showInspoImporter} onImporterClose={() => setShowInspoImporter(false)} />
-      ) : view === "outfits" ? (
-        <Outfits
-          items={items}
-          premiumAllowed={premiumAllowed}
-          provider={aiSetup?.provider ?? null}
-          colorProfile={colorProfile}
-          onOpenColorQuiz={() => setShowColorQuiz(true)}
-          showBuilder={showOutfitBuilder}
-          onOpenBuilder={() => setShowOutfitBuilder(true)}
-          onCloseBuilder={() => setShowOutfitBuilder(false)}
-          showSuggestions={showOutfitSuggestions}
-          onCloseSuggestions={() => setShowOutfitSuggestions(false)}
-          openOutfitId={openOutfitId}
-          onOutfitOpened={() => setOpenOutfitId(null)}
-          archiveGeneration={browserState?.archiveGeneration}
-        />
       ) : (
         <PageShell
           count={onlyMatches ? visibleItems.length : items.length}
@@ -747,7 +713,7 @@ export function App() {
           retiredItems={retiredItems}
           onSetStatus={setItemStatus}
           onClose={() => setShowDeclutter(false)}
-          onGoToOutfits={() => { setShowDeclutter(false); setView("outfits"); }}
+          onGoToOutfits={() => { setShowDeclutter(false); setOverviewSection("outfits"); setView("overview"); }}
         />
       )}
 

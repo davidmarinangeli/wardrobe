@@ -189,7 +189,7 @@
     left: 12px;
     z-index: 30;
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     align-items: center;
     padding: 5px 6px;
     border-radius: var(--r-full);
@@ -218,12 +218,12 @@
   }
 
   /* Compact: past the threshold the labels collapse and the bar contracts on
-     both axes, leaving four centred icons. The horizontal inset is animated
+     both axes, leaving three centred icons. The horizontal inset is animated
      rather than transformed — scaleX would squash the icons — which makes this
      the one place here that animates layout, once per threshold crossing. */
   .bottom-nav[data-compact="true"] {
-    right: 52px;
-    left: 52px;
+    right: 72px;
+    left: 72px;
     padding: 3px 6px;
   }
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowCounterClockwise, Palette, PencilSimple, Sparkle, SpinnerGap, X } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, Lightbulb, Palette, PencilSimple, Plus, Sparkle, SpinnerGap, X } from "@phosphor-icons/react";
 import { CheckCircle } from "@phosphor-icons/react";
 import { OptimizedImage } from "./OptimizedImage.jsx";
 import { api } from "./api.js";
@@ -13,7 +13,6 @@ import { ViewerPanel } from "./components/ViewerPanel.jsx";
 import { ModeledHero } from "./components/ModeledHero.jsx";
 import { PanelActions } from "./components/PanelActions.jsx";
 import { EditableTitle } from "./components/EditableTitle.jsx";
-import { PageShell } from "./components/PageShell.jsx";
 import { PageStatus } from "./components/PageStatus.jsx";
 import { useViewerKeyboard } from "./hooks/useViewerKeyboard.js";
 import { useWornToday } from "./hooks/useWornToday.js";
@@ -474,16 +473,17 @@ function SuggestionNudges({ items, colorProfile, onOpenColorQuiz }) {
   );
 }
 
-// Add outfit / Suggest outfit trigger from the topbar (see App.jsx's
-// .top-actions) — showBuilder/showSuggestions are controlled from there so
-// there's exactly one "add" and one "AI action" button per view, not a
-// second pair duplicated on the page itself. showBuilder opens the shared
-// PiecePicker (through OutfitPicker); builderOutfit (which outfit, if any,
-// is being edited) stays local — the topbar doesn't need to know.
-export function Outfits({ items, premiumAllowed = true, provider = null, colorProfile, onOpenColorQuiz, showBuilder, onOpenBuilder, onCloseBuilder, showSuggestions, onCloseSuggestions, openOutfitId, onOutfitOpened, archiveGeneration }) {
+// The Outfits section of Overview (see overview.jsx). Its header row owns
+// + Outfit and Suggest outfit; the top bar keeps the shared import + Mirror.
+// showBuilder opens the shared PiecePicker (through OutfitPicker), and
+// builderOutfit is the outfit being edited, or null for a new one. All of it
+// is local: an archive change remounts the whole app shell, which resets it.
+export function OutfitsSection({ items, premiumAllowed = true, provider = null, colorProfile, onOpenColorQuiz, openOutfitId, onOutfitOpened, archiveGeneration }) {
   const [outfits, setOutfits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showBuilder, setShowBuilder] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [builderOutfit, setBuilderOutfit] = useState(null);
   const { isWornToday, logWear, error: wearError, ready: wearReady } = useWornToday();
   const [viewingOutfitId, setViewingOutfitId] = useState(null);
@@ -542,22 +542,28 @@ export function Outfits({ items, premiumAllowed = true, provider = null, colorPr
       : item));
   };
 
-  const openEditOutfit = (outfit) => { setViewingOutfitId(null); setBuilderOutfit(outfit); onOpenBuilder(); };
-  // The topbar's "Add outfit" opens the same picker directly (see App.jsx),
-  // bypassing openEditOutfit entirely — so builderOutfit must reset to null
-  // on every close, or a stale edit target would linger into the next "new".
-  // Edit is only reachable from the viewer, so closing an edit (saved or
-  // not) goes back to that viewer, like "back".
+  // Safari doesn't focus buttons on click; focusing the trigger first lets the
+  // picker's ViewerPanel capture it and hand focus back on close.
+  const openNewOutfit = (event) => {
+    if (!items.length) return;
+    event?.currentTarget?.focus?.({ preventScroll: true });
+    setBuilderOutfit(null);
+    setShowBuilder(true);
+  };
+  const openEditOutfit = (outfit) => { setViewingOutfitId(null); setBuilderOutfit(outfit); setShowBuilder(true); };
+  const openSuggestions = (event) => {
+    event?.currentTarget?.focus?.({ preventScroll: true });
+    setShowSuggestions(true);
+  };
+  // builderOutfit resets on every close so a stale edit target never lingers
+  // into the next "new". Edit is only reachable from the viewer, so closing
+  // an edit (saved or not) goes back to that viewer, like "back".
   const closeBuilder = () => {
     const returnId = builderOutfit?.id;
     setBuilderOutfit(null);
-    onCloseBuilder();
+    setShowBuilder(false);
     if (returnId) { setOpenedFrom(null); setViewingOutfitId(returnId); }
   };
-
-  // App also closes the picker itself (an archive change resets
-  // showOutfitBuilder); clear the edit target then too.
-  useEffect(() => { if (!showBuilder) setBuilderOutfit(null); }, [showBuilder]);
 
   const saveOutfit = async (draft) => {
     const saved = builderOutfit
@@ -592,10 +598,39 @@ export function Outfits({ items, premiumAllowed = true, provider = null, colorPr
   const viewingOutfit = outfits.find((outfit) => outfit.id === viewingOutfitId) || null;
 
   return (
-    <PageShell
-      count={outfits.length}
-      noun="outfit"
-    >
+    <section className="outfits-section" aria-labelledby="outfits-section-title">
+      <header className="overview-panel-head">
+        <h2 id="outfits-section-title">Outfits{!loading && <> <span>{outfits.length}</span></>}</h2>
+        <div className="overview-panel-head__actions">
+          {/* Explicit aria-label: the label span is display:none at phone width. */}
+          <button
+            type="button"
+            className="top-action top-action--secondary ai-action"
+            onClick={openSuggestions}
+            disabled={items.length < 5}
+            aria-haspopup="dialog"
+            aria-label="Suggest outfit"
+          >
+            <Lightbulb size={17} weight="bold" aria-hidden="true" />
+            <span className="top-action__label">Suggest outfit</span>
+            <span className="ai-action-beam-mask" aria-hidden="true">
+              <span className="ai-action-beam" />
+            </span>
+          </button>
+          <button
+            type="button"
+            className="overview-panel-head__add"
+            onClick={openNewOutfit}
+            disabled={!items.length}
+            aria-haspopup="dialog"
+            title={items.length ? undefined : "Add pieces to your wardrobe first"}
+            aria-label={items.length ? "New outfit" : "New outfit, Add pieces to your wardrobe first"}
+          ><Plus size={16} weight="bold" aria-hidden="true" /> Outfit</button>
+        </div>
+      </header>
+
+      <SuggestionNudges items={items} colorProfile={colorProfile} onOpenColorQuiz={onOpenColorQuiz} />
+
       <PageStatus
         loading={loading}
         error={error || wearError}
@@ -605,8 +640,6 @@ export function Outfits({ items, premiumAllowed = true, provider = null, colorPr
         filterEmptyMessage="No outfits yet — combine pieces from your wardrobe into a look."
         noun="outfits"
       />
-
-      <SuggestionNudges items={items} colorProfile={colorProfile} onOpenColorQuiz={onOpenColorQuiz} />
 
       {!!outfits.length && (
         <section className="outfits-grid">
@@ -655,9 +688,9 @@ export function Outfits({ items, premiumAllowed = true, provider = null, colorPr
             setOutfits((current) => [...current, saved]);
             return saved;
           }}
-          onClose={onCloseSuggestions}
+          onClose={() => setShowSuggestions(false)}
         />
       )}
-    </PageShell>
+    </section>
   );
 }

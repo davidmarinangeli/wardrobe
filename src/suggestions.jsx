@@ -145,6 +145,10 @@ export function SuggestionPanel({ items, onSaveOutfit, onClose }) {
   const exitTimer = useRef(null);
   const undoTimer = useRef(null);
   const pendingPass = useRef(null);
+  // useDeckGesture is called further down (it needs onCommit, which needs
+  // advance); callbacks above it reach its controls through this ref instead
+  // of closing over consts that are still in the temporal dead zone.
+  const deckControls = useRef({ stopAnimation: () => {}, clearPose: () => {} });
 
   useViewerKeyboard(onClose, closeRef);
 
@@ -229,9 +233,9 @@ export function SuggestionPanel({ items, onSaveOutfit, onClose }) {
     exitTimer.current = setTimeout(() => {
       setLeaving(null);
       setIndex((current) => current + 1);
-      stopAnimation();
+      deckControls.current.stopAnimation();
     }, prefersReducedMotion() ? 0 : EXIT_MS);
-  }, [index, stopAnimation]);
+  }, [index]);
 
   const like = useCallback(async (suggestion) => {
     if (leaving) return;
@@ -266,15 +270,15 @@ export function SuggestionPanel({ items, onSaveOutfit, onClose }) {
     pendingPass.current = null;
     clearTimeout(exitTimer.current);
     clearTimeout(undoTimer.current);
-    stopAnimation();
+    deckControls.current.stopAnimation();
     setLeaving(null);
     setIndex(undo.index);
     setUndo(null);
     setAnnouncement("Brought that one back.");
     requestAnimationFrame(() => {
-      clearPose(topCardRef.current);
+      deckControls.current.clearPose(topCardRef.current);
     });
-  }, [clearPose, stopAnimation, undo]);
+  }, [undo]);
 
   const current = suggestions[index] || null;
   const exhausted = suggestions.length > 0 && !current && !leaving;
@@ -295,6 +299,7 @@ export function SuggestionPanel({ items, onSaveOutfit, onClose }) {
     enabled: Boolean(current) && !leaving,
     onCommit,
   });
+  deckControls.current = { stopAnimation, clearPose };
 
   // The buttons and the arrow keys throw the same card the same way, just with
   // no velocity to inherit — one exit path, so the deck can never be in a pose

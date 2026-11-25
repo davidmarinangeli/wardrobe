@@ -91,12 +91,12 @@ const CREATE_BLOCKED_HINT = "Add pieces to your wardrobe first";
 function SheetCollection({ sheets, loading, error, canCreate, onNew, onOpen, onEdit, openingId }) {
   return (
     <section className="cheat-collection" aria-labelledby="cheat-collection-title">
-      <header className="cheat-collection__header">
-        <div><span className="cheat-collection__eyebrow">Overview</span><h2 id="cheat-collection-title">Cheat sheets <span>{sheets.length}</span></h2></div>
-        {/* Keep the class: saved/closeEditor fall back to it for focus. */}
+      <header className="cheat-collection__header overview-panel-head">
+        <h2 id="cheat-collection-title">Cheat sheets <span>{sheets.length}</span></h2>
+        {/* Keep cheat-new-button: saved/closeEditor fall back to it for focus. */}
         <button
           type="button"
-          className="cheat-new-button"
+          className="cheat-new-button overview-panel-head__add"
           onClick={onNew}
           aria-haspopup="dialog"
           disabled={!canCreate}
@@ -781,7 +781,7 @@ function CheatSheetEditor({ items, entry, onClose, onSaved, onSheetUpdate, premi
   );
 }
 
-export function CheatSheetsArea({ items, premiumAllowed = true, provider = null, active, createRequest, returnFocusRef, onSaved }) {
+export function CheatSheetsArea({ items, premiumAllowed = true, provider = null, active, onSaved }) {
   const [sheets, setSheets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -794,7 +794,6 @@ export function CheatSheetsArea({ items, premiumAllowed = true, provider = null,
   const collectionViewerMounted = useRef(false);
   const editorReturnFocus = useRef(null);
   const editorMounted = useRef(false);
-  const requestSeen = useRef(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -852,17 +851,6 @@ export function CheatSheetsArea({ items, premiumAllowed = true, provider = null,
     return () => { stopped = true; window.clearTimeout(timer); };
   }, [hasProcessingSheet]);
 
-  useEffect(() => {
-    if (!createRequest || requestSeen.current === createRequest.id) return;
-    requestSeen.current = createRequest.id;
-    editorReturnFocus.current = returnFocusRef?.current || document.activeElement;
-    openRequestId.current += 1;
-    setOpeningId(null);
-    setCollectionViewer(null);
-    setCreating(false); // never a create picker under an editor
-    setEntry({ key: createRequest.id, sheet: null, initialPieces: createRequest.pieces || [] });
-  }, [createRequest, returnFocusRef]);
-
   const updateSheet = useCallback((sheet, removedId = null) => {
     setSheets((current) => sortSheets(removedId ? current.filter((item) => item.id !== removedId) : [sheet, ...current.filter((item) => item.id !== sheet.id)]));
   }, []);
@@ -883,7 +871,6 @@ export function CheatSheetsArea({ items, premiumAllowed = true, provider = null,
   const confirmNewSheet = (pieces) => {
     const trigger = createTriggerRef.current;
     editorReturnFocus.current = trigger;
-    if (returnFocusRef) returnFocusRef.current = trigger;
     setCreating(false);
     setEntry({ key: crypto.randomUUID(), sheet: null, initialPieces: pieces });
   };
@@ -918,7 +905,6 @@ export function CheatSheetsArea({ items, premiumAllowed = true, provider = null,
     const trigger = event?.currentTarget || null;
     trigger?.focus?.({ preventScroll: true });
     editorReturnFocus.current = trigger;
-    if (returnFocusRef) returnFocusRef.current = trigger;
     setOpeningId(sheet.id); setError(""); setCollectionViewer(null);
     try {
       const result = await api(`/api/cheat-sheets/${encodeURIComponent(sheet.id)}`);
@@ -950,7 +936,7 @@ export function CheatSheetsArea({ items, premiumAllowed = true, provider = null,
   };
 
   const closeEditor = () => {
-    const trigger = editorReturnFocus.current || returnFocusRef?.current;
+    const trigger = editorReturnFocus.current;
     editorReturnFocus.current = null;
     openRequestId.current += 1;
     setOpeningId(null);
