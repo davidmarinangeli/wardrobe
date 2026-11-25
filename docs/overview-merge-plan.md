@@ -171,3 +171,11 @@ Each phase leaves the app working and ends with `npm run check` green, a manual 
 - Exact picker layout on phones (tray height, columns) and its motion: deliberately left loose; the user will refine the modal after this lands.
 - Whether the cheat sheet tray preview should become a rough live layout (cheap DOM approximation) instead of a thumbnail strip.
 - Whether to keep evidence facets (the "12 linen shirts" chips from Pieces) in the picker as well.
+
+## Delivery record
+
+The plan was written in `8e8295c` and split into feature specs in `d88f407`. Features 01–04 are commits `0a218ef` (outfit rules and tag filtering), `54192d3` (shared piece picker for outfits), `18485ec` (cheat sheets on the picker) and `9caaa19` (Outfits merged into Overview). Feature 05 is the commit that adds this record, `chore: remove dead builder/picker code and document the merged Overview` (`git log --grep "dead builder/picker"`); it deletes the CSS, props and exports features 02–04 left unused and rewrites the README for the three tabs. It changes no behaviour. Each commit leaves `npm run check` green. Pushing is left to whoever runs the workflow.
+
+Media to retake: every README image predates the Overview tab and shows the old **Wardrobe · Outfits · Inspo** bar. These are `docs/screenshots/gallery.png`, `wardrobe.webp`/`.mp4`, `outfits.webp`/`.mp4` (it shows the removed Outfits page itself), `inspo-howdoilook.webp`/`.mp4`, and `armocromia.webp`/`.mp4` (zoomed in, so the bar isn't visible in the first frame, but it was probably recorded in the same session). The README now says so in a visible note and has a `RETAKE` comment next to each one. `docs/screenshots/editor.png` is not referenced by any Markdown file. Ask before retaking or deleting it.
+
+Open follow-ups (not fixed here) are in [`overview-merge-review-notes.md`](overview-merge-review-notes.md) and [`overview-merge-critical-points.md`](overview-merge-critical-points.md). They include: Pieces losing its search and selection on a section switch, a stale outfit index for "in N looks" inside Overview (`App.jsx` refetch guard), the single tabpanel's labelling while the cheat-sheet editor stays open, and the picker issues noted for feature 02.

@@ -109,7 +109,9 @@
   .piece-picker__chip:not(.is-active):hover { border-color: var(--accent-warm); }
 }
 
-/* Variant thumbnails, from the old builder's .builder-variant-picker. */
+/* Variant thumbnails. They scroll rather than wrap so every card keeps the
+   same height however many variants a piece has; the 44px squares meet
+   Apple's touch-target floor, well over the 24px WCAG 2.5.8 minimum. */
 .piece-picker__variants { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
 .piece-picker__variants::-webkit-scrollbar { display: none; }
 .piece-picker__variants button {

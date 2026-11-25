@@ -497,8 +497,8 @@ export function OutfitsSection({ items, premiumAllowed = true, provider = null, 
   }, [archiveGeneration]);
 
   // Arriving from a wardrobe piece ("in 3 looks" -> this outfit). The id is set
-  // before this tab has finished loading its outfits, which is fine: the viewer
-  // renders off a lookup that simply finds nothing until the list arrives.
+  // before this section has finished loading its outfits, which is fine: the
+  // viewer renders off a lookup that simply finds nothing until the list arrives.
   useEffect(() => {
     if (!openOutfitId) return;
     setViewingOutfitId(openOutfitId);
@@ -675,7 +675,7 @@ export function OutfitsSection({ items, premiumAllowed = true, provider = null, 
         />
       )}
 
-      {/* Add outfit is disabled with no pieces; an edit still renders so it can be closed. */}
+      {/* + Outfit is disabled with no pieces; an edit still renders so it can be closed. */}
       {showBuilder && (items.length > 0 || builderOutfit) && (
         <OutfitPicker key={builderOutfit?.id || "new"} items={items} outfit={builderOutfit} onCancel={closeBuilder} onSave={saveOutfit} />
       )}

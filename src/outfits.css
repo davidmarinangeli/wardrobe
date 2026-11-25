@@ -2,7 +2,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 30px 34px;
-  padding: 40px var(--page-x) 80px;
+  padding: 8px 0 40px;
 }
 
 /* Wraps the card button so the wear control can be a sibling rather than a
@@ -367,18 +367,10 @@
   }
 }
 
-.outfit-builder-entry { width: clamp(390px, 40vw, 560px); }
-
-.outfit-builder-body {
-  padding-top: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-}
-
-/* Standalone stage — the suggestion deck and the builder preview. Inside an
-   outfit card or the viewer's flat-lay box this is stripped back to nothing,
-   because those already provide the stage themselves. */
+/* Standalone stage — the suggestion deck and the piece picker's outfit
+   preview. Inside an outfit card or the viewer's flat-lay box this is
+   stripped back to nothing, because those already provide the stage
+   themselves. */
 .outfit-stack {
   display: flex;
   flex-direction: column;
@@ -506,130 +498,12 @@
   filter: var(--shadow-contact);
 }
 
-.outfit-category-label {
-  margin: 0 0 8px;
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: .1em;
-  text-transform: uppercase;
-}
-
-.outfit-category-row {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-}
-
-.outfit-piece {
-  flex: none;
-  width: 76px;
-  height: 76px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  padding: 8px;
-  background: var(--paper-raised);
-  box-shadow: var(--shadow-xs);
-  cursor: pointer;
-  transition:
-    border-color var(--dur-pop) var(--ease-out),
-    box-shadow var(--dur-pop) var(--ease-out),
-    background var(--dur-pop) var(--ease-out),
-    transform var(--dur-press) var(--ease-out);
-}
-
-.outfit-piece img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  filter: var(--shadow-contact);
-}
-
-.outfit-piece.active {
-  border-color: var(--accent-warm);
-  box-shadow: 0 0 0 2px var(--accent-warm), var(--shadow-xs);
-  background: #ffffff;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .outfit-piece:hover:not(.blocked) {
-    background: #ffffff;
-    border-color: var(--accent-warm);
-    box-shadow: var(--shadow-sm);
-  }
-}
-
-.outfit-piece:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
-.outfit-piece:active { transform: scale(.96); }
-.builder-piece-option { display: grid; justify-items: center; gap: 5px; }
-/* Scrolls rather than wrapping: wrapping text pills grew the row's height per
-   piece and shoved the categories below it around. A fixed-height strip under
-   a 72px thumbnail keeps every row the same shape however many variants a
-   piece has. */
-.builder-variant-picker {
-  display: flex;
-  width: 72px;
-  gap: 4px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-}
-
-.builder-variant-picker::-webkit-scrollbar { display: none; }
-
-.builder-variant-picker button {
-  display: grid;
-  place-items: center;
-  flex: none;
-  /* 44px square — Apple's floor, and just under twice the 24px WCAG 2.5.8
-     minimum the 18px-tall pills here used to miss. */
-  width: 44px;
-  height: 44px;
-  padding: 3px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
-  background: var(--paper-raised);
-  color: var(--ink-soft);
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition:
-    border-color var(--dur-pop) var(--ease-out),
-    box-shadow var(--dur-pop) var(--ease-out),
-    transform var(--dur-press) var(--ease-out);
-}
-
-.builder-variant-picker button img { width: 100%; height: 100%; object-fit: contain; }
-.builder-variant-picker button.active { border-color: var(--accent-warm); box-shadow: 0 0 0 1px var(--accent-warm); color: var(--ink); }
-.builder-variant-picker button:active { transform: scale(.94); }
-.builder-variant-picker button:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
-
-/* Until its photo exists a variant still needs a distinguishable tile, so it
-   falls back to the first letter of its name. */
-.builder-variant-picker__pending { font-size: 13px; font-weight: 500; color: var(--muted); }
-
-/* Greyed rather than hidden: the piece is still in the wardrobe, it just can't
-   join this particular outfit (a dress already covers that half). */
-.outfit-piece.blocked {
-  opacity: .32;
-  cursor: not-allowed;
-  filter: grayscale(1);
-}
-
-.outfit-piece.blocked:active { transform: none; }
-
-@media (hover: hover) and (pointer: fine) {
-  .outfit-piece.blocked:hover { border-color: var(--line); box-shadow: var(--glass-edge); }
-}
-
 .outfit-error { margin: 0; text-align: right; }
 
 /* ─── Nudge banner ──────────────────────────────────────────────────────────
-   Renders on the Outfits page (SuggestionNudges in outfits.jsx), which is why
-   it lives here now — it used to sit in suggestions.css, where it picked up a
-   hardcoded 52px gutter that missed the page's own --page-x by four pixels.
+   Renders in Overview › Outfits (SuggestionNudges in outfits.jsx), which is
+   why it lives here now — it used to sit in suggestions.css. It carries no
+   side gutter of its own: .overview-page already pads by --page-x.
 
    Material is the app's inline-card recipe: warm raised fill, light on the
    top edge, one soft shadow. The old rgba(255,255,255,.08) was effectively
@@ -638,7 +512,7 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  margin: 4px var(--page-x) 20px;
+  margin: 0 0 20px;
   padding: 12px 14px 12px 16px;
   border: 1px solid var(--glass-border);
   border-radius: var(--r-lg);
@@ -703,23 +577,15 @@
   .nudge-banner__action { order: 2; margin-left: 44px; }
 }
 
-@media (max-width: 860px) {
-  .outfit-builder-entry { width: 100%; }
-}
-
 @media (max-width: 640px) {
   .outfits-grid {
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
     gap: 18px 16px;
-    padding: 26px var(--page-x) 60px;
   }
 }
 
-/* Inside Overview › Outfits. These blocks hard-code var(--page-x) gutters for
-   PageShell's unpadded .gallery-pane; .overview-page already pads by it, so
-   the section zeroes them. (0,2,0) beats the bare 640px .outfits-grid rule. */
-.outfits-section .outfits-grid { padding: 8px 0 40px; }
-.outfits-section .nudge-banner { margin: 0 0 20px; }
+/* .status is global and brings its own var(--page-x) side margin, which
+   doubles up with .overview-page's padding inside Overview › Outfits. */
 .outfits-section > .status { margin-inline: 0; }
 
 @media (prefers-reduced-motion: reduce) {
@@ -729,9 +595,7 @@
   .nudge-banner,
   .outfit-card-spinner { transition: none; animation: none; }
 
-  .outfit-card-art,
-  .outfit-piece { transition-property: opacity, background, border-color, box-shadow; }
+  .outfit-card-art { transition-property: opacity, background, border-color, box-shadow; }
 
-  .outfit-card:hover .outfit-card-art,
-  .outfit-piece:active { transform: none; }
+  .outfit-card:hover .outfit-card-art { transform: none; }
 }

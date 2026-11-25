@@ -113,7 +113,7 @@ function CleanupEditor({ job, tolerance, setTolerance, busy, onPreview, onAccept
   );
 }
 
-export function WardrobeImportFlow({ onGarmentApproved, externalSetup, idleLabel, onIdleActivate, idleDisabled = false, idleHint }) {
+export function WardrobeImportFlow({ onGarmentApproved, externalSetup, idleLabel, onIdleActivate }) {
   const inputRef = useRef(null);
   const closeButtonRef = useRef(null);
   const triggerRef = useRef(null);
@@ -274,9 +274,6 @@ export function WardrobeImportFlow({ onGarmentApproved, externalSetup, idleLabel
   const reviewStage = reviewJob ? reviewStageFor(reviewJob) : null;
   const progress = 0;
   const hasImportActivity = Boolean(jobs.length || notice || setupRequired || analyzing);
-  // Only the idle "add" action can be unavailable (e.g. Add outfit with an
-  // empty wardrobe); setup and import progress must always stay reachable.
-  const idleBlocked = idleDisabled && !setupRequired && !hasImportActivity;
 
   // Chip identity, computed once. The header renders the same icon and the same
   // words so they can travel into it — see usePopoverOrigin and .popover-identity.
@@ -302,9 +299,7 @@ export function WardrobeImportFlow({ onGarmentApproved, externalSetup, idleLabel
           if (onIdleActivate) onIdleActivate();
           else inputRef.current?.click();
         }}
-        aria-label={setupRequired ? "Open setup instructions" : hasImportActivity ? "Open import progress" : idleBlocked && idleHint ? `${idleLabel || "Add clothes"}, ${idleHint}` : (idleLabel || "Add clothes")}
-        disabled={idleBlocked}
-        title={idleBlocked ? idleHint : undefined}
+        aria-label={setupRequired ? "Open setup instructions" : hasImportActivity ? "Open import progress" : (idleLabel || "Add clothes")}
       >
         {chipIcon}
         <span className="top-action__label">{chipLabel}</span>

@@ -301,7 +301,6 @@ export function OverviewPieces({ items, loading = false, error = "", selectedIte
 
       {selectedCount > 0 && (
         <section className={`overview-drawer${mobileExpanded ? " is-expanded" : ""}`} aria-label="Selected pieces and tags">
-          <div className="overview-drawer__collapsed-actions">
           <button
             ref={mobileToggleRef}
             type="button"
@@ -348,7 +347,6 @@ export function OverviewPieces({ items, loading = false, error = "", selectedIte
           >
             {mobileExpanded ? <span className="overview-drawer__grab" aria-hidden="true" /> : <span>{selectedCount} selected</span>}
           </button>
-          </div>
           <div id="overview-mobile-panel" className="overview-drawer__panel" hidden={!mobileExpanded}>
               <div className="overview-selection__header">
                 <div><span className="overview-selection__eyebrow">Overview</span><h2>Selection</h2></div>
