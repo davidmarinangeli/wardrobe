@@ -7,7 +7,7 @@ import { api } from "./api.js";
 import { OUTFIT_CATEGORIES as CATEGORIES } from "./categories.js";
 import { GARMENT_PART_MAP } from "../shared/garments.mjs";
 import { initialVariantForPiece, resolveOutfitPieces, variantImage, variantOwnImage } from "../shared/wardrobe-model.mjs";
-import { GenerateButton, RefineComposer, StageChip, StageStatus, useRememberedTier } from "./components/ModelPhotoControls.jsx";
+import { GenerateButton, RefineComposer, StageChip, StageError, StageStatus, useRememberedTier } from "./components/ModelPhotoControls.jsx";
 import { SuggestionPanel } from "./suggestions.jsx";
 import { useSheetGesture } from "./hooks/useSheetGesture.js";
 import { useIsPhone } from "./hooks/useIsPhone.js";
@@ -496,7 +496,7 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
 
       <div className="viewer-details editing">
         {(generateError || outfit.modeledStatus === "error") && (
-          <p className="stage-error" role="alert">{generateError || outfit.modeledError || "That model photo could not be made."}</p>
+          <StageError message={generateError || outfit.modeledError} />
         )}
 
         <EditableTitle

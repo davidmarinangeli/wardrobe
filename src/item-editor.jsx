@@ -13,7 +13,7 @@ import { WARDROBE_TYPES as TYPES, TYPE_MAP } from "./categories.js";
 import { itemVariant, variantImage, variantModeledImage, variantOwnImage } from "../shared/wardrobe-model.mjs";
 import { galleryVariantIndex, galleryVariantPhotos, isPeekGesture } from "./gallery-variants.js";
 import { DEFAULT_ITEM_COLOR, changedDraftFields, itemMenuActions, itemMetaLine, unsavedLabel } from "./item-sheet.js";
-import { GenerateButton, RefineComposer, StageStatus, useRememberedTier } from "./components/ModelPhotoControls.jsx";
+import { GenerateButton, RefineComposer, StageError, StageStatus, useRememberedTier } from "./components/ModelPhotoControls.jsx";
 import { moveMenuFocus, useDismissOnOutsidePointer } from "./hooks/usePopover.js";
 
 function rgbToHex(red, green, blue) {
@@ -1220,7 +1220,7 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
 
       <div className="viewer-details editing">
         {(generateError || modeledStatus === "error") && (
-          <p className="stage-error" role="alert">{generateError || modeledError || "That model photo could not be made."}</p>
+          <StageError message={generateError || modeledError} />
         )}
 
         {/* The name straight after the photo. It used to be the fourth thing on

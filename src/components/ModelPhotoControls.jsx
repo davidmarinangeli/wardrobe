@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import { ArrowCounterClockwise, CaretDown, CaretUp, Check, SpinnerGap, X } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, CaretDown, CaretUp, Check, SpinnerGap, WarningCircle, X } from "@phosphor-icons/react";
 import { modelTiers } from "../model-tiers.js";
 import { resolveModelTier } from "../item-sheet.js";
 import { updateBrowserState, useBrowserState } from "../browser-state.js";
@@ -141,6 +141,37 @@ export function StageStatus({ children }) {
       <SpinnerGap size={15} className="modeled-photo-spinner" aria-hidden="true" />
       {children}
     </span>
+  );
+}
+
+const megabytes = (bytes) => `${(Number(bytes) / 1024 / 1024).toFixed(1).replace(/\.0$/, "")} MB`;
+
+/**
+ * An API's own wording, made readable: a size limit in raw bytes becomes a
+ * sentence in megabytes. Anything else passes through unchanged.
+ */
+export function readableGenerationError(message) {
+  const tooLarge = /Request body of (\d+) bytes exceeds the maximum allowed size of (\d+) bytes/i.exec(message || "");
+  if (tooLarge) {
+    return {
+      title: "The reference photos are too large",
+      detail: `Together they come to ${megabytes(tooLarge[1])}, over the ${megabytes(tooLarge[2])} the image service accepts. Try fewer pieces or smaller photos.`,
+    };
+  }
+  return { title: "That model photo could not be made.", detail: message || "" };
+}
+
+/** Why the last generation failed, as a banner where the photo would be. */
+export function StageError({ message }) {
+  const { title, detail } = readableGenerationError(message);
+  return (
+    <div className="stage-error" role="alert">
+      <WarningCircle size={18} weight="fill" aria-hidden="true" />
+      <div>
+        <strong>{title}</strong>
+        {detail && <p>{detail}</p>}
+      </div>
+    </div>
   );
 }
 
