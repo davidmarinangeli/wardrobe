@@ -18,6 +18,8 @@
 .cheat-collection__empty strong { color: var(--ink-soft); font-size: 19px; font-weight: 500; }
 .cheat-collection__empty > span { max-width: 440px; }
 .cheat-collection__empty button { margin-top: 8px; }
+.cheat-collection__hint { color: var(--muted); font-size: 12px; }
+.cheat-new-button:disabled, .cheat-collection__empty button:disabled { opacity: .45; cursor: not-allowed; }
 .cheat-message { font-size: 13px; line-height: 1.5; }
 .cheat-message--error { color: var(--error); }
 
@@ -79,6 +81,13 @@
 .cheat-picker__name { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .cheat-picker__name strong { font-size: 12px; font-weight: 500; line-height: 1.4; overflow-wrap: anywhere; }
 .cheat-picker__name small { color: var(--muted); font-size: 10px; }
+
+.cheat-tray { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+.cheat-tray__piece { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.cheat-tray__art { display: block; aspect-ratio: 3 / 4; border-radius: var(--r-xs); background: var(--surface-stage); }
+.cheat-tray__art img { width: 100%; height: 100%; padding: 4px; object-fit: contain; }
+.cheat-tray__name { overflow: hidden; color: var(--ink-soft); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.cheat-tray__empty { margin: 0; color: var(--muted); font-size: 13px; }
 
 .cheat-beautify { display: grid; gap: 12px; margin: 0 20px 24px; padding: 18px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--paper-raised); }
 .cheat-beautify h3 { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--ink-soft); font-size: 15px; font-weight: 600; }

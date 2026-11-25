@@ -1,13 +1,13 @@
-import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, CornersOut, DownloadSimple, Minus, Plus, Sparkle, SpinnerGap, Trash, X } from "@phosphor-icons/react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Check, CornersOut, DownloadSimple, Minus, Plus, Sparkle, SpinnerGap, Trash, X } from "@phosphor-icons/react";
 import { PencilSimple } from "@phosphor-icons/react";
 import { api } from "./api.js";
 import { ViewerPanel } from "./components/ViewerPanel.jsx";
+import { PiecePicker } from "./components/PiecePicker.jsx";
 import { GenerateButton, useRememberedTier } from "./components/ModelPhotoControls.jsx";
-import { CATEGORY_LABEL, WARDROBE_TYPES } from "./categories.js";
 import { useIsPhone } from "./hooks/useIsPhone.js";
 import { initialVariantForPiece, variantImage, variantOwnImage } from "../shared/wardrobe-model.mjs";
-import { buildOverviewIndex, filterByPart, filterOverviewIndex } from "../shared/overview-index.mjs";
+import { reconcileSheetPieces } from "../shared/cheat-sheet-pieces.mjs";
 import { cheatSheetSourceFingerprint, renderCheatSheet } from "./cheat-sheet-renderer.js";
 import { CHEAT_SHEET_LAYOUT_VERSION, CHEAT_SHEET_MAX_PIECE_SCALE, CHEAT_SHEET_MIN_PIECE_SCALE, CHEAT_SHEET_PIECE_SCALE_STEP, normalizeCheatSheetScale } from "../shared/cheat-sheet-layout.mjs";
 import { CHEAT_SHEET_DESCRIPTION_LIMIT, CHEAT_SHEET_PROMPT_LIMIT, DEFAULT_CHEAT_SHEET_BEAUTIFY_PROMPT } from "../shared/cheat-sheet-prompt.mjs";
@@ -86,12 +86,23 @@ function SheetCard({ sheet, onOpen, onEdit, opening }) {
   );
 }
 
-function SheetCollection({ sheets, loading, error, onNew, onOpen, onEdit, openingId }) {
+const CREATE_BLOCKED_HINT = "Add pieces to your wardrobe first";
+
+function SheetCollection({ sheets, loading, error, canCreate, onNew, onOpen, onEdit, openingId }) {
   return (
     <section className="cheat-collection" aria-labelledby="cheat-collection-title">
       <header className="cheat-collection__header">
         <div><span className="cheat-collection__eyebrow">Overview</span><h2 id="cheat-collection-title">Cheat sheets <span>{sheets.length}</span></h2></div>
-        <button type="button" className="cheat-new-button" onClick={onNew}><Plus size={16} weight="bold" aria-hidden="true" /> New cheat sheet</button>
+        {/* Keep the class: saved/closeEditor fall back to it for focus. */}
+        <button
+          type="button"
+          className="cheat-new-button"
+          onClick={onNew}
+          aria-haspopup="dialog"
+          disabled={!canCreate}
+          title={canCreate ? undefined : CREATE_BLOCKED_HINT}
+          aria-label={canCreate ? "New cheat sheet" : `New cheat sheet, ${CREATE_BLOCKED_HINT}`}
+        ><Plus size={16} weight="bold" aria-hidden="true" /> Cheat sheet</button>
       </header>
       {error && <p className="cheat-message cheat-message--error" role="alert">{error}</p>}
       {loading ? <p className="cheat-collection__empty">Loading cheat sheets…</p> : sheets.length ? (
@@ -99,8 +110,9 @@ function SheetCollection({ sheets, loading, error, onNew, onOpen, onEdit, openin
       ) : (
         <div className="cheat-collection__empty">
           <strong>Your collection starts here.</strong>
-          <span>Create a cheat sheet from selected wardrobe pieces or start with a blank sheet.</span>
-          <button type="button" className="secondary-button" onClick={onNew}>Create your first cheat sheet</button>
+          <span>Pick pieces from your wardrobe to lay them out on a sheet.</span>
+          <button type="button" className="secondary-button" onClick={onNew} aria-haspopup="dialog" disabled={!canCreate} title={canCreate ? undefined : CREATE_BLOCKED_HINT}>Create your first cheat sheet</button>
+          {!canCreate && <small className="cheat-collection__hint">{CREATE_BLOCKED_HINT}.</small>}
         </div>
       )}
     </section>
@@ -202,35 +214,20 @@ function FullscreenCheatSheetViewer({ title, versionLabel, isDraft, children, on
   </ViewerPanel>;
 }
 
-const PiecePicker = forwardRef(function PiecePicker({ items, selected, onToggle, query, onQuery, category, onCategory, disabled }, searchRef) {
-  const index = useMemo(() => buildOverviewIndex(items), [items]);
-  const filtered = useMemo(() => filterOverviewIndex(index, query), [index, query]);
-  const visible = filterByPart(filtered, category);
+// The picker's preview: a strip of the selected pieces' thumbnails.
+function SheetPieceTray({ pieces }) {
+  if (!pieces.length) return <p className="cheat-tray__empty">Pick pieces to lay out on the sheet.</p>;
   return (
-    <div className="cheat-picker">
-      <div className="cheat-picker__heading"><span className="cheat-editor__eyebrow">Wardrobe</span><h3>Add pieces</h3></div>
-      <label className="sr-only" htmlFor="cheat-picker-search">Search the wardrobe</label>
-      <input ref={searchRef} id="cheat-picker-search" className="cheat-picker__search" type="search" value={query} onChange={(event) => onQuery(event.target.value)} placeholder="Search your wardrobe" autoComplete="off" disabled={disabled} />
-      <div className="cheat-picker__categories" role="group" aria-label="Filter by category">
-        {WARDROBE_TYPES.map((entry) => <button key={entry.id} type="button" className={category === entry.id ? "is-active" : ""} onClick={() => onCategory(entry.id)} disabled={disabled}>{entry.label}</button>)}
-      </div>
-      <div className="cheat-picker__list" aria-label="Wardrobe pieces">
-        {visible.length ? visible.map(({ item }) => {
-          const checked = selected.has(item.id);
-          const image = variantImage(item, item.defaultVariantId);
-          return (
-            <label key={item.id} className={`cheat-picker__item${checked ? " is-selected" : ""}`}>
-              <input type="checkbox" checked={checked} disabled={disabled} onChange={() => onToggle(item)} />
-              <span className="cheat-picker__checkbox" aria-hidden="true">{checked && <Check size={13} weight="bold" />}</span>
-              <span className="cheat-picker__thumb">{image && <OptimizedImage src={image} alt="" loading="lazy" />}</span>
-              <span className="cheat-picker__name"><strong>{item.name || "Untitled piece"}</strong><small>{CATEGORY_LABEL[item.part] || "Other"}</small></span>
-            </label>
-          );
-        }) : <p className="cheat-picker__empty">No pieces match this search.</p>}
-      </div>
-    </div>
+    <ul className="cheat-tray" aria-label="Selected pieces">
+      {pieces.map((piece) => (
+        <li key={piece.id} className="cheat-tray__piece">
+          <span className="cheat-tray__art">{piece.thumbnail && <OptimizedImage src={piece.thumbnail} alt="" sizes="72px" breakpoints={[80, 160]} />}</span>
+          <span className="cheat-tray__name">{piece.name || "Untitled piece"}</span>
+        </li>
+      ))}
+    </ul>
   );
-});
+}
 
 function CheatSheetEditor({ items, entry, onClose, onSaved, onSheetUpdate, premiumAllowed, provider }) {
   const [savedSheet, setSavedSheet] = useState(entry.sheet || null);
@@ -247,10 +244,8 @@ function CheatSheetEditor({ items, entry, onClose, onSaved, onSheetUpdate, premi
         return item ? [[piece.itemId, { variantId: piece.variantId || initialVariantForPiece(item), scale: normalizeCheatSheetScale(piece.scale) }]] : [];
       }),
   ));
-  const [mode, setMode] = useState("pieces");
   const [mobileView, setMobileView] = useState("pieces");
-  const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("all");
+  const [piecePickerOpen, setPiecePickerOpen] = useState(false);
   const [renderVersion, setRenderVersion] = useState(0);
   const [preview, setPreview] = useState(null);
   const [previewError, setPreviewError] = useState(null);
@@ -269,7 +264,7 @@ function CheatSheetEditor({ items, entry, onClose, onSaved, onSheetUpdate, premi
   const closeConfirmReturnRef = useRef(null);
   const deleteTriggerRef = useRef(null);
   const deleteKeepRef = useRef(null);
-  const pickerSearchRef = useRef(null);
+  const editPiecesRef = useRef(null);
   const mobilePiecesTabRef = useRef(null);
   const mobilePreviewTabRef = useRef(null);
   const fullscreenTriggerRef = useRef(null);
@@ -307,16 +302,22 @@ function CheatSheetEditor({ items, entry, onClose, onSaved, onSheetUpdate, premi
   const restoreCloseConfirmFocus = useCallback(() => {
     const candidates = [
       closeConfirmReturnRef.current,
-      mode === "picker" ? pickerSearchRef.current : null,
       isPhone && mobileView === "preview" ? mobilePreviewTabRef.current : null,
       isPhone ? mobilePiecesTabRef.current : null,
       titleInputRef.current,
       closeButtonRef.current,
     ];
     for (const candidate of candidates) if (focusIfVisible(candidate)) return;
-  }, [isPhone, mode, mobileView]);
+  }, [isPhone, mobileView]);
 
-  useEffect(() => { titleInputRef.current?.focus({ preventScroll: true }); }, []);
+  // A frame later, not synchronously: on create, the picker unmounts in the
+  // commit that mounts this editor, and its ViewerPanel cleanup queues a frame
+  // that refocuses "+ Cheat sheet" behind us. Passive unmounts run before
+  // mounts, so this frame is queued after that one and wins.
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => titleInputRef.current?.focus({ preventScroll: true }));
+    return () => cancelAnimationFrame(frame);
+  }, []);
 
   useEffect(() => {
     if (fullscreenOpen || !hasOpenedFullscreenRef.current) return undefined;
@@ -345,12 +346,6 @@ function CheatSheetEditor({ items, entry, onClose, onSaved, onSheetUpdate, premi
       window.removeEventListener("resize", syncViewport);
     };
   }, [isPhone]);
-
-  useEffect(() => {
-    if (mode !== "picker") return undefined;
-    const frame = requestAnimationFrame(() => pickerSearchRef.current?.focus({ preventScroll: true }));
-    return () => cancelAnimationFrame(frame);
-  }, [mode]);
 
   useEffect(() => {
     if (closeConfirm) requestAnimationFrame(() => closeKeepRef.current?.focus({ preventScroll: true }));
@@ -406,12 +401,29 @@ function CheatSheetEditor({ items, entry, onClose, onSaved, onSheetUpdate, premi
     return () => { window.clearTimeout(timer); controller.abort(); };
   }, [title, items, draftPieces, key, renderVersion]);
 
-  const toggleItem = (item) => setSelected((current) => {
-    const next = new Map(current);
-    if (next.has(item.id)) next.delete(item.id);
-    else next.set(item.id, { variantId: initialVariantForPiece(item), scale: 1 });
-    return next;
-  });
+  const openPiecePicker = (event) => {
+    // Safari doesn't focus buttons on click; the picker's ViewerPanel restores to whatever had focus.
+    event?.currentTarget?.focus?.({ preventScroll: true });
+    setPiecePickerOpen(true);
+  };
+
+  const closePiecePicker = () => {
+    setPiecePickerOpen(false);
+    // Two frames: after the picker's own single-frame restore.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (!focusIfVisible(editPiecesRef.current)) focusIfVisible(titleInputRef.current);
+    }));
+  };
+
+  // Synchronous and never throws: the picker unmounts on success.
+  const applyPickedPieces = (pieces) => {
+    const next = reconcileSheetPieces(draftPieces, pieces, new Set(itemsById.keys()));
+    // An unchanged Done must not replace `selected`: a new Map would re-run the preview render for nothing.
+    if (draftShape("", next) !== draftShape("", draftPieces)) {
+      setSelected(new Map(next.map(({ itemId, variantId, scale }) => [itemId, { variantId, scale }])));
+    }
+    closePiecePicker();
+  };
 
   const removePiece = (itemId) => setSelected((current) => {
     const next = new Map(current);
@@ -513,12 +525,13 @@ function CheatSheetEditor({ items, entry, onClose, onSaved, onSheetUpdate, premi
       if (busy) return;
       if (deleteConfirm) { setDeleteConfirm(false); requestAnimationFrame(() => deleteTriggerRef.current?.focus({ preventScroll: true })); return; }
       if (closeConfirm) { setCloseConfirm(false); requestAnimationFrame(restoreCloseConfirmFocus); return; }
-      if (mode === "picker") { setMode("pieces"); requestAnimationFrame(() => titleInputRef.current?.focus({ preventScroll: true })); return; }
       if (requestClose()) onClose();
     };
+    // Document capture: the piece picker's window-capture listener runs first
+    // and stops the event, so Escape over the picker never reaches this.
     document.addEventListener("keydown", onEscape, true);
     return () => document.removeEventListener("keydown", onEscape, true);
-  }, [busy, closeConfirm, deleteConfirm, fullscreenOpen, mode, mobileView, restoreCloseConfirmFocus, requestClose, onClose]);
+  }, [busy, closeConfirm, deleteConfirm, fullscreenOpen, mobileView, restoreCloseConfirmFocus, requestClose, onClose]);
 
   const confirmDiscard = () => { setCloseConfirm(false); onClose(); };
 
@@ -572,9 +585,8 @@ function CheatSheetEditor({ items, entry, onClose, onSaved, onSheetUpdate, premi
     );
   };
 
-  const handleMobileTab = (view) => { if (mode !== "picker") setMobileView(view); };
+  const handleMobileTab = (view) => setMobileView(view);
   const controlsDisabled = busy || modalOpen;
-  const pickMode = mode === "picker";
   const hasFullscreenPreview = Boolean(savedSheet?.originalImage || renderReady);
   const fullscreenVersion = dirty ? (savedSheet?.originalImage && !renderReady ? "Last saved version" : "Draft preview") : savedSheet ? "Saved sheet" : "Draft preview";
   return (
@@ -589,119 +601,107 @@ function CheatSheetEditor({ items, entry, onClose, onSaved, onSheetUpdate, premi
       panelClassName="cheat-editor-panel"
       overlayStyle={overlayStyle}
       entryStyle={entryStyle}
-      swipeToClose={!dirty && !busy && !modalOpen}
+      swipeToClose={!dirty && !busy && !modalOpen && !piecePickerOpen}
       swipeHandleOnly
-      closeDisabled={busy || modalOpen}
-      focusTrap={!fullscreenOpen}
+      closeDisabled={busy || modalOpen || piecePickerOpen}
+      // Off while a stacked panel traps focus: both traps listen on document,
+      // and ours would pull Tab back into this (inert) editor. Turning it off
+      // runs ViewerPanel's restore for one frame before the stacked panel's
+      // own initial focus wins; don't reorder those frames.
+      focusTrap={!fullscreenOpen && !piecePickerOpen}
     >
-      <div className="cheat-editor" inert={modalOpen || fullscreenOpen ? true : undefined} aria-hidden={fullscreenOpen || undefined}>
+      <div className="cheat-editor" inert={modalOpen || fullscreenOpen || piecePickerOpen ? true : undefined} aria-hidden={fullscreenOpen || piecePickerOpen || undefined}>
         {previewUpdating && <span className="sr-only" role="status">Updating cheat sheet preview.</span>}
         <div className="cheat-editor__handle" data-sheet-grab aria-hidden="true"><span /></div>
         <header className="cheat-editor__header">
-          {pickMode ? (
-            <>
-              <button type="button" className="cheat-editor__back" onClick={() => setMode("pieces")} disabled={controlsDisabled} aria-label="Back to selected pieces"><ArrowLeft size={18} /> Back</button>
-              <div><span className="cheat-editor__eyebrow">Wardrobe</span><h2>Add pieces</h2></div>
-              <button type="button" className="cheat-editor__done" onClick={() => setMode("pieces")} disabled={controlsDisabled}>Done</button>
-            </>
-          ) : (
-            <>
-              <div><span className="cheat-editor__eyebrow">{savedSheet ? "Collection" : "Overview"}</span><h2>{savedSheet ? "Edit cheat sheet" : "Create cheat sheet"}</h2></div>
-              <span className="cheat-editor__header-count">{selectedCount} {selectedCount === 1 ? "piece" : "pieces"}</span>
-            </>
-          )}
+          <div><span className="cheat-editor__eyebrow">{savedSheet ? "Collection" : "Overview"}</span><h2>{savedSheet ? "Edit cheat sheet" : "Create cheat sheet"}</h2></div>
+          <span className="cheat-editor__header-count">{selectedCount} {selectedCount === 1 ? "piece" : "pieces"}</span>
           <span className="cheat-editor__close-spacer" />
         </header>
 
-        {isPhone && !pickMode && (
+        {isPhone && (
           <div className="cheat-editor__mobile-tabs" role="tablist" aria-label="Cheat sheet editor">
             <button ref={mobilePiecesTabRef} type="button" role="tab" aria-selected={mobileView === "pieces"} className={mobileView === "pieces" ? "is-active" : ""} onClick={() => handleMobileTab("pieces")}>Pieces ({selectedCount})</button>
             <button ref={mobilePreviewTabRef} type="button" role="tab" aria-selected={mobileView === "preview"} className={mobileView === "preview" ? "is-active" : ""} onClick={() => handleMobileTab("preview")}>Preview</button>
           </div>
         )}
 
-        <div className={`cheat-editor__main${pickMode ? " is-picker" : ""}${mobileView === "preview" ? " is-mobile-preview" : ""}`}>
-          <section className={`cheat-editor__left-pane${pickMode ? " is-picker" : ""}`} aria-label={pickMode ? "Choose wardrobe pieces" : "Cheat sheet pieces"}>
-            {pickMode ? (
-              <PiecePicker ref={pickerSearchRef} items={items} selected={selected} onToggle={toggleItem} query={query} onQuery={setQuery} category={category} onCategory={setCategory} disabled={controlsDisabled} />
-            ) : (
-              <>
-                <section className="cheat-editor__pieces-pane" aria-label="Cheat sheet pieces">
-                  {isPhone && <button type="button" className="cheat-editor__mini-preview" onClick={() => setMobileView("preview")} aria-label="Open full cheat sheet preview" aria-busy={previewUpdating || undefined}>{displayPreview(false)}</button>}
-                  <div className="cheat-editor__piece-controls">
-                    <label className="cheat-title-field">
-                      <span>Title</span>
-                      <input ref={titleInputRef} type="text" value={title} onChange={(event) => setTitle(event.target.value.slice(0, 120))} maxLength={120} placeholder="e.g. Summer in the city" disabled={controlsDisabled} />
-                      <small>{title.length}/120</small>
-                    </label>
-                    <label className="cheat-title-field cheat-description-field">
-                      <span>Description <em>optional</em></span>
-                      <textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={CHEAT_SHEET_DESCRIPTION_LIMIT} rows={3} placeholder="e.g. Weekend hikes in the Dolomites, earthy tones and fresh alpine air" disabled={controlsDisabled} />
-                      <small>Helps the AI choose a theme · {description.length}/{CHEAT_SHEET_DESCRIPTION_LIMIT}</small>
-                    </label>
-                    <div className="cheat-piece-count"><strong>{selectedCount} {selectedCount === 1 ? "piece" : "pieces"}</strong><button type="button" onClick={() => setMode("picker")} disabled={controlsDisabled}><Plus size={15} weight="bold" /> Add pieces</button></div>
-                  </div>
-                  <section className="cheat-beautify" aria-labelledby="cheat-beautify-title">
-                    <h3 id="cheat-beautify-title"><Sparkle size={18} aria-hidden="true" /> Beautify</h3>
-                    <p>A themed background and subtle, context-aware title typography, with harmonious light and shadows. Your clothes stay recognizable.</p>
-                    <details className="cheat-beautify__prompt">
-                      <summary>Customize the prompt</summary>
-                      <label className="cheat-title-field">
-                        <span>Art direction</span>
-                        <textarea value={beautifyPrompt} onChange={(event) => setBeautifyPrompt(event.target.value)} maxLength={CHEAT_SHEET_PROMPT_LIMIT} rows={9} disabled={controlsDisabled} />
-                        <small>Title, description and sheet image are included automatically.</small>
-                      </label>
-                      <button type="button" className="cheat-beautify__reset" onClick={() => setBeautifyPrompt(DEFAULT_CHEAT_SHEET_BEAUTIFY_PROMPT)} disabled={controlsDisabled}>Restore suggested prompt</button>
-                    </details>
-                    <GenerateButton
-                      block
-                      icon={<Sparkle size={16} aria-hidden="true" />}
-                      label={dirty || !savedSheet ? "Save & beautify" : savedSheet.aiImage ? "Generate another finish" : "Beautify"}
-                      busy={busy || beautifying}
-                      busyLabel={beautifying ? "Beautifying…" : saving ? "Saving…" : deleting ? "Deleting…" : "Starting…"}
-                      disabled={!tierReady || controlsDisabled || !beautifyPrompt.trim() || (dirty || !savedSheet ? !canSave : !savedSheet.originalImage)}
-                      onGenerate={beautify}
-                      tier={tier}
-                      tiers={tiers}
-                      onTierChange={chooseTier}
-                      premiumAllowed={premiumAllowed}
-                      tierStateError={tierStateError}
-                    />
-                    <small>The original is kept. Uses your configured AI provider.</small>
-                    {savedSheet?.beautifyStatus === "error" && <p className="cheat-message--error" role="alert">{savedSheet.beautifyError}</p>}
-                  </section>
-                  <div className="cheat-selected-list">
-                    {selectedEntries.length ? selectedEntries.map(({ itemId, variantId, scale, item, variant }) => {
-                      const unavailable = !item || !variant || !variantOwnImage(item, variantId);
-                      const issueForItem = renderIssue?.itemId === itemId;
-                      return (
-                        <article key={itemId} className={`cheat-selected-piece${unavailable || issueForItem ? " is-error" : ""}`}>
-                          <span className="cheat-selected-piece__image">{item && variantImage(item, variantId) && <OptimizedImage src={variantImage(item, variantId)} alt="" />}</span>
-                          <div className="cheat-selected-piece__details">
-                            <strong>{item?.name || "Missing wardrobe piece"}</strong>
-                            {item && item.variants?.length > 1 ? <label className="sr-only" htmlFor={`cheat-variant-${itemId}`}>Variant for {item.name}</label> : <small>{variant?.name || "Reference missing"}</small>}
-                            {item && item.variants?.length > 1 && (
-                              <select id={`cheat-variant-${itemId}`} value={variantId || ""} onChange={(event) => setVariant(itemId, event.target.value)} disabled={controlsDisabled}>
-                                {item.variants.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
-                              </select>
-                            )}
-                            <div className="cheat-selected-piece__scale" role="group" aria-label={`Thumbnail size for ${item?.name || "this piece"}`}>
-                              <button type="button" aria-label={`Reduce size of ${item?.name || "this piece"}`} onClick={() => adjustPieceScale(itemId, -1)} disabled={controlsDisabled || !item || scale <= CHEAT_SHEET_MIN_PIECE_SCALE}><Minus size={14} weight="bold" /></button>
-                              <output aria-live="polite">{Math.round(scale * 100)}%</output>
-                              <button type="button" aria-label={`Increase size of ${item?.name || "this piece"}`} onClick={() => adjustPieceScale(itemId, 1)} disabled={controlsDisabled || !item || scale >= CHEAT_SHEET_MAX_PIECE_SCALE}><Plus size={14} weight="bold" /></button>
-                            </div>
-                          </div>
-                          <button type="button" className="cheat-selected-piece__remove" aria-label={`Remove ${item?.name || "missing piece"}`} onClick={() => removePiece(itemId)} disabled={controlsDisabled}><X size={17} /></button>
-                          {(unavailable || issueForItem) && <div className="cheat-selected-piece__issue" role="alert"><span>{issueForItem ? renderIssue.message : `${item?.name || "This piece"} needs an approved cutout.`}</span><button type="button" onClick={retryPreview} disabled={controlsDisabled}>Retry</button><button type="button" onClick={() => removePiece(itemId)} disabled={controlsDisabled}>Remove</button></div>}
-                        </article>
-                      );
-                    }) : <p className="cheat-selected-list__empty">Add pieces from your wardrobe to get started.</p>}
-                  </div>
-                </section>
-              </>
-            )}
+        <div className={`cheat-editor__main${mobileView === "preview" ? " is-mobile-preview" : ""}`}>
+          <section className="cheat-editor__left-pane" aria-label="Cheat sheet pieces">
+            <section className="cheat-editor__pieces-pane" aria-label="Cheat sheet pieces">
+              {isPhone && <button type="button" className="cheat-editor__mini-preview" onClick={() => setMobileView("preview")} aria-label="Open full cheat sheet preview" aria-busy={previewUpdating || undefined}>{displayPreview(false)}</button>}
+              <div className="cheat-editor__piece-controls">
+                <label className="cheat-title-field">
+                  <span>Title</span>
+                  <input ref={titleInputRef} type="text" value={title} onChange={(event) => setTitle(event.target.value.slice(0, 120))} maxLength={120} placeholder="e.g. Summer in the city" disabled={controlsDisabled} />
+                  <small>{title.length}/120</small>
+                </label>
+                <label className="cheat-title-field cheat-description-field">
+                  <span>Description <em>optional</em></span>
+                  <textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={CHEAT_SHEET_DESCRIPTION_LIMIT} rows={3} placeholder="e.g. Weekend hikes in the Dolomites, earthy tones and fresh alpine air" disabled={controlsDisabled} />
+                  <small>Helps the AI choose a theme · {description.length}/{CHEAT_SHEET_DESCRIPTION_LIMIT}</small>
+                </label>
+                <div className="cheat-piece-count"><strong>{selectedCount} {selectedCount === 1 ? "piece" : "pieces"}</strong><button ref={editPiecesRef} type="button" aria-haspopup="dialog" onClick={openPiecePicker} disabled={controlsDisabled}><PencilSimple size={15} weight="bold" aria-hidden="true" /> Edit pieces</button></div>
+              </div>
+              <section className="cheat-beautify" aria-labelledby="cheat-beautify-title">
+                <h3 id="cheat-beautify-title"><Sparkle size={18} aria-hidden="true" /> Beautify</h3>
+                <p>A themed background and subtle, context-aware title typography, with harmonious light and shadows. Your clothes stay recognizable.</p>
+                <details className="cheat-beautify__prompt">
+                  <summary>Customize the prompt</summary>
+                  <label className="cheat-title-field">
+                    <span>Art direction</span>
+                    <textarea value={beautifyPrompt} onChange={(event) => setBeautifyPrompt(event.target.value)} maxLength={CHEAT_SHEET_PROMPT_LIMIT} rows={9} disabled={controlsDisabled} />
+                    <small>Title, description and sheet image are included automatically.</small>
+                  </label>
+                  <button type="button" className="cheat-beautify__reset" onClick={() => setBeautifyPrompt(DEFAULT_CHEAT_SHEET_BEAUTIFY_PROMPT)} disabled={controlsDisabled}>Restore suggested prompt</button>
+                </details>
+                <GenerateButton
+                  block
+                  icon={<Sparkle size={16} aria-hidden="true" />}
+                  label={dirty || !savedSheet ? "Save & beautify" : savedSheet.aiImage ? "Generate another finish" : "Beautify"}
+                  busy={busy || beautifying}
+                  busyLabel={beautifying ? "Beautifying…" : saving ? "Saving…" : deleting ? "Deleting…" : "Starting…"}
+                  disabled={!tierReady || controlsDisabled || !beautifyPrompt.trim() || (dirty || !savedSheet ? !canSave : !savedSheet.originalImage)}
+                  onGenerate={beautify}
+                  tier={tier}
+                  tiers={tiers}
+                  onTierChange={chooseTier}
+                  premiumAllowed={premiumAllowed}
+                  tierStateError={tierStateError}
+                />
+                <small>The original is kept. Uses your configured AI provider.</small>
+                {savedSheet?.beautifyStatus === "error" && <p className="cheat-message--error" role="alert">{savedSheet.beautifyError}</p>}
+              </section>
+              <div className="cheat-selected-list">
+                {selectedEntries.length ? selectedEntries.map(({ itemId, variantId, scale, item, variant }) => {
+                  const unavailable = !item || !variant || !variantOwnImage(item, variantId);
+                  const issueForItem = renderIssue?.itemId === itemId;
+                  return (
+                    <article key={itemId} className={`cheat-selected-piece${unavailable || issueForItem ? " is-error" : ""}`}>
+                      <span className="cheat-selected-piece__image">{item && variantImage(item, variantId) && <OptimizedImage src={variantImage(item, variantId)} alt="" />}</span>
+                      <div className="cheat-selected-piece__details">
+                        <strong>{item?.name || "Missing wardrobe piece"}</strong>
+                        {item && item.variants?.length > 1 ? <label className="sr-only" htmlFor={`cheat-variant-${itemId}`}>Variant for {item.name}</label> : <small>{variant?.name || "Reference missing"}</small>}
+                        {item && item.variants?.length > 1 && (
+                          <select id={`cheat-variant-${itemId}`} value={variantId || ""} onChange={(event) => setVariant(itemId, event.target.value)} disabled={controlsDisabled}>
+                            {item.variants.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
+                          </select>
+                        )}
+                        <div className="cheat-selected-piece__scale" role="group" aria-label={`Thumbnail size for ${item?.name || "this piece"}`}>
+                          <button type="button" aria-label={`Reduce size of ${item?.name || "this piece"}`} onClick={() => adjustPieceScale(itemId, -1)} disabled={controlsDisabled || !item || scale <= CHEAT_SHEET_MIN_PIECE_SCALE}><Minus size={14} weight="bold" /></button>
+                          <output aria-live="polite">{Math.round(scale * 100)}%</output>
+                          <button type="button" aria-label={`Increase size of ${item?.name || "this piece"}`} onClick={() => adjustPieceScale(itemId, 1)} disabled={controlsDisabled || !item || scale >= CHEAT_SHEET_MAX_PIECE_SCALE}><Plus size={14} weight="bold" /></button>
+                        </div>
+                      </div>
+                      <button type="button" className="cheat-selected-piece__remove" aria-label={`Remove ${item?.name || "missing piece"}`} onClick={() => removePiece(itemId)} disabled={controlsDisabled}><X size={17} /></button>
+                      {(unavailable || issueForItem) && <div className="cheat-selected-piece__issue" role="alert"><span>{issueForItem ? renderIssue.message : `${item?.name || "This piece"} needs an approved cutout.`}</span><button type="button" onClick={retryPreview} disabled={controlsDisabled}>Retry</button><button type="button" onClick={() => removePiece(itemId)} disabled={controlsDisabled}>Remove</button></div>}
+                    </article>
+                  );
+                }) : <p className="cheat-selected-list__empty">Choose pieces with Edit pieces to get started.</p>}
+              </div>
+            </section>
           </section>
-          <section className={`cheat-editor__preview-pane${mobileView === "preview" && !pickMode ? " is-visible" : ""}`} aria-label="Preview">
+          <section className={`cheat-editor__preview-pane${mobileView === "preview" ? " is-visible" : ""}`} aria-label="Preview">
             <div className="cheat-preview__toolbar">
               <div
                 className={`cheat-preview__versions${aiAvailable ? "" : " is-empty"}`}
@@ -757,6 +757,18 @@ function CheatSheetEditor({ items, entry, onClose, onSaved, onSheetUpdate, premi
         </div>
       )}
     </ViewerPanel>
+    {/* After the editor's panel: both overlays share z-index 40, so the later portal paints on top. */}
+    {piecePickerOpen && <PiecePicker
+      title="Edit pieces"
+      items={items}
+      initialSelection={draftPieces}
+      rules={null}
+      confirmLabel="Done"
+      minPieces={1}
+      renderPreview={(pieces) => <SheetPieceTray pieces={pieces} />}
+      onConfirm={applyPickedPieces}
+      onClose={closePiecePicker}
+    />}
     {fullscreenOpen && <FullscreenCheatSheetViewer
       title={title.trim() || savedSheet?.title || "Cheat sheet preview"}
       versionLabel={fullscreenVersion}
@@ -776,6 +788,8 @@ export function CheatSheetsArea({ items, premiumAllowed = true, provider = null,
   const [entry, setEntry] = useState(null);
   const [openingId, setOpeningId] = useState(null);
   const [collectionViewer, setCollectionViewer] = useState(null);
+  const [creating, setCreating] = useState(false);
+  const createTriggerRef = useRef(null);
   const openRequestId = useRef(0);
   const collectionViewerMounted = useRef(false);
   const editorReturnFocus = useRef(null);
@@ -805,6 +819,7 @@ export function CheatSheetsArea({ items, premiumAllowed = true, provider = null,
     openRequestId.current += 1;
     setOpeningId(null);
     setCollectionViewer(null);
+    setCreating(false);
   }, [active]);
 
   useEffect(() => {
@@ -844,6 +859,7 @@ export function CheatSheetsArea({ items, premiumAllowed = true, provider = null,
     openRequestId.current += 1;
     setOpeningId(null);
     setCollectionViewer(null);
+    setCreating(false); // never a create picker under an editor
     setEntry({ key: createRequest.id, sheet: null, initialPieces: createRequest.pieces || [] });
   }, [createRequest, returnFocusRef]);
 
@@ -852,14 +868,29 @@ export function CheatSheetsArea({ items, premiumAllowed = true, provider = null,
   }, []);
 
   const newSheet = (event) => {
+    if (!items.length) return;
     const trigger = event?.currentTarget || null;
     openRequestId.current += 1;
     setOpeningId(null);
     setCollectionViewer(null);
+    // Safari doesn't focus on click; the picker's ViewerPanel captures the focused element at mount.
     trigger?.focus?.({ preventScroll: true });
+    createTriggerRef.current = trigger;
+    setCreating(true);
+  };
+
+  // Synchronous: the picker unmounts in the commit that mounts the editor.
+  const confirmNewSheet = (pieces) => {
+    const trigger = createTriggerRef.current;
     editorReturnFocus.current = trigger;
     if (returnFocusRef) returnFocusRef.current = trigger;
-    setEntry({ key: crypto.randomUUID(), sheet: null, initialPieces: [] });
+    setCreating(false);
+    setEntry({ key: crypto.randomUUID(), sheet: null, initialPieces: pieces });
+  };
+
+  const cancelNewSheet = () => {
+    setCreating(false);
+    restoreEditorFocus(createTriggerRef.current, () => document.querySelector(".cheat-new-button"));
   };
 
   const openSheetViewer = async (sheet, event) => {
@@ -927,12 +958,22 @@ export function CheatSheetsArea({ items, premiumAllowed = true, provider = null,
     restoreEditorFocus(trigger, () => document.querySelector(".cheat-new-button"));
   };
 
-  if (!active && !entry) return null;
+  if (!active && !entry && !creating) return null;
   return <>
-    {active && <SheetCollection sheets={sheets} loading={loading} error={error} onNew={newSheet} onOpen={openSheetViewer} onEdit={openSheetEditor} openingId={openingId} />}
+    {active && <SheetCollection sheets={sheets} loading={loading} error={error} canCreate={items.length > 0} onNew={newSheet} onOpen={openSheetViewer} onEdit={openSheetEditor} openingId={openingId} />}
     {active && collectionViewer && <FullscreenCheatSheetViewer title={collectionViewer.sheet.title} versionLabel={collectionViewer.versionLabel} isDraft={false} onClose={closeCollectionViewer} openedFrom={collectionViewer.trigger}>
       <OptimizedImage className="cheat-preview__saved-image" src={collectionViewer.image} alt={`${collectionViewer.sheet.title || "Cheat sheet"}, ${collectionViewer.versionLabel.toLowerCase()}`} />
     </FullscreenCheatSheetViewer>}
+    {creating && <PiecePicker
+      title="New cheat sheet"
+      items={items}
+      rules={null}
+      confirmLabel="Next"
+      minPieces={1}
+      renderPreview={(pieces) => <SheetPieceTray pieces={pieces} />}
+      onConfirm={confirmNewSheet}
+      onClose={cancelNewSheet}
+    />}
     {entry && <CheatSheetEditor key={entry.key} items={items} entry={entry} onClose={closeEditor} onSaved={saved} onSheetUpdate={updateSheet} premiumAllowed={premiumAllowed} provider={provider} />}
   </>;
 }
