@@ -1,0 +1,91 @@
+name: Desktop
+
+# Builds the Node sidecar for both desktop targets, starts it headlessly and
+# checks /api/health (desktop-smoke), and runs the Rust tests of the Tauri
+# shell (desktop-rust). Release builds are Feature 05's release.yml.
+on:
+  pull_request:
+    paths:
+      - "desktop/**"
+      - "scripts/**"
+      - "shared/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/desktop.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  desktop-smoke:
+    name: desktop-smoke (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # Builds the web app and runs the scripts. The sidecar's own Node
+          # comes from desktop/node-version.txt and is downloaded by prepare.
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            desktop/package-lock.json
+      - run: npm ci
+      - run: npm ci
+        working-directory: desktop
+      - run: npm test
+        working-directory: desktop
+      - name: Prepare the sidecar (web build, server bundle, native modules, Node)
+        run: npm run prepare:app -- --target ${{ matrix.target }}
+        working-directory: desktop
+      - name: Start the packaged sidecar and check /api/health
+        run: npm run smoke
+        working-directory: desktop
+      - name: Sidecar size
+        shell: bash
+        run: cat desktop/src-tauri/resources/server/prepared.json
+
+  desktop-rust:
+    name: desktop-rust (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            desktop/package-lock.json
+      - run: npm ci
+      # The lifecycle tests run scripts/server.mjs against the built dist/.
+      - run: npm run build
+      - run: npm ci
+        working-directory: desktop
+      # tauri::generate_context! embeds the control-panel build.
+      - run: npm run build
+        working-directory: desktop
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+      - run: cargo test --locked
+        working-directory: desktop/src-tauri

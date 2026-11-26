@@ -18,9 +18,10 @@ export default defineConfig(({ mode }) => {
       },
       // The runtime cache (WARDROBE_CACHE_DIR, default .cache/) holds the
       // ~470 MB background-removal model and the drape portrait: nothing in it
-      // is source, so the watcher has no reason to follow it.
+      // is source, so the watcher has no reason to follow it. desktop/ is the
+      // Tauri shell (its own package, Rust target/ and sidecar resources).
       watch: {
-        ignored: ["**/.cache/**"],
+        ignored: ["**/.cache/**", "**/desktop/**"],
       },
       warmup: {
         clientFiles: ["./src/main.jsx"],

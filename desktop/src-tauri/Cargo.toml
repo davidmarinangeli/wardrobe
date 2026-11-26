@@ -1,0 +1,40 @@
+[package]
+name = "wardrobe-desktop"
+version = "1.0.0"
+description = "Wardrobe desktop app: Tauri shell around the Wardrobe Node server"
+authors = ["Wardrobe contributors"]
+license = "MIT"
+edition = "2021"
+rust-version = "1.80"
+publish = false
+
+[lib]
+# The _lib suffix avoids a name clash with the binary on Windows (cargo#8519).
+name = "wardrobe_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7", features = [] }
+
+[dependencies]
+tauri = { version = "2.12", features = ["tray-icon"] }
+tauri-plugin-shell = "2.6"
+tauri-plugin-store = "2.5"
+tauri-plugin-opener = "2.7"
+tauri-plugin-window-state = "2.5"
+tauri-plugin-single-instance = "2.5"
+tauri-plugin-autostart = "2.7"
+tauri-plugin-log = "2.10"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+log = "0.4"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

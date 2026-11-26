@@ -1,0 +1,59 @@
+:root {
+  --bg: #f4f0e8;
+  --card: #fffdf8;
+  --text: #191919;
+  --muted: #6b665e;
+  --border: #e2dccf;
+  --accent: #191919;
+  --accent-text: #fffdf8;
+  --ok: #1f7a44;
+  --warn: #a15c00;
+  --error: #b3261e;
+  color-scheme: light dark;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 15px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161514;
+    --card: #1f1e1c;
+    --text: #f1ede6;
+    --muted: #a39d93;
+    --border: #34312d;
+    --accent: #f1ede6;
+    --accent-text: #161514;
+    --ok: #5cc28a;
+    --warn: #e0a350;
+    --error: #ff8a80;
+  }
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); }
+.panel { max-width: 640px; margin: 0 auto; padding: 20px 16px 32px; display: grid; gap: 14px; }
+.panel-header h1 { margin: 0; font-size: 22px; }
+.muted { color: var(--muted); font-size: 13px; margin: 4px 0 0; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+.card h2 { margin: 0 0 8px; font-size: 15px; }
+.status { font-weight: 600; margin: 0 0 10px; }
+.status-running { color: var(--ok); }
+.status-starting { color: var(--warn); }
+.status-failed { color: var(--error); }
+.error { color: var(--error); margin: 6px 0; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+button {
+  font: inherit; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--accent);
+  background: var(--accent); color: var(--accent-text); cursor: pointer;
+}
+button:disabled { opacity: .45; cursor: default; }
+form { display: grid; gap: 10px; }
+label { display: grid; gap: 4px; font-size: 13px; }
+label.check { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+input[type="password"], select { font: inherit; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+.log { max-height: 320px; overflow: auto; font: 12px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace; background: var(--bg); padding: 10px; border-radius: 8px; white-space: pre-wrap; word-break: break-all; }
+.paths { display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; margin: 0; font-size: 13px; }
+.paths dt { color: var(--muted); }
+.paths dd { margin: 0; word-break: break-all; }
+.plain { margin: 0; padding-left: 18px; }
+summary { cursor: pointer; font-weight: 600; }
