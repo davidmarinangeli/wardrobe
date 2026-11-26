@@ -554,19 +554,15 @@ export function OutfitsSection({ items, premiumAllowed = true, provider = null, 
       : item));
   };
 
-  // Safari doesn't focus buttons on click; focusing the trigger first lets the
-  // picker's ViewerPanel capture it and hand focus back on close.
-  const openNewOutfit = (event) => {
+  // The picker's ViewerPanel captures the focused trigger (Chrome focuses a
+  // button on click) and hands focus back to it on close.
+  const openNewOutfit = () => {
     if (!items.length) return;
-    event?.currentTarget?.focus?.({ preventScroll: true });
     setBuilderOutfit(null);
     setShowBuilder(true);
   };
   const openEditOutfit = (outfit) => { setViewingOutfitId(null); setBuilderOutfit(outfit); setShowBuilder(true); };
-  const openSuggestions = (event) => {
-    event?.currentTarget?.focus?.({ preventScroll: true });
-    setShowSuggestions(true);
-  };
+  const openSuggestions = () => setShowSuggestions(true);
   // builderOutfit resets on every close so a stale edit target never lingers
   // into the next "new". Edit is only reachable from the viewer, so closing
   // an edit (saved or not) goes back to that viewer, like "back".

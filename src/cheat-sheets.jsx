@@ -264,7 +264,6 @@ function CheatSheetEditor({ items, entry, onClose, onSaved, onSheetUpdate, premi
   const closeConfirmReturnRef = useRef(null);
   const deleteTriggerRef = useRef(null);
   const deleteKeepRef = useRef(null);
-  const editPiecesRef = useRef(null);
   const mobilePiecesTabRef = useRef(null);
   const mobilePreviewTabRef = useRef(null);
   const fullscreenTriggerRef = useRef(null);
@@ -401,19 +400,10 @@ function CheatSheetEditor({ items, entry, onClose, onSaved, onSheetUpdate, premi
     return () => { window.clearTimeout(timer); controller.abort(); };
   }, [title, items, draftPieces, key, renderVersion]);
 
-  const openPiecePicker = (event) => {
-    // Safari doesn't focus buttons on click; the picker's ViewerPanel restores to whatever had focus.
-    event?.currentTarget?.focus?.({ preventScroll: true });
-    setPiecePickerOpen(true);
-  };
-
-  const closePiecePicker = () => {
-    setPiecePickerOpen(false);
-    // Two frames: after the picker's own single-frame restore.
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      if (!focusIfVisible(editPiecesRef.current)) focusIfVisible(titleInputRef.current);
-    }));
-  };
+  // The picker's ViewerPanel captures Edit pieces (focused by the click) and
+  // returns focus to it on close.
+  const openPiecePicker = () => setPiecePickerOpen(true);
+  const closePiecePicker = () => setPiecePickerOpen(false);
 
   // Synchronous and never throws: the picker unmounts on success.
   const applyPickedPieces = (pieces) => {
@@ -641,7 +631,7 @@ function CheatSheetEditor({ items, entry, onClose, onSaved, onSheetUpdate, premi
                   <textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={CHEAT_SHEET_DESCRIPTION_LIMIT} rows={3} placeholder="e.g. Weekend hikes in the Dolomites, earthy tones and fresh alpine air" disabled={controlsDisabled} />
                   <small>Helps the AI choose a theme · {description.length}/{CHEAT_SHEET_DESCRIPTION_LIMIT}</small>
                 </label>
-                <div className="cheat-piece-count"><strong>{selectedCount} {selectedCount === 1 ? "piece" : "pieces"}</strong><button ref={editPiecesRef} type="button" aria-haspopup="dialog" onClick={openPiecePicker} disabled={controlsDisabled}><PencilSimple size={15} weight="bold" aria-hidden="true" /> Edit pieces</button></div>
+                <div className="cheat-piece-count"><strong>{selectedCount} {selectedCount === 1 ? "piece" : "pieces"}</strong><button type="button" aria-haspopup="dialog" onClick={openPiecePicker} disabled={controlsDisabled}><PencilSimple size={15} weight="bold" aria-hidden="true" /> Edit pieces</button></div>
               </div>
               <section className="cheat-beautify" aria-labelledby="cheat-beautify-title">
                 <h3 id="cheat-beautify-title"><Sparkle size={18} aria-hidden="true" /> Beautify</h3>
@@ -861,8 +851,6 @@ export function CheatSheetsArea({ items, premiumAllowed = true, provider = null,
     openRequestId.current += 1;
     setOpeningId(null);
     setCollectionViewer(null);
-    // Safari doesn't focus on click; the picker's ViewerPanel captures the focused element at mount.
-    trigger?.focus?.({ preventScroll: true });
     createTriggerRef.current = trigger;
     setCreating(true);
   };
@@ -875,10 +863,8 @@ export function CheatSheetsArea({ items, premiumAllowed = true, provider = null,
     setEntry({ key: crypto.randomUUID(), sheet: null, initialPieces: pieces });
   };
 
-  const cancelNewSheet = () => {
-    setCreating(false);
-    restoreEditorFocus(createTriggerRef.current, () => document.querySelector(".cheat-new-button"));
-  };
+  // The picker's ViewerPanel returns focus to the trigger it captured.
+  const cancelNewSheet = () => setCreating(false);
 
   const openSheetViewer = async (sheet, event) => {
     const requestId = ++openRequestId.current;
