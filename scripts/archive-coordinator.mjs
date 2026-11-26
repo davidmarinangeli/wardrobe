@@ -2,11 +2,13 @@ import { randomUUID } from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { chmod, lstat, link, mkdir, open, readFile, readdir, rename, rm, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fsyncDirectory } from "./fs-durability.mjs";
 
 const CONTROLS = "archive-coordination";
 const leasesContext = new AsyncLocalStorage();
 const recoveryByRoot = new Map();
 const recoveryPending = new Map();
+const writersInFlight = new Set();
 
 export class ArchiveMaintenanceError extends Error {
   constructor(code = "archive_maintenance", { cause } = {}) {
@@ -26,8 +28,7 @@ function controlPaths(dataDir) {
 }
 
 async function syncDirectory(directory) {
-  const handle = await open(directory, "r");
-  try { await handle.sync(); } finally { await handle.close(); }
+  await fsyncDirectory(directory);
 }
 
 async function ensureControlDirectory(dataDir) {
@@ -204,6 +205,13 @@ export async function withArchiveWriteLease(dataDir, task) {
   const root = path.resolve(dataDir);
   const inherited = activeLease(root);
   if (inherited) return task(inherited);
+  const run = runWithNewWriteLease(root, task);
+  writersInFlight.add(run);
+  run.finally(() => writersInFlight.delete(run)).catch(() => {});
+  return run;
+}
+
+async function runWithNewWriteLease(root, task) {
   await ensureArchiveRecovered(root);
   const lease = await acquireWriter(root);
   const context = { root, lease, background: new Set() };
@@ -215,6 +223,15 @@ export async function withArchiveWriteLease(dataDir, task) {
     await drainBackground(context);
     await releaseWriter(lease);
   }
+}
+
+/**
+ * Resolves once every writer lease this process opened (and the background
+ * work it tracks) has been released. The standalone server awaits it on
+ * shutdown so in-flight archive writes finish before the process exits.
+ */
+export async function drainArchiveWriters() {
+  while (writersInFlight.size) await Promise.allSettled([...writersInFlight]);
 }
 
 async function drainBackground(context) {

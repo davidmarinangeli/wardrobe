@@ -16,6 +16,7 @@ import {
 } from "./archive-store.mjs";
 import { hasGoogleDrivePrivatePathComponent } from "./google-drive-private-path.mjs";
 import { safeArchivePath } from "../shared/portable-assets.mjs";
+import { fsyncDirectory } from "./fs-durability.mjs";
 
 export const GOOGLE_DRIVE_OUTAGE_NOTICE = "Le modifiche vengono salvate sul computer. Quando il collegamento sarà ripristinato, l’archivio locale sovrascriverà quello su Google Drive.";
 
@@ -327,8 +328,7 @@ async function ensurePrivateDirectory(directory) {
   if (info?.isSymbolicLink() || (info && !info.isDirectory())) throw new GoogleDriveSyncError("private_state_invalid");
   if (!info) {
     await mkdir(directory, { recursive: false, mode: 0o700 });
-    const parent = await open(path.dirname(directory), "r");
-    try { await parent.sync(); } finally { await parent.close(); }
+    await fsyncDirectory(path.dirname(directory));
   }
   await chmod(directory, 0o700);
 }
@@ -339,8 +339,7 @@ async function ensurePrivateChild(parent, child) {
   if (info?.isSymbolicLink() || (info && !info.isDirectory())) throw new GoogleDriveSyncError("private_state_invalid");
   if (!info) {
     await mkdir(child, { recursive: false, mode: 0o700 });
-    const parentHandle = await open(parent, "r");
-    try { await parentHandle.sync(); } finally { await parentHandle.close(); }
+    await fsyncDirectory(parent);
   }
   await chmod(child, 0o700);
 }
@@ -357,9 +356,7 @@ async function atomicJson(filePath, value) {
   } finally { await handle.close(); }
   try {
     await rename(temp, filePath);
-    const directoryHandle = await open(directory, "r");
-    try { await directoryHandle.sync(); }
-    finally { await directoryHandle.close(); }
+    await fsyncDirectory(directory);
   }
   catch (error) { await unlink(temp).catch(() => {}); throw error; }
 }

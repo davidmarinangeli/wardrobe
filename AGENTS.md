@@ -74,6 +74,7 @@ The setup wizard covers the essentials for AI import and image generation (`AI_P
 | `WARDROBE_MODEL_REFERENCE` | `data/model-reference.png` |
 | `WARDROBE_FACE_REFERENCE` | `data/model-reference-face.png` (optional) |
 | `WARDROBE_DATA_DIR` | `data` |
+| `WARDROBE_ALLOWED_HOSTS` | Empty; extra `Host` names `npm run start` accepts besides `localhost` and IP addresses (comma list, `.ts.net` allows every subdomain) |
 | `GOOGLE_DRIVE_CLIENT_ID` | Empty; optional OAuth Web application client ID |
 | `GOOGLE_DRIVE_CLIENT_SECRET` | Empty; optional backend-only OAuth client secret |
 | `GOOGLE_DRIVE_REDIRECT_URI` | Empty; callback URL registered in Google Cloud Console |

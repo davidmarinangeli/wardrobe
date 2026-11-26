@@ -6,6 +6,7 @@ import path from "node:path";
 import { ARCHIVE_SCHEMA_VERSION, buildArchiveInventory, createRawArchiveSnapshot, hashArchiveFile, isAllowedArchivePath, resolveArchiveFile, validateArchive } from "./archive-store.mjs";
 import { safeArchivePath } from "../shared/portable-assets.mjs";
 import { ArchiveMaintenanceError, archiveMaintenanceStatus, withArchiveMaintenance } from "./archive-coordinator.mjs";
+import { fsyncDirectory } from "./fs-durability.mjs";
 
 const FIELDS = ["itemEdits", "deletedIds", "colorProfile", "declutterKeptIds", "dismissedNudges", "modelTier", "onboardingDismissed", "wornToday"];
 const JOURNAL_DISAPPEARED_DURING_READ = Symbol("journal-disappeared-during-read");
@@ -169,8 +170,7 @@ async function entryAt(root, relative) {
   try { return { path: relative, ...(await hashArchiveFile(await resolveArchiveFile(root, relative))) }; } catch (e) { if (e.code === "ENOENT") return null; throw e; }
 }
 async function syncDirectory(directory, onDurability) {
-  const handle = await open(directory, "r");
-  try { await handle.sync(); } finally { await handle.close(); }
+  await fsyncDirectory(directory);
   await onDurability?.("directory", directory);
 }
 async function syncDirectoryChain(directory, root, onDurability) {

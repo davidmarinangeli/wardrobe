@@ -9,6 +9,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "start": "node --env-file-if-exists=.env scripts/server.mjs",
     "check": "npm test && npm run build",
     "test": "node --test test/*.test.mjs",
     "bulk-import": "node --env-file=.env scripts/bulk-import.mjs",
@@ -21,12 +22,14 @@
     "@phosphor-icons/react": "^2.1.10",
     "@unpic/react": "^1.0.2",
     "@vitejs/plugin-react": "5.0.4",
+    "connect": "^3.7.0",
     "ipx": "^3.1.1",
     "liquid-glass-web-react": "^0.1.1",
     "motion": "^13.2.0",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "sharp": "^0.34.5",
+    "sirv": "^3.0.2",
     "vite": "6.4.3"
   },
   "allowScripts": {

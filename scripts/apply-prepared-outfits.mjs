@@ -9,6 +9,7 @@ import { OUTFIT_MAX_PIECES } from "../shared/outfit-rules.mjs";
 import { catalogForDisk, safeArchivePath } from "../shared/portable-assets.mjs";
 import { buildArchiveInventory, prepareArchiveDirectory, validateArchive } from "./archive-store.mjs";
 import { withArchiveWriteLease } from "./archive-coordinator.mjs";
+import { fsyncDirectory } from "./fs-durability.mjs";
 
 function args(argv) {
   const result = { repo: process.cwd() };
@@ -55,8 +56,7 @@ async function atomicCatalog(file, value) {
   try { await handle.writeFile(`${JSON.stringify(catalogForDisk(value), null, 2)}\n`); await handle.sync(); }
   finally { await handle.close(); }
   await rename(temporary, file);
-  const parent = await open(path.dirname(file), "r");
-  try { await parent.sync(); } finally { await parent.close(); }
+  await fsyncDirectory(path.dirname(file));
 }
 
 async function run() {

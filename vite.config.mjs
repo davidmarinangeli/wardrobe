@@ -1,19 +1,6 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
-import { wardrobeImportApi } from "./scripts/import-job-api.mjs";
-import { outfitsApi } from "./scripts/outfits-api.mjs";
-import { inspoApi } from "./scripts/inspo-api.mjs";
-import { wishlistApi } from "./scripts/wishlist-api.mjs";
-import { suggestionsApi } from "./scripts/suggestions-api.mjs";
-import { mirrorApi } from "./scripts/mirror-api.mjs";
-import { responsiveImageApi } from "./scripts/responsive-image-api.mjs";
-import { wardrobeSetupApi } from "./scripts/setup-api.mjs";
-import { preferencesApi } from "./scripts/preferences-api.mjs";
-import { colorProfileApi } from "./scripts/color-profile-api.mjs";
-import { variantApi } from "./scripts/variant-api.mjs";
-import { cheatSheetsApi } from "./scripts/cheat-sheets-api.mjs";
-import { browserStateApi } from "./scripts/browser-state-api.mjs";
-import { googleDriveApi } from "./scripts/google-drive-api.mjs";
+import { apiPlugins } from "./scripts/api-plugins.mjs";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
@@ -38,22 +25,8 @@ export default defineConfig(({ mode }) => {
       port: 4173,
       allowedHosts: ["localhost"],
     },
-    plugins: [
-      googleDriveApi({ env }),
-      react(),
-      responsiveImageApi(),
-      wardrobeImportApi({ env }),
-      outfitsApi({ env }),
-      inspoApi({ env }),
-      wishlistApi({ env }),
-      suggestionsApi({ env }),
-      mirrorApi({ env }),
-      wardrobeSetupApi({ env }),
-      preferencesApi({ env }),
-      colorProfileApi({ env }),
-      variantApi({ env }),
-      cheatSheetsApi({ env }),
-      browserStateApi({ env }),
-    ],
+    // The plugin list and its order live in scripts/api-plugins.mjs, shared
+    // with the standalone server (scripts/server.mjs).
+    plugins: apiPlugins({ env, react: react() }),
   };
 });
