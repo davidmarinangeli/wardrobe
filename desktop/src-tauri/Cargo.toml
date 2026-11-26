@@ -5,7 +5,7 @@ description = "Wardrobe desktop app: Tauri shell around the Wardrobe Node server
 authors = ["Wardrobe contributors"]
 license = "MIT"
 edition = "2021"
-rust-version = "1.80"
+rust-version = "1.90"  # tauri-plugin-updater 2.14 requires 1.90
 publish = false
 
 [lib]
@@ -26,6 +26,8 @@ tauri-plugin-single-instance = "2.5"
 tauri-plugin-autostart = "2.7"
 tauri-plugin-log = "2.10"
 tauri-plugin-dialog = "2.7"
+# In-app updates from the GitHub release's latest.json (Feature 06).
+tauri-plugin-updater = "2.12"
 # OS keychain: macOS Keychain and Windows Credential Manager. Tests use the
 # crate's mock credential store and never touch the real keychain.
 keyring = { version = "3.6", features = ["apple-native", "windows-native"] }

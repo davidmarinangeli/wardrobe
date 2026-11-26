@@ -54,7 +54,14 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": ""
+      "endpoints": [
+        "https://github.com/davidmarinangeli/wardrobe/releases/latest/download/latest.json"
+      ],
+      "pubkey": "",
+      "requireSignedVersion": true,
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }

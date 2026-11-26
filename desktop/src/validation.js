@@ -167,3 +167,24 @@ export function stateLabel(state) {
     default: return "…";
   }
 }
+
+/** "just now", "3 minutes ago", "2 hours ago", "4 days ago" for Unix seconds. */
+export function formatAgo(unixSeconds, nowMs = Date.now()) {
+  const seconds = Math.max(0, Math.floor(nowMs / 1000 - Number(unixSeconds)));
+  const plural = (n, unit) => `${n} ${unit}${n === 1 ? "" : "s"} ago`;
+  if (seconds < 60) return "just now";
+  if (seconds < 3600) return plural(Math.floor(seconds / 60), "minute");
+  if (seconds < 86400) return plural(Math.floor(seconds / 3600), "hour");
+  return plural(Math.floor(seconds / 86400), "day");
+}
+
+/** The panel's last-check line for an updater status. */
+export function lastCheckLabel(status, nowMs = Date.now()) {
+  if (!status) return "";
+  const failure = status.lastFailure;
+  if (failure && (status.lastChecked == null || failure.at >= status.lastChecked)) {
+    return `Last check failed ${formatAgo(failure.at, nowMs)}: ${failure.reason}`;
+  }
+  if (status.lastChecked != null) return `Checked ${formatAgo(status.lastChecked, nowMs)}`;
+  return "Not checked yet";
+}

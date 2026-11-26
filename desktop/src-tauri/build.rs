@@ -25,6 +25,10 @@ const COMMANDS: &[&str] = &[
     "pick_directory",
     "reveal_location",
     "open_help",
+    "update_state",
+    "update_check",
+    "update_install",
+    "update_skip",
 ];
 
 const PLACEHOLDER: &str = "Placeholder written by build.rs for debug builds. Run `npm run prepare:app` in desktop/ to produce the real file.\n";

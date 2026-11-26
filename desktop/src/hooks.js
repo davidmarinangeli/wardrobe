@@ -13,6 +13,18 @@ export function useServerState() {
   return state;
 }
 
+/** The updater status, kept current by the `update-state` event. */
+export function useUpdateStatus() {
+  const [status, setStatus] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    api.updateState().then((next) => { if (alive) setStatus(next); }, () => {});
+    const stop = api.onUpdateState((next) => { if (alive) setStatus(next); });
+    return () => { alive = false; stop(); };
+  }, []);
+  return [status, setStatus];
+}
+
 /**
  * One pending action at a time per section: `run(label, fn)` records the
  * label while `fn` runs and keeps its error message. Resolves to fn's result,

@@ -5,11 +5,12 @@ use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::webview::NewWindowResponse;
 use tauri::{
-    AppHandle, Manager, Runtime, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder, Wry,
+    AppHandle, Emitter, Manager, Runtime, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder, Wry,
 };
 use tauri_plugin_opener::OpenerExt;
 
 use crate::sidecar::ServerState;
+use crate::updates::{self, UpdateStatus};
 use crate::AppState;
 
 pub const WARDROBE: &str = "wardrobe";
@@ -21,6 +22,11 @@ pub const MENU_BROWSER: &str = "open-in-browser";
 pub const MENU_SETTINGS: &str = "settings";
 pub const MENU_UPDATES: &str = "check-for-updates";
 pub const MENU_QUIT: &str = "quit";
+
+/// Control-panel sections the shell can open directly (the panel's `SECTIONS` ids).
+pub const SECTION_UPDATES: &str = "updates";
+/// Emitted to an open control window: `payload` is the section id to show.
+pub const SHOW_SECTION_EVENT: &str = "show-section";
 
 /// The address the window and the browser use. `localhost`, not `127.0.0.1`:
 /// the Google Drive redirect URI and same-origin checks assume
@@ -101,11 +107,25 @@ pub fn reload_wardrobe(app: &AppHandle, port: u16) {
 }
 
 pub fn open_control(app: &AppHandle) -> Result<(), String> {
+    open_control_at(app, None)
+}
+
+/// Shows the control window, on `section` when given: a new window gets it
+/// as the URL fragment (`index.html#updates`), an open one as a
+/// `show-section` event.
+pub fn open_control_at(app: &AppHandle, section: Option<&str>) -> Result<(), String> {
     if let Some(window) = app.get_webview_window(CONTROL) {
+        if let Some(section) = section {
+            let _ = app.emit_to(CONTROL, SHOW_SECTION_EVENT, section);
+        }
         show(&window);
         return Ok(());
     }
-    let window = WebviewWindowBuilder::new(app, CONTROL, WebviewUrl::App("index.html".into()))
+    let page = match section {
+        Some(section) => format!("index.html#{section}"),
+        None => "index.html".into(),
+    };
+    let window = WebviewWindowBuilder::new(app, CONTROL, WebviewUrl::App(page.into()))
         .title("Wardrobe Settings")
         // Wide enough for the section rail plus one column of settings.
         .inner_size(780.0, 720.0)
@@ -148,6 +168,7 @@ pub fn focus_existing(app: &AppHandle) {
 
 pub struct Tray<R: Runtime> {
     pub status: MenuItem<R>,
+    pub updates: MenuItem<R>,
 }
 
 pub fn build_tray(app: &AppHandle) -> tauri::Result<Tray<Wry>> {
@@ -155,8 +176,8 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<Tray<Wry>> {
     let open = MenuItem::with_id(app, MENU_OPEN, "Open Wardrobe", true, None::<&str>)?;
     let browser = MenuItem::with_id(app, MENU_BROWSER, "Open in browser", true, None::<&str>)?;
     let settings = MenuItem::with_id(app, MENU_SETTINGS, "Settings…", true, None::<&str>)?;
-    // Feature 06 wires the updater; until then the item is visible but disabled.
-    let updates = MenuItem::with_id(app, MENU_UPDATES, "Check for updates…", false, None::<&str>)?;
+    // "Check for updates…", or "Update to vX.Y.Z…" once one is available.
+    let updates = MenuItem::with_id(app, MENU_UPDATES, "Check for updates…", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, MENU_QUIT, "Quit Wardrobe", true, None::<&str>)?;
     let menu = Menu::with_items(
         app,
@@ -185,6 +206,7 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<Tray<Wry>> {
             MENU_SETTINGS => {
                 let _ = open_control(app);
             }
+            MENU_UPDATES => crate::tray_updates_clicked(app),
             MENU_QUIT => crate::quit(app),
             _ => {}
         })
@@ -205,7 +227,17 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<Tray<Wry>> {
         builder = builder.icon(icon.clone());
     }
     builder.build(app)?;
-    Ok(Tray { status })
+    Ok(Tray { status, updates })
+}
+
+/// Updates the tray's updates item: "Check for updates…", "Update to
+/// vX.Y.Z…", or a disabled progress line.
+pub fn update_tray_updates(app: &AppHandle, status: &UpdateStatus) {
+    let (text, enabled) = updates::tray_item(status);
+    if let Some(tray) = app.try_state::<Tray<Wry>>() {
+        let _ = tray.updates.set_text(&text);
+        let _ = tray.updates.set_enabled(enabled);
+    }
 }
 
 /// Updates the tray status line and tooltip.

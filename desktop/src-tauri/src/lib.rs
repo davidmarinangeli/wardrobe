@@ -7,6 +7,7 @@ pub mod config;
 pub mod secrets;
 pub mod sidecar;
 pub mod storage;
+pub mod updates;
 pub mod windows;
 
 use std::path::{Path, PathBuf};
@@ -22,10 +23,12 @@ use tauri_plugin_window_state::StateFlags;
 
 use config::{AppDirs, DesktopConfig, OpenTarget};
 use secrets::{KeyringSecretStore, MemorySecretStore, SecretStore};
+use serde_json::Value;
 use sidecar::{
     ImportOutcome, LaunchInputs, LaunchSpec, LogBuffer, ServerLayout, ServerState, SidecarManager,
     Timing,
 };
+use updates::{InstallHost, Persisted, PluginBackend, UpdateCore, UpdateManager, UpdateStatus};
 
 /// Passed by the autostart entry: start in the tray without opening a window.
 pub const HIDDEN_ARG: &str = "--hidden";
@@ -261,6 +264,131 @@ fn secret_store() -> (Box<dyn SecretStore>, bool) {
     }
 }
 
+/// The app around an update install: the server is stopped under the
+/// lifecycle lock (no restart can start it while the installer runs) and
+/// started again only when the install fails.
+struct AppInstallHost(AppHandle);
+
+impl InstallHost for AppInstallHost {
+    fn install_with_server_stopped(
+        &self,
+        install: &mut dyn FnMut() -> Result<(), String>,
+    ) -> Result<(), String> {
+        let state = self.0.state::<AppState>();
+        let logs = state.sidecar.logs();
+        state.sidecar.stop();
+        let _lifecycle = lifecycle_guard(&state);
+        state.sidecar.stop();
+        logs.app("installing an update: server stopped");
+        let current = self.0.package_info().version.to_string();
+        // Read at the next launch: open the windows even when the restart
+        // carries --hidden (autostart) or start_hidden is on.
+        set_store_value(
+            &self.0,
+            updates::STORE_INSTALLED_FROM,
+            Some(Value::String(current)),
+        );
+        let result = install();
+        if let Err(reason) = &result {
+            set_store_value(&self.0, updates::STORE_INSTALLED_FROM, None);
+            logs.app(&format!(
+                "update install failed: {reason}; starting the server again"
+            ));
+            match prepare_start(&state) {
+                Ok(spec) => state.sidecar.start(&spec),
+                Err(reason) => state.sidecar.fail(state.config().port, reason),
+            };
+        }
+        result
+    }
+
+    fn restart_app(&self) {
+        self.0
+            .state::<AppState>()
+            .sidecar
+            .logs()
+            .app("update installed: restarting");
+        self.0.request_restart();
+    }
+}
+
+/// Sets (or with `None`, removes) one `config.json` key outside
+/// `DesktopConfig`, and saves the file.
+fn set_store_value(app: &AppHandle, key: &str, value: Option<Value>) {
+    let state = app.state::<AppState>();
+    let result = app.store(state.dirs.store_file()).and_then(|store| {
+        match value {
+            Some(value) => store.set(key, value),
+            None => {
+                store.delete(key);
+            }
+        }
+        store.save()
+    });
+    if let Err(error) = result {
+        log::warn!("cannot save {key} to config.json: {error}");
+    }
+}
+
+fn persist_updates(app: &AppHandle, persisted: &Persisted) {
+    set_store_value(
+        app,
+        updates::STORE_LAST_CHECK,
+        persisted.last_checked.map(Value::from),
+    );
+    set_store_value(
+        app,
+        updates::STORE_SKIPPED,
+        persisted.skipped_version.clone().map(Value::String),
+    );
+}
+
+/// Installs the available update (blocking): download, stop the server,
+/// install, restart. See `UpdateManager::install`.
+pub fn install_update(app: &AppHandle) -> Result<UpdateStatus, String> {
+    app.state::<UpdateManager>()
+        .install(&AppInstallHost(app.clone()))
+}
+
+/// Tray "Check for updates…" / "Update to vX.Y.Z…": opens the Updates
+/// section, and starts a manual check unless an update is already offered.
+/// Installing always needs the panel's button.
+pub fn tray_updates_clicked(app: &AppHandle) {
+    if let Err(error) = windows::open_control_at(app, Some(windows::SECTION_UPDATES)) {
+        log::warn!("cannot open the control panel: {error}");
+    }
+    let offered = matches!(
+        app.state::<UpdateManager>().status().state,
+        updates::UpdateState::Available { skipped: false, .. }
+            | updates::UpdateState::Downloading { .. }
+            | updates::UpdateState::Ready { .. }
+    );
+    if !offered {
+        let app = app.clone();
+        std::thread::spawn(move || {
+            let _ = app.state::<UpdateManager>().check(true);
+        });
+    }
+}
+
+/// One check 15 s after launch, then every 6 hours.
+fn spawn_update_scheduler(app: AppHandle) {
+    std::thread::spawn(move || {
+        std::thread::sleep(updates::FIRST_CHECK_DELAY);
+        loop {
+            if let Err(error) = app.state::<UpdateManager>().check(false) {
+                log::info!("automatic update check skipped: {error}");
+            }
+            std::thread::sleep(updates::CHECK_INTERVAL);
+        }
+    });
+}
+
+fn on_update_status(app: &AppHandle, status: &UpdateStatus) {
+    windows::update_tray_updates(app, status);
+    let _ = app.emit("update-state", status);
+}
+
 /// Tray "Quit": stop the server (graceful, then kill after 10 s), then exit.
 pub fn quit(app: &AppHandle) {
     let app = app.clone();
@@ -378,6 +506,10 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        // Endpoints, public key and Windows install mode: tauri.conf.json
+        // `plugins.updater`. Only Rust calls it (no updater permission is
+        // granted to any window).
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_window_state::Builder::new()
                 .with_state_flags(StateFlags::all() & !StateFlags::VISIBLE)
@@ -414,7 +546,27 @@ pub fn run() {
                 log::warn!("{warning}");
             }
             let layout = choose_layout(&handle)?;
-            let hidden = std::env::args().any(|arg| arg == HIDDEN_ARG) || config.start_hidden;
+            let stored = |key: &str| entries.iter().find(|(k, _)| k == key).map(|(_, v)| v);
+            let updated_from = stored(updates::STORE_INSTALLED_FROM)
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            let update_persisted = Persisted {
+                last_checked: stored(updates::STORE_LAST_CHECK).and_then(Value::as_u64),
+                skipped_version: stored(updates::STORE_SKIPPED)
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
+            };
+            if let Some(from) = &updated_from {
+                log::info!("updated from {from} to {}", app.package_info().version);
+                store.delete(updates::STORE_INSTALLED_FROM);
+                if let Err(error) = store.save() {
+                    log::warn!("cannot save config.json: {error}");
+                }
+            }
+            // The first launch after an update always shows the app, even
+            // when the restart carried --hidden or start_hidden is on.
+            let hidden = updated_from.is_none()
+                && (std::env::args().any(|arg| arg == HIDDEN_ARG) || config.start_hidden);
             log::info!(
                 "Wardrobe {} starting: sidecar {} ({}), data {}, config {}",
                 app.package_info().version,
@@ -448,6 +600,45 @@ pub fn run() {
             });
             let tray = windows::build_tray(&handle)?;
             app.manage(tray);
+
+            let auto_check = updates::auto_check_enabled(
+                std::env::var(updates::AUTO_CHECK_ENV).ok().as_deref(),
+                !cfg!(debug_assertions),
+            );
+            let mut update_core = UpdateCore::new(
+                app.package_info().version.to_string(),
+                update_persisted,
+                auto_check,
+            );
+            // A relaunch on the same version (the installer failed after the
+            // app exited) still opens the windows, but is not "updated from".
+            let running = app.package_info().version.to_string();
+            update_core.set_updated_from(updated_from.filter(|from| *from != running));
+            let persist_handle = handle.clone();
+            let update_manager = UpdateManager::new(
+                update_core,
+                Box::new(PluginBackend::new(handle.clone())),
+                Box::new(move |persisted: &Persisted| persist_updates(&persist_handle, persisted)),
+            );
+            let update_handle = handle.clone();
+            update_manager.set_listener(Arc::new(move |status: &UpdateStatus| {
+                on_update_status(&update_handle, status)
+            }));
+            app.manage(update_manager);
+            let product = app.package_info().name.clone();
+            std::thread::spawn(move || {
+                for removed in updates::remove_stale_installers(&std::env::temp_dir(), &product) {
+                    log::info!("removed the update installer folder {}", removed.display());
+                }
+            });
+            if auto_check {
+                spawn_update_scheduler(handle.clone());
+            } else {
+                log::info!(
+                    "automatic update checks are off in this build ({}=on turns them on)",
+                    updates::AUTO_CHECK_ENV
+                );
+            }
             let listener_handle = handle.clone();
             manager.set_listener(Arc::new(move |state: &ServerState| {
                 on_server_state(&listener_handle, state)
@@ -483,6 +674,10 @@ pub fn run() {
             commands::pick_directory,
             commands::reveal_location,
             commands::open_help,
+            commands::update_state,
+            commands::update_check,
+            commands::update_install,
+            commands::update_skip,
         ])
         .build(tauri::generate_context!())
         .expect("error while building the Wardrobe desktop app");

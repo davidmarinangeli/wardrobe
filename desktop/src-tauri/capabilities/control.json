@@ -26,6 +26,10 @@
     "allow-cache-clear-models",
     "allow-pick-directory",
     "allow-reveal-location",
-    "allow-open-help"
+    "allow-open-help",
+    "allow-update-state",
+    "allow-update-check",
+    "allow-update-install",
+    "allow-update-skip"
   ]
 }

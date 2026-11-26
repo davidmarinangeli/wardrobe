@@ -47,6 +47,11 @@ export const UPDATER_PLATFORMS = Object.freeze({
   "windows-x86_64": Object.freeze({ bundle: "nsis", asset: /_x64-setup\.exe$/, file: /_x64-setup\.exe$/ }),
 });
 
+/** The address the installed app polls (tauri.conf.json plugins.updater.endpoints). */
+export function updaterEndpoint(repo = DEFAULT_REPO) {
+  return `https://github.com/${repo}/releases/latest/download/latest.json`;
+}
+
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
 // ---------------------------------------------------------------------------
@@ -75,7 +80,13 @@ export function configProblems(config, overlay) {
   if (config.bundle?.macOS?.hardenedRuntime !== false) problems.push("bundle.macOS.hardenedRuntime must be false: the ad-hoc signed Node sidecar needs JIT, which the hardened runtime forbids without entitlements");
   if (config.bundle?.createUpdaterArtifacts) problems.push("bundle.createUpdaterArtifacts belongs in tauri.release.conf.json, so local builds without the signing key keep working");
   if (overlay?.bundle?.createUpdaterArtifacts !== true) problems.push("tauri.release.conf.json must set bundle.createUpdaterArtifacts to true");
-  const pubkey = config.plugins?.updater?.pubkey;
+  const updater = config.plugins?.updater ?? {};
+  const endpoints = updater.endpoints;
+  if (!Array.isArray(endpoints) || endpoints.length !== 1 || endpoints[0] !== updaterEndpoint()) {
+    problems.push(`plugins.updater.endpoints must be ["${updaterEndpoint()}"], the latest.json this workflow publishes, got ${JSON.stringify(endpoints)}`);
+  }
+  if (updater.requireSignedVersion !== true) problems.push("plugins.updater.requireSignedVersion must be true: the signature then pins the version latest.json announces (no downgrade to an older signed build)");
+  const pubkey = updater.pubkey;
   if (!pubkey) {
     problems.push("plugins.updater.pubkey is empty: generate the updater keypair (desktop/README.md, \"Updater signing key\") and commit the public key");
   } else {

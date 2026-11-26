@@ -19,6 +19,7 @@ use crate::config::{ConfigPatch, DesktopConfig};
 use crate::secrets::{self, SecretStatus};
 use crate::sidecar::{self, Health, ImportOutcome, LogLine, ServerState};
 use crate::storage::{self, CacheStatus};
+use crate::updates::{UpdateManager, UpdateStatus};
 use crate::{windows, AppState};
 
 /// The repository the help links point at.
@@ -291,16 +292,57 @@ pub fn reveal_location(app: AppHandle, location: String) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-/// Opens a fixed help page in the default browser: `google-drive`.
+/// Opens a fixed help page in the default browser: `google-drive` or
+/// `releases`.
 #[tauri::command]
 pub fn open_help(app: AppHandle, topic: String) -> Result<(), String> {
     let url = match topic.as_str() {
         "google-drive" => format!("{REPO_URL}/blob/main/docs/google-drive-operations.md"),
+        "releases" => format!("{REPO_URL}/releases"),
         other => return Err(format!("unknown help topic {other:?}")),
     };
     app.opener()
         .open_url(url, None::<&str>)
         .map_err(|e| e.to_string())
+}
+
+/// The updater state: `{ state: "idle" | "upToDate" | "available" |
+/// "downloading" | "ready" | "failed", current, checking, lastChecked,
+/// lastFailure, skippedVersion, autoCheck, updatedFrom, ... }`.
+#[tauri::command]
+pub fn update_state(updates: State<'_, UpdateManager>) -> UpdateStatus {
+    updates.status()
+}
+
+/// A manual check ("Check for updates" in the panel): a failure becomes the
+/// `failed` state. Resolves when the check finishes, or at once with
+/// `checking: true` when one is already running.
+#[tauri::command]
+pub async fn update_check(app: AppHandle) -> Result<UpdateStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || app.state::<UpdateManager>().check(true))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// "Install and restart": downloads and verifies the available update with
+/// the server running, stops the server, installs, and restarts the app. On
+/// Windows the installer replaces the app and the process exits. A failed
+/// download or install comes back as the `failed` state (the server is
+/// running again); `Err` means there was nothing to install.
+#[tauri::command]
+pub async fn update_install(app: AppHandle) -> Result<UpdateStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::install_update(&app))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// "Skip this version" with a version, "Stop skipping" with `null`.
+#[tauri::command]
+pub fn update_skip(
+    updates: State<'_, UpdateManager>,
+    version: Option<String>,
+) -> Result<UpdateStatus, String> {
+    updates.skip(version.as_deref())
 }
 
 /// The single restart path for commands: rebuilds the launch spec from the

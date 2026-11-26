@@ -23,12 +23,29 @@ export const cacheClearModels = () => invoke("cache_clear_models");
 export const pickDirectory = (title, start) => invoke("pick_directory", { title: title ?? null, start: start ?? null });
 /** `location`: "data" | "cache" | "logs" | "config". */
 export const revealLocation = (location) => invoke("reveal_location", { location });
-/** `topic`: "google-drive". */
+/** `topic`: "google-drive" | "releases". */
 export const openHelp = (topic) => invoke("open_help", { topic });
+export const updateState = () => invoke("update_state");
+export const updateCheck = () => invoke("update_check");
+export const updateInstall = () => invoke("update_install");
+/** A version skips it; `null` stops skipping. */
+export const updateSkip = (version) => invoke("update_skip", { version: version ?? null });
 
 /** Calls `handler(state)` on every `server-state` event. Returns an unsubscribe function. */
 export function onServerState(handler) {
   const unlisten = listen("server-state", (event) => handler(event.payload));
+  return () => { unlisten.then((stop) => stop()).catch(() => {}); };
+}
+
+/** Calls `handler(status)` on every `update-state` event. Returns an unsubscribe function. */
+export function onUpdateState(handler) {
+  const unlisten = listen("update-state", (event) => handler(event.payload));
+  return () => { unlisten.then((stop) => stop()).catch(() => {}); };
+}
+
+/** Calls `handler(sectionId)` when the shell asks to show a section (tray "Check for updates…"). */
+export function onShowSection(handler) {
+  const unlisten = listen("show-section", (event) => handler(event.payload));
   return () => { unlisten.then((stop) => stop()).catch(() => {}); };
 }
 

@@ -5,6 +5,8 @@ import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import { emit } from "@tauri-apps/api/event";
 import { App } from "../src/App.jsx";
 import { ImportResult } from "../src/sections/StorageSection.jsx";
+import { Markdown } from "../src/markdown.jsx";
+import { lastCheckLabel } from "../src/validation.js";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -21,10 +23,20 @@ function emptySecrets() {
 }
 
 /** A fake Rust side. Like the real one, it stores values but only ever returns presence and a hint. */
-function fakeBackend({ hasKey = true } = {}) {
+const UP_TO_DATE = {
+  state: "upToDate", current: "1.0.0", checking: false, lastChecked: null, lastFailure: null,
+  skippedVersion: null, autoCheck: true, updatedFrom: null,
+};
+const AVAILABLE = {
+  ...UP_TO_DATE, state: "available", version: "1.0.1", date: "2026-11-27T10:00:00Z",
+  notes: "## What's new\n- The version string is **visible**\n- <img src=x onerror=alert(1)>", skipped: false,
+};
+
+function fakeBackend({ hasKey = true, update = UP_TO_DATE, checkResult = AVAILABLE, eventBeforeReply = null } = {}) {
   const stored = new Map();
   if (hasKey) stored.set("OPENAI_API_KEY", "sk-old-key-ab12");
   const calls = [];
+  let updateStatus = { ...update };
   const config = {
     config: {
       port: 5173, data_dir: null, cache_dir: null, allowed_hosts: [], launch_at_login: false, start_hidden: false,
@@ -53,6 +65,23 @@ function fakeBackend({ hasKey = true } = {}) {
       case "server_health": return { ok: true, version: "1.0.0", uptime: 75, managed: true };
       case "server_logs": return [];
       case "autostart_get": return false;
+      case "update_state": return updateStatus;
+      case "update_check":
+        // A check that joins a running one: the running check's result can
+        // reach the panel as an event before this reply.
+        if (eventBeforeReply) return emit("update-state", eventBeforeReply).then(() => ({ ...checkResult }));
+        updateStatus = { ...checkResult }; return updateStatus;
+      case "update_skip":
+        updateStatus = {
+          ...updateStatus,
+          skippedVersion: args.version,
+          skipped: updateStatus.state === "available" && args.version === updateStatus.version,
+        };
+        return updateStatus;
+      case "update_install":
+        updateStatus = { ...updateStatus, state: "ready", version: updateStatus.version };
+        return updateStatus;
+      case "open_help": return null;
       case "cache_status": return { cache_dir: "/u/cache", transformers: { path: "/u/cache/transformers", exists: false, bytes: 0 }, drapes: { path: "/u/cache/drapes", exists: false, bytes: 0 } };
       case "set_config": {
         const patch = args.patch;
@@ -87,6 +116,11 @@ async function settle() {
 
 function byText(selector, text) {
   return [...container.querySelectorAll(selector)].find((node) => node.textContent.trim() === text);
+}
+
+/** A rail button by its label (ignoring a badge next to it). */
+function railItem(label) {
+  return [...container.querySelectorAll("button.rail__item")].find((node) => node.firstChild?.textContent.trim() === label);
 }
 
 async function click(node) {
@@ -235,13 +269,117 @@ describe("control panel", () => {
     expect(container.textContent).toContain("Port 5174 is in use by another program.");
   });
 
-  it("renders the placeholders for later features", async () => {
+  it("renders the placeholder for remote access", async () => {
     fakeBackend();
     await render(<App />);
     await click(byText("button.rail__item", "Remote access"));
     expect(container.textContent).toContain("Coming in a later version.");
+  });
+});
+
+describe("updates", () => {
+  it("checks on demand and offers the new version with its notes", async () => {
+    const backend = fakeBackend();
+    await render(<App />);
     await click(byText("button.rail__item", "Updates"));
-    expect(container.textContent).toContain("Coming in a later version.");
+    expect(container.querySelector('[data-testid="current-version"]').textContent).toBe("v1.0.0");
+    expect(container.textContent).toContain("Wardrobe is up to date.");
+    expect(container.querySelector('[data-testid="last-check"]').textContent).toBe("Not checked yet");
+
+    await click(byText("button", "Check for updates"));
+    expect(backend.calls.map(([cmd]) => cmd)).toContain("update_check");
+    expect(container.textContent).toContain("Wardrobe v1.0.1 is available");
+    const notes = container.querySelector('[data-testid="release-notes"]');
+    expect(notes.querySelector("strong").textContent).toBe("visible");
+    expect(notes.querySelectorAll("li")).toHaveLength(2);
+    // The release body is rendered as text, never as markup.
+    expect(notes.querySelector("img")).toBeNull();
+    expect(notes.textContent).toContain("<img src=x onerror=alert(1)>");
+    expect(container.querySelector('[aria-label="update available"]')).toBeTruthy();
+
+    await click(byText("button", "Install and restart"));
+    expect(backend.calls.map(([cmd]) => cmd)).toContain("update_install");
+    expect(container.textContent).toContain("Installing v1.0.1. Wardrobe will restart in a moment.");
+  });
+
+  it("skips a version and can stop skipping", async () => {
+    const backend = fakeBackend({ update: AVAILABLE });
+    await render(<App />);
+    expect(container.querySelector('[aria-label="update available"]')).toBeTruthy();
+    await click(railItem("Updates"));
+    await click(byText("button", "Skip this version"));
+    expect(backend.calls).toContainEqual(["update_skip", { version: "1.0.1" }]);
+    expect(container.textContent).toContain("You skipped v1.0.1.");
+    expect(byText("button", "Install and restart")).toBeUndefined();
+    expect(container.querySelector('[aria-label="update available"]')).toBeNull();
+
+    await click(byText("button", "Stop skipping"));
+    expect(backend.calls).toContainEqual(["update_skip", { version: null }]);
+    expect(byText("button", "Install and restart")).toBeTruthy();
+  });
+
+  it("follows update-state events: progress, then a failure that keeps this version", async () => {
+    fakeBackend({ update: AVAILABLE });
+    await render(<App />);
+    await click(railItem("Updates"));
+    await act(async () => { await emit("update-state", { ...AVAILABLE, state: "downloading", received: 25, total: 100 }); });
+    await settle();
+    expect(container.textContent).toContain("Downloading v1.0.1… 25%");
+    expect(byText("button", "Check for updates").disabled).toBe(true);
+    await act(async () => { await emit("update-state", { ...AVAILABLE, state: "failed", version: "1.0.1", reason: "The download failed: connection reset" }); });
+    await settle();
+    expect(container.querySelector('[role="alert"]').textContent).toContain("The update to v1.0.1 failed. The download failed: connection reset");
+    expect(container.textContent).toContain("This version keeps working.");
+    expect(byText("button", "Check for updates").disabled).toBe(false);
+  });
+
+  it("opens on the Updates section from the URL fragment and on show-section", async () => {
+    fakeBackend();
+    window.location.hash = "#updates";
+    try {
+      await render(<App />);
+      expect(container.querySelector("#updates-title")).toBeTruthy();
+    } finally {
+      window.location.hash = "";
+    }
+    await click(byText("button.rail__item", "Status"));
+    expect(container.querySelector("#updates-title")).toBeNull();
+    await act(async () => { await emit("show-section", "updates"); });
+    await settle();
+    expect(container.querySelector("#updates-title")).toBeTruthy();
+  });
+
+  it("keeps a running check's result when a joined check replies late", async () => {
+    fakeBackend({ checkResult: { ...UP_TO_DATE, checking: true }, eventBeforeReply: AVAILABLE });
+    await render(<App />);
+    await click(railItem("Updates"));
+    await click(byText("button", "Check for updates"));
+    await settle();
+    expect(container.textContent).toContain("Wardrobe v1.0.1 is available");
+    expect(byText("button", "Check for updates").disabled).toBe(false);
+  });
+
+  it("words the last-check line", () => {
+    const now = 1_000_000 * 1000;
+    expect(lastCheckLabel({ lastChecked: 1_000_000 - 180, lastFailure: null }, now)).toBe("Checked 3 minutes ago");
+    expect(lastCheckLabel({ lastChecked: 1_000_000 - 30, lastFailure: null }, now)).toBe("Checked just now");
+    expect(lastCheckLabel({ lastChecked: 1_000_000 - 7200, lastFailure: { at: 1_000_000 - 60, reason: "offline" } }, now))
+      .toBe("Last check failed 1 minute ago: offline");
+    expect(lastCheckLabel({ lastChecked: 1_000_000 - 60, lastFailure: { at: 1_000_000 - 7200, reason: "offline" } }, now))
+      .toBe("Checked 1 minute ago");
+  });
+});
+
+describe("release notes markdown", () => {
+  it("renders headings, lists, code and links as text", async () => {
+    await render(<Markdown text={"# Title\n\nSome `code` and [the docs](https://example.com/x).\n\n1. one\n2. two\n\n```\nraw <b>\n```"} />);
+    expect(container.querySelector("h4").textContent).toBe("Title");
+    expect(container.querySelector("p code").textContent).toBe("code");
+    expect(container.querySelector("a")).toBeNull();
+    expect(container.textContent).toContain("the docs (https://example.com/x)");
+    expect(container.querySelectorAll("ol li")).toHaveLength(2);
+    expect(container.querySelector("pre").textContent).toBe("raw <b>");
+    expect(container.querySelector("b")).toBeNull();
   });
 });
 

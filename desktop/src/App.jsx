@@ -3,12 +3,13 @@
 // back only as { present, hint }.
 import { useCallback, useEffect, useState } from "react";
 import * as api from "./api.js";
-import { useServerState } from "./hooks.js";
+import { useServerState, useUpdateStatus } from "./hooks.js";
 import { AiSection } from "./sections/AiSection.jsx";
 import { DriveSection } from "./sections/DriveSection.jsx";
 import { GeneralSection, PlaceholderSection } from "./sections/GeneralSection.jsx";
 import { StatusSection } from "./sections/StatusSection.jsx";
 import { StorageSection } from "./sections/StorageSection.jsx";
+import { UpdatesSection } from "./sections/UpdatesSection.jsx";
 import { stateLabel } from "./validation.js";
 
 export const SECTIONS = [
@@ -21,12 +22,19 @@ export const SECTIONS = [
   { id: "updates", label: "Updates" },
 ];
 
+/** A section asked for in the URL fragment (`index.html#updates`, from the tray). */
+function sectionFromHash() {
+  const id = typeof window === "undefined" ? "" : window.location.hash.replace(/^#/, "");
+  return SECTIONS.some((item) => item.id === id) ? id : null;
+}
+
 export function App() {
   const server = useServerState();
+  const [updates, setUpdates] = useUpdateStatus();
   const [info, setInfo] = useState(null);
   const [config, setConfig] = useState(null);
   const [secrets, setSecrets] = useState(null);
-  const [section, setSection] = useState(null);
+  const [section, setSection] = useState(sectionFromHash);
   const [loadError, setLoadError] = useState("");
 
   const refreshConfig = useCallback(() => api.getConfig().then(setConfig), []);
@@ -48,6 +56,11 @@ export function App() {
       .catch((error) => { setLoadError(api.errorText(error)); setSection((current) => current ?? "status"); });
   }, []);
 
+  // The tray's "Check for updates…" on an open window.
+  useEffect(() => api.onShowSection((id) => {
+    if (SECTIONS.some((item) => item.id === id)) setSection(id);
+  }), []);
+
   // Every change that affects the server ends in a restart, so a state change
   // is the moment to re-read what the panel shows (also covers changes made
   // from the tray or another control window).
@@ -59,6 +72,7 @@ export function App() {
   }, [server?.state, server?.port]);
 
   const firstLaunch = Boolean(info && !info.has_provider_key);
+  const updateOffered = updates?.state === "available" && !updates.skipped;
   const props = {
     server, info, config, secrets,
     onConfigChanged: refreshConfig,
@@ -83,6 +97,7 @@ export function App() {
               >
                 {item.label}
                 {item.id === "ai" && firstLaunch && <span className="badge" aria-label="needs a key">!</span>}
+                {item.id === "updates" && updateOffered && <span className="badge badge--info" aria-label="update available">1</span>}
               </button>
             </li>
           ))}
@@ -97,7 +112,7 @@ export function App() {
         {section === "drive" && <DriveSection {...props} />}
         {section === "general" && <GeneralSection {...props} />}
         {section === "remote" && <PlaceholderSection id="remote" title="Remote access" />}
-        {section === "updates" && <PlaceholderSection id="updates" title="Updates" />}
+        {section === "updates" && <UpdatesSection updates={updates} onStatus={setUpdates} info={info} />}
       </main>
     </div>
   );

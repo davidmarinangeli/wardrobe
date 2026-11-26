@@ -12,7 +12,7 @@ import { DESKTOP_DIR, REPO_ROOT, readAppVersion, targetInfo } from "../scripts/c
 import {
   RELEASE_OVERLAY, TAURI_CONFIG, UPDATER_PLATFORMS, assetUrl, buildLatestJson, configProblems, findOrCreateDraft,
   latestJsonProblems, parsePublicKey, parseSignature, pickUpdaterAssets, refreshLatestJson, signatureProblems,
-  tagProblems, trustedCommentFields,
+  tagProblems, trustedCommentFields, updaterEndpoint,
 } from "../scripts/release.mjs";
 import { sidecarLayout } from "../scripts/smoke-sidecar.mjs";
 
@@ -43,7 +43,7 @@ function releaseConfig(pubkey) {
   return {
     version: "../../package.json",
     bundle: { targets: ["app", "dmg", "nsis"], macOS: { signingIdentity: "-", hardenedRuntime: false } },
-    plugins: { updater: { pubkey } },
+    plugins: { updater: { endpoints: [updaterEndpoint()], pubkey, requireSignedVersion: true } },
   };
 }
 const OVERLAY = { bundle: { createUpdaterArtifacts: true } };
@@ -65,6 +65,8 @@ test("the release config check accepts a complete config and names each gap", ()
   broken.bundle.targets = ["app", "nsis", "msi"];
   broken.bundle.macOS = {};
   broken.bundle.createUpdaterArtifacts = true;
+  broken.plugins.updater.endpoints = ["https://example.com/latest.json"];
+  delete broken.plugins.updater.requireSignedVersion;
   const problems = configProblems(broken, {}).join("\n");
   assert.match(problems, /version must be "\.\.\/\.\.\/package\.json"/);
   assert.match(problems, /must include "dmg"/);
@@ -74,6 +76,8 @@ test("the release config check accepts a complete config and names each gap", ()
   assert.match(problems, /createUpdaterArtifacts belongs in tauri\.release\.conf\.json/);
   assert.match(problems, /tauri\.release\.conf\.json must set bundle\.createUpdaterArtifacts/);
   assert.match(problems, /pubkey is empty/);
+  assert.match(problems, /plugins\.updater\.endpoints must be/);
+  assert.match(problems, /requireSignedVersion must be true/);
   assert.match(configProblems(releaseConfig("bm90IGEga2V5"), OVERLAY).join(), /not a minisign public key/);
 });
 
@@ -82,7 +86,10 @@ test("the committed Tauri config is release-ready except, until the owner commit
   const overlay = JSON.parse(readFileSync(RELEASE_OVERLAY, "utf8"));
   const problems = configProblems(config, overlay);
   assert.ok(problems.every((problem) => /plugins\.updater\.pubkey/.test(problem)), problems.join("\n"));
-  assert.deepEqual(configProblems({ ...config, plugins: { updater: { pubkey: makeKey().pubkey } } }, overlay), []);
+  assert.deepEqual(configProblems({ ...config, plugins: { updater: { ...config.plugins.updater, pubkey: makeKey().pubkey } } }, overlay), []);
+  // The in-app updater (Feature 06) polls the latest.json this workflow publishes.
+  assert.deepEqual(config.plugins.updater.endpoints, [updaterEndpoint()]);
+  assert.equal(config.plugins.updater.windows.installMode, "passive");
   // Local builds must never need the signing key.
   assert.equal(config.bundle.createUpdaterArtifacts, undefined);
   assert.equal(config.version, "../../package.json");

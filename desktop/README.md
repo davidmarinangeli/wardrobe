@@ -130,8 +130,8 @@ The installed bundle is never written to.
 ## Control panel
 
 The control window (tray › Settings…) has the sections Status, AI provider,
-Storage, Google Drive, General, plus placeholders for Remote access (Feature 07)
-and Updates (Feature 06). It replaces `.env` editing:
+Storage, Google Drive, General, Updates, plus a placeholder for Remote access
+(Feature 07). It replaces `.env` editing:
 
 - API keys and the Google Drive client secret go to the OS keychain and reach
   the server only as environment variables. The panel only ever sees
@@ -152,6 +152,45 @@ key after an update. Choose **Always Allow**.
 instead of the keychain (manual testing on a machine whose keychain must not be
 touched).
 
+## Updates
+
+The app updates itself from the latest GitHub release with
+`tauri-plugin-updater` (`plugins.updater` in `src-tauri/tauri.conf.json`):
+
+- It reads
+  `https://github.com/davidmarinangeli/wardrobe/releases/latest/download/latest.json`
+  15 s after launch, every 6 hours while running, from the tray item
+  **Check for updates…** and from **Check for updates** in Settings › Updates.
+  Drafts and prereleases are invisible to `releases/latest`.
+- A newer version shows in Settings › Updates with its release notes, an
+  **Install and restart** button and **Skip this version**. The tray item then
+  reads **Update to vX.Y.Z…** (not for a skipped version) and opens that screen.
+  Nothing installs without the click.
+- Install downloads and verifies the update while the server keeps running,
+  then stops the server, installs and restarts. On Windows the NSIS installer
+  runs in passive mode (a progress bar, no questions) and starts the new
+  version; on macOS the bundle is replaced in place and the app relaunches.
+  A failed download leaves everything as it was; a failed install starts the
+  server again. Both show the reason in Settings.
+- Failed automatic checks are silent apart from the "Last check failed…" line;
+  a failed manual check shows its error.
+- The signature must verify against `plugins.updater.pubkey` and, with
+  `requireSignedVersion`, carry the version `latest.json` announces, so an
+  older signed build cannot be passed off as a newer one.
+- `config.json` keeps `update_last_check`, `update_skipped_version`, and
+  `update_installed_from` (written just before an install, removed at the next
+  launch, which then always opens its windows even with `--hidden`).
+
+Automatic checks run in release builds only. `WARDROBE_DESKTOP_UPDATE_CHECKS=on`
+(or `off`) forces them either way; manual checks always work.
+
+To exercise the updater without publishing anything, run `npm run tauri dev --
+--config <overlay.json>` with an overlay that points `plugins.updater.endpoints`
+at a local server, sets `"dangerousInsecureTransportProtocol": true` and a
+throwaway `pubkey`, and serve a `latest.json` whose artifact is signed with
+`npm run tauri signer sign -- -f <key> -p "" --app-version <version> <file>`.
+Feature 06's implementation notes describe the run done this way.
+
 ## Tests
 
 ```bash
@@ -160,7 +199,8 @@ npm test                         # build-script tests (no network), then the
                                  # control-panel tests (Vitest, jsdom, mocked IPC)
 npm run build                    # control panel, needed once by cargo
 cd src-tauri && cargo test       # config, secrets (keyring mock store), sidecar,
-                                 # storage; lifecycle and import-data tests run the
+                                 # storage, updater state machine (mocked updater);
+                                 # lifecycle and import-data tests run the
                                  # real server with node from PATH and the root dist/
 ```
 
@@ -238,8 +278,9 @@ version instead.
 | `Wardrobe_<ver>_x64-setup.exe` + `.sig` | Windows NSIS installer (current-user), also the Windows updater payload |
 | `latest.json` | Updater manifest with `darwin-aarch64`, `darwin-aarch64-app`, `windows-x86_64` and `windows-x86_64-nsis` |
 
-There is no MSI. The updater (Feature 06) reads
-`https://github.com/davidmarinangeli/wardrobe/releases/latest/download/latest.json`.
+There is no MSI. The updater (see "Updates" above) reads
+`https://github.com/davidmarinangeli/wardrobe/releases/latest/download/latest.json`,
+so an installed app sees a release only once it is **published**.
 
 ### Updater signing key
 
