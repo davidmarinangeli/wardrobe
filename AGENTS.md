@@ -18,7 +18,7 @@ Open the cloned repo in Codex and run either prompt. The import skill asks for a
 If you are setting up Wardrobe for a user, ask how they want to import their clothes:
 
 - **Codex:** Ask for a folder or camera-roll location and a model-reference PNG, then extract, model, and import the individual pieces by following [the bundled import skill](.agents/skills/import-clothes/SKILL.md). Afterward, offer to create a requested number of modeled looks with [the outfit-generation skill](.agents/skills/generate-outfits/SKILL.md).
-- **Web UI:** The gear icon opens **Settings** with two tabs: **AI** (provider, keys, Gemini TEST/PROD, reference photos) and **Archive** (Google Drive). The Archive tab is greyed out until the four `GOOGLE_DRIVE_*` values are in `.env`. The first-run wizard is separate; its **Archive / Google Drive** shortcut is available in every step and does not require an AI key.
+- **Web UI:** The gear icon opens **Settings** with two tabs: **AI** (provider, keys, Gemini TEST/PROD, reference photos) and **Archive** (Google Drive). The Archive tab is greyed out until the four `GOOGLE_DRIVE_*` values are in `.env` (in the desktop app, in its control panel's Google Drive section instead). The first-run wizard is separate; its **Archive / Google Drive** shortcut is available in every step and does not require an AI key.
 - **Any other agent (no Codex available):** Run `scripts/bulk-import.mjs` (see below) — it imports every detected garment occurrence as an independent wardrobe record without depending on Codex's built-in `imagegen` tool.
 
 ## Bulk import without Codex

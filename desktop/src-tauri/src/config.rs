@@ -29,6 +29,52 @@ pub const SHELL_OWNED_KEYS: [&str; 6] = [
     "NODE_OPTIONS",
 ];
 
+/// The non-secret Google Drive values, owned by the panel's Google Drive
+/// section. They are rejected as overrides with a pointer to that section.
+pub const DRIVE_ENV_KEYS: [&str; 3] = [
+    "GOOGLE_DRIVE_CLIENT_ID",
+    "GOOGLE_DRIVE_REDIRECT_URI",
+    "GOOGLE_DRIVE_FOLDER_ID",
+];
+
+/// The path the server's OAuth callback is mounted on.
+pub const DRIVE_CALLBACK_PATH: &str = "/api/google-drive/oauth/callback";
+
+/// The redirect URI the panel proposes for a port.
+pub fn default_drive_redirect_uri(port: u16) -> String {
+    format!("http://localhost:{port}{DRIVE_CALLBACK_PATH}")
+}
+
+/// Google Drive archive credentials, except the client secret (keychain).
+/// Empty strings mean "not set".
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct GoogleDriveConfig {
+    pub client_id: String,
+    /// `None` follows the port: `http://localhost:<port>/api/google-drive/oauth/callback`.
+    pub redirect_uri: Option<String>,
+    pub folder_id: String,
+}
+
+/// A partial update of `GoogleDriveConfig`. For `redirect_uri`, an empty
+/// string goes back to the port-derived default.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct GoogleDrivePatch {
+    pub client_id: Option<String>,
+    pub redirect_uri: Option<String>,
+    pub folder_id: Option<String>,
+}
+
+/// Where Wardrobe opens when the app launches.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum OpenTarget {
+    #[default]
+    Window,
+    Browser,
+}
+
 /// One non-secret environment override, kept in the user's order.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OverrideEntry {
@@ -53,6 +99,10 @@ pub struct DesktopConfig {
     pub overrides: Vec<OverrideEntry>,
     /// `AI_PROVIDER`; `None` lets the server use its default.
     pub provider: Option<String>,
+    /// `GOOGLE_DRIVE_CLIENT_ID`, `_REDIRECT_URI`, `_FOLDER_ID`.
+    pub google_drive: GoogleDriveConfig,
+    /// Open Wardrobe in the app window or the default browser at launch.
+    pub open_wardrobe_in: OpenTarget,
 }
 
 impl Default for DesktopConfig {
@@ -66,6 +116,8 @@ impl Default for DesktopConfig {
             start_hidden: false,
             overrides: Vec::new(),
             provider: None,
+            google_drive: GoogleDriveConfig::default(),
+            open_wardrobe_in: OpenTarget::Window,
         }
     }
 }
@@ -83,6 +135,8 @@ pub struct ConfigPatch {
     pub start_hidden: Option<bool>,
     pub overrides: Option<Vec<OverrideEntry>>,
     pub provider: Option<String>,
+    pub google_drive: Option<GoogleDrivePatch>,
+    pub open_wardrobe_in: Option<OpenTarget>,
 }
 
 /// Absolute locations the shell uses. All writable paths come from the
@@ -121,6 +175,41 @@ impl DesktopConfig {
         self.cache_dir
             .clone()
             .unwrap_or_else(|| dirs.default_cache_dir())
+    }
+
+    /// The redirect URI the server gets: the stored one, or the port default.
+    pub fn effective_drive_redirect_uri(&self) -> String {
+        self.google_drive
+            .redirect_uri
+            .clone()
+            .unwrap_or_else(|| default_drive_redirect_uri(self.port))
+    }
+
+    /// The Google Drive environment entries. Nothing when no Drive value is
+    /// configured (neither here nor the client secret), so an unconfigured app
+    /// does not hand the server a lone default redirect URI, which the server
+    /// would report as an incomplete configuration.
+    pub fn drive_env(&self, client_secret_present: bool) -> Vec<(String, String)> {
+        let drive = &self.google_drive;
+        let configured = !drive.client_id.is_empty()
+            || !drive.folder_id.is_empty()
+            || drive.redirect_uri.is_some()
+            || client_secret_present;
+        if !configured {
+            return Vec::new();
+        }
+        let mut env = Vec::new();
+        if !drive.client_id.is_empty() {
+            env.push(("GOOGLE_DRIVE_CLIENT_ID".into(), drive.client_id.clone()));
+        }
+        env.push((
+            "GOOGLE_DRIVE_REDIRECT_URI".into(),
+            self.effective_drive_redirect_uri(),
+        ));
+        if !drive.folder_id.is_empty() {
+            env.push(("GOOGLE_DRIVE_FOLDER_ID".into(), drive.folder_id.clone()));
+        }
+        env
     }
 
     /// Builds a config from store entries. Unknown keys are ignored; a known
@@ -177,6 +266,7 @@ impl DesktopConfig {
                 return Err(format!("provider must be one of {}", PROVIDERS.join(", ")));
             }
         }
+        validate_drive(&self.google_drive)?;
         Ok(())
     }
 
@@ -217,6 +307,25 @@ impl DesktopConfig {
                 Some(provider)
             };
         }
+        if let Some(drive) = patch.google_drive {
+            if let Some(client_id) = drive.client_id {
+                next.google_drive.client_id = client_id.trim().to_string();
+            }
+            if let Some(redirect_uri) = drive.redirect_uri {
+                let redirect_uri = redirect_uri.trim();
+                next.google_drive.redirect_uri = if redirect_uri.is_empty() {
+                    None
+                } else {
+                    Some(redirect_uri.to_string())
+                };
+            }
+            if let Some(folder_id) = drive.folder_id {
+                next.google_drive.folder_id = folder_id.trim().to_string();
+            }
+        }
+        if let Some(target) = patch.open_wardrobe_in {
+            next.open_wardrobe_in = target;
+        }
         next.validate()?;
         let restart = next.affects_server(self);
         Ok((next, restart))
@@ -230,6 +339,7 @@ impl DesktopConfig {
             || self.allowed_hosts != other.allowed_hosts
             || self.overrides != other.overrides
             || self.provider != other.provider
+            || self.google_drive != other.google_drive
     }
 }
 
@@ -281,6 +391,11 @@ pub fn validate_overrides(overrides: &[OverrideEntry]) -> Result<(), String> {
         if SHELL_OWNED_KEYS.contains(&key) {
             return Err(format!("override {key}: set by the desktop app itself"));
         }
+        if DRIVE_ENV_KEYS.contains(&key) {
+            return Err(format!(
+                "override {key}: set it in the Google Drive section"
+            ));
+        }
         if entry.value.contains(['\n', '\r', '\0']) {
             return Err(format!("override {key}: the value must be a single line"));
         }
@@ -289,6 +404,77 @@ pub fn validate_overrides(overrides: &[OverrideEntry]) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+fn single_line(value: &str) -> bool {
+    !value.contains(['\n', '\r', '\0'])
+}
+
+/// The same rules the server applies (`scripts/google-drive-auth.mjs`), so a
+/// value the panel accepts is never reported as `configuration_invalid`.
+pub fn validate_drive(drive: &GoogleDriveConfig) -> Result<(), String> {
+    let client_id = drive.client_id.as_str();
+    if client_id.len() > 512 || !single_line(client_id) || client_id.contains(char::is_whitespace) {
+        return Err("Google Drive client ID: one line, no spaces, at most 512 characters".into());
+    }
+    let folder = drive.folder_id.as_str();
+    if !folder.is_empty()
+        && (folder.len() < 5
+            || folder.len() > 200
+            || !folder
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'))
+    {
+        return Err(
+            "Google Drive folder ID: 5 to 200 letters, digits, _ or - (the last part of the folder URL)"
+                .into(),
+        );
+    }
+    if let Some(uri) = &drive.redirect_uri {
+        validate_redirect_uri(uri)?;
+    }
+    Ok(())
+}
+
+/// `https://…/api/google-drive/oauth/callback`, or `http://` on a loopback
+/// host, with no user info, query or fragment.
+pub fn validate_redirect_uri(uri: &str) -> Result<(), String> {
+    let invalid = || {
+        format!(
+            "Google Drive redirect URI must look like {} (https, or http on localhost)",
+            default_drive_redirect_uri(DEFAULT_PORT)
+        )
+    };
+    if !single_line(uri) || uri.contains(char::is_whitespace) || uri.contains(['?', '#', '@']) {
+        return Err(invalid());
+    }
+    let (scheme, rest) = uri.split_once("://").ok_or_else(invalid)?;
+    let (authority, path) = match rest.find('/') {
+        Some(index) => (&rest[..index], &rest[index..]),
+        None => return Err(invalid()),
+    };
+    if path != DRIVE_CALLBACK_PATH || authority.is_empty() {
+        return Err(invalid());
+    }
+    let host = if let Some(stripped) = authority.strip_prefix('[') {
+        stripped
+            .split(']')
+            .next()
+            .map(|h| format!("[{h}]"))
+            .unwrap_or_default()
+    } else {
+        authority
+            .split(':')
+            .next()
+            .unwrap_or_default()
+            .to_ascii_lowercase()
+    };
+    let loopback = matches!(host.as_str(), "localhost" | "127.0.0.1" | "[::1]");
+    match scheme.to_ascii_lowercase().as_str() {
+        "https" => Ok(()),
+        "http" if loopback => Ok(()),
+        _ => Err(invalid()),
+    }
 }
 
 #[cfg(test)]
@@ -347,6 +533,12 @@ mod tests {
                 entry("GEMINI_IMAGE_SIZE", "2K"),
             ],
             provider: Some("gemini".into()),
+            google_drive: GoogleDriveConfig {
+                client_id: "123-abc.apps.googleusercontent.com".into(),
+                redirect_uri: None,
+                folder_id: "1AbCdEfGhIjK".into(),
+            },
+            open_wardrobe_in: OpenTarget::Browser,
         };
         let entries: Map<String, Value> = config.to_entries().into_iter().collect();
         let keys: Vec<&str> = entries.keys().map(String::as_str).collect();
@@ -359,6 +551,8 @@ mod tests {
             "start_hidden",
             "overrides",
             "provider",
+            "google_drive",
+            "open_wardrobe_in",
         ] {
             assert!(keys.contains(&key), "missing store key {key}");
         }
@@ -500,5 +694,153 @@ mod tests {
                 ..Default::default()
             })
             .is_ok());
+    }
+
+    #[test]
+    fn drive_overrides_point_to_the_drive_section() {
+        let base = DesktopConfig::default();
+        for key in DRIVE_ENV_KEYS {
+            let error = base
+                .apply(ConfigPatch {
+                    overrides: Some(vec![entry(key, "x")]),
+                    ..Default::default()
+                })
+                .unwrap_err();
+            assert!(error.contains("Google Drive section"), "{key}: {error}");
+        }
+    }
+
+    #[test]
+    fn drive_settings_follow_the_port_and_validate() {
+        let base = DesktopConfig::default();
+        assert!(
+            base.drive_env(false).is_empty(),
+            "nothing configured, nothing exported"
+        );
+        let (drive, restart) = base
+            .apply(ConfigPatch {
+                google_drive: Some(GoogleDrivePatch {
+                    client_id: Some(" 123-abc.apps.googleusercontent.com ".into()),
+                    folder_id: Some("1AbCdEfGhIjK_-".into()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(restart);
+        assert_eq!(
+            drive.drive_env(true),
+            vec![
+                (
+                    "GOOGLE_DRIVE_CLIENT_ID".to_string(),
+                    "123-abc.apps.googleusercontent.com".to_string()
+                ),
+                (
+                    "GOOGLE_DRIVE_REDIRECT_URI".to_string(),
+                    "http://localhost:5173/api/google-drive/oauth/callback".to_string()
+                ),
+                (
+                    "GOOGLE_DRIVE_FOLDER_ID".to_string(),
+                    "1AbCdEfGhIjK_-".to_string()
+                ),
+            ]
+        );
+        // The default redirect URI follows the port.
+        let (moved, _) = drive
+            .apply(ConfigPatch {
+                port: Some(5174),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(
+            moved.effective_drive_redirect_uri(),
+            "http://localhost:5174/api/google-drive/oauth/callback"
+        );
+        // An edited one does not, until it is reset with an empty string.
+        let (edited, _) = moved
+            .apply(ConfigPatch {
+                google_drive: Some(GoogleDrivePatch {
+                    redirect_uri: Some(
+                        "https://wardrobe.example.ts.net/api/google-drive/oauth/callback".into(),
+                    ),
+                    ..Default::default()
+                }),
+                port: Some(5175),
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(edited
+            .effective_drive_redirect_uri()
+            .starts_with("https://wardrobe.example"));
+        let (reset, _) = edited
+            .apply(ConfigPatch {
+                google_drive: Some(GoogleDrivePatch {
+                    redirect_uri: Some(" ".into()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(reset.google_drive.redirect_uri, None);
+        assert!(reset.effective_drive_redirect_uri().contains(":5175/"));
+        // Only the secret set: the redirect URI is exported so the server
+        // reports "incomplete" rather than nothing.
+        assert_eq!(base.drive_env(true).len(), 1);
+
+        let reject = |patch: GoogleDrivePatch| {
+            base.apply(ConfigPatch {
+                google_drive: Some(patch),
+                ..Default::default()
+            })
+            .unwrap_err()
+        };
+        assert!(reject(GoogleDrivePatch {
+            folder_id: Some("abc".into()),
+            ..Default::default()
+        })
+        .contains("folder ID"));
+        assert!(reject(GoogleDrivePatch {
+            folder_id: Some("folder/with/slashes".into()),
+            ..Default::default()
+        })
+        .contains("folder ID"));
+        assert!(reject(GoogleDrivePatch {
+            client_id: Some("two words".into()),
+            ..Default::default()
+        })
+        .contains("client ID"));
+        for bad in [
+            "http://example.com/api/google-drive/oauth/callback",
+            "https://example.com/other",
+            "https://example.com/api/google-drive/oauth/callback?x=1",
+            "ftp://localhost/api/google-drive/oauth/callback",
+            "localhost:5173/api/google-drive/oauth/callback",
+        ] {
+            assert!(validate_redirect_uri(bad).is_err(), "{bad}");
+        }
+        for good in [
+            "http://localhost:5173/api/google-drive/oauth/callback",
+            "http://127.0.0.1:5174/api/google-drive/oauth/callback",
+            "http://[::1]:5173/api/google-drive/oauth/callback",
+            "https://machine.tail1234.ts.net/api/google-drive/oauth/callback",
+        ] {
+            assert!(validate_redirect_uri(good).is_ok(), "{good}");
+        }
+    }
+
+    #[test]
+    fn open_target_is_not_a_server_setting() {
+        let (next, restart) = DesktopConfig::default()
+            .apply(ConfigPatch {
+                open_wardrobe_in: Some(OpenTarget::Browser),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(next.open_wardrobe_in, OpenTarget::Browser);
+        assert!(!restart);
+        assert_eq!(
+            serde_json::to_value(OpenTarget::Browser).unwrap(),
+            serde_json::json!("browser")
+        );
     }
 }

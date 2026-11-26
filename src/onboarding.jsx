@@ -23,7 +23,7 @@ export const MANAGED_KEYS_HINT = "API keys are managed by the Wardrobe desktop a
  * (yes/no only), and `managed` when the desktop app owns keys and provider.
  * Null until it answers; a failed request leaves it null.
  */
-function useSetupProviders() {
+export function useSetupProviders() {
   const [providers, setProviders] = useState(null);
   useEffect(() => {
     let cancelled = false;

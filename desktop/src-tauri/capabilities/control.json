@@ -2,7 +2,9 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "control",
   "description": "The bundled control panel window. The wardrobe window (the web app) has no capability and therefore no IPC.",
-  "windows": ["control"],
+  "windows": [
+    "control"
+  ],
   "permissions": [
     "core:event:default",
     "allow-server-state",
@@ -17,6 +19,13 @@
     "allow-secret-status",
     "allow-secret-set",
     "allow-secret-delete",
-    "allow-app-info"
+    "allow-app-info",
+    "allow-server-health",
+    "allow-data-import",
+    "allow-cache-status",
+    "allow-cache-clear-models",
+    "allow-pick-directory",
+    "allow-reveal-location",
+    "allow-open-help"
   ]
 }

@@ -6,9 +6,10 @@ pub mod commands;
 pub mod config;
 pub mod secrets;
 pub mod sidecar;
+pub mod storage;
 pub mod windows;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -19,10 +20,11 @@ use tauri_plugin_shell::ShellExt;
 use tauri_plugin_store::StoreExt;
 use tauri_plugin_window_state::StateFlags;
 
-use config::{AppDirs, DesktopConfig};
-use secrets::{MemorySecretStore, SecretStore};
+use config::{AppDirs, DesktopConfig, OpenTarget};
+use secrets::{KeyringSecretStore, MemorySecretStore, SecretStore};
 use sidecar::{
-    LaunchInputs, LaunchSpec, LogBuffer, ServerLayout, ServerState, SidecarManager, Timing,
+    ImportOutcome, LaunchInputs, LaunchSpec, LogBuffer, ServerLayout, ServerState, SidecarManager,
+    Timing,
 };
 
 /// Passed by the autostart entry: start in the tray without opening a window.
@@ -38,7 +40,13 @@ pub struct AppState {
     pub dirs: AppDirs,
     pub layout: ServerLayout,
     pub secrets: Box<dyn SecretStore>,
+    /// True for the OS keychain, false for the session-only memory store.
+    pub secrets_persistent: bool,
     config: Mutex<DesktopConfig>,
+    /// Serializes server lifecycle operations (start, restart, stop-run-start),
+    /// so a restart requested meanwhile (a key, a setting, the Restart button)
+    /// cannot start the server in the middle of an import or a cache clear.
+    lifecycle: Mutex<()>,
     /// Open the Wardrobe window the first time the server is ready (cleared once used).
     auto_open_wardrobe: AtomicBool,
 }
@@ -111,9 +119,15 @@ fn prepare_start(state: &AppState) -> Result<LaunchSpec, String> {
     Ok(spec)
 }
 
+/// Holds `AppState::lifecycle` for one start, restart or stop-run-start.
+fn lifecycle_guard(state: &AppState) -> std::sync::MutexGuard<'_, ()> {
+    state.lifecycle.lock().unwrap_or_else(|p| p.into_inner())
+}
+
 /// Starts the sidecar (blocking). Used at launch.
 pub fn start_sidecar(app: &AppHandle) -> ServerState {
     let state = app.state::<AppState>();
+    let _lifecycle = lifecycle_guard(&state);
     match prepare_start(&state) {
         Ok(spec) => state.sidecar.start(&spec),
         Err(reason) => state.sidecar.fail(state.config().port, reason),
@@ -124,10 +138,126 @@ pub fn start_sidecar(app: &AppHandle) -> ServerState {
 /// single entry point for every change that affects the server.
 pub fn restart_sidecar(app: &AppHandle) -> ServerState {
     let state = app.state::<AppState>();
+    // The first stop interrupts a start that is still waiting for health (so
+    // the lock below is released quickly); the second, under the lock, covers
+    // a server another operation started in between. Waits for an import or a
+    // cache clear to finish instead of starting the server in its middle.
+    state.sidecar.stop();
+    let _lifecycle = lifecycle_guard(&state);
     state.sidecar.stop();
     match prepare_start(&state) {
         Ok(spec) => state.sidecar.start(&spec),
         Err(reason) => state.sidecar.fail(state.config().port, reason),
+    }
+}
+
+/// Stops the server, runs `f`, then starts it again with the current config
+/// and secrets (blocking). Used by operations that must not run while the
+/// server holds its data or cache files open. Holds the lifecycle lock
+/// throughout, so no restart can start the server while `f` runs.
+pub fn with_server_stopped<T>(app: &AppHandle, f: impl FnOnce(&AppState) -> T) -> T {
+    let state = app.state::<AppState>();
+    state.sidecar.stop();
+    let _lifecycle = lifecycle_guard(&state);
+    state.sidecar.stop();
+    let result = f(&state);
+    match prepare_start(&state) {
+        Ok(spec) => state.sidecar.start(&spec),
+        Err(reason) => state.sidecar.fail(state.config().port, reason),
+    };
+    result
+}
+
+/// Imports an existing data folder into the configured data directory with
+/// the Feature 02 `import-data` subcommand, run by the sidecar's Node binary
+/// (not through the running server, which is stopped meanwhile and started
+/// again afterwards). Blocking.
+pub fn import_data(app: &AppHandle, from: &Path, replace: bool) -> Result<ImportOutcome, String> {
+    if !from.is_absolute() {
+        return Err("Choose an absolute folder to import".into());
+    }
+    if !from.is_dir() {
+        return Err(format!("{} is not a folder", from.display()));
+    }
+    Ok(with_server_stopped(app, |state| {
+        let to = state.config().effective_data_dir(&state.dirs);
+        let logs = state.sidecar.logs();
+        // The server's own first-start skeleton is not a wardrobe to protect:
+        // import over it (it still goes to a `before-import` backup).
+        let replace = replace || storage::is_empty_wardrobe(&to);
+        logs.app(&format!(
+            "import-data from {} to {}{}",
+            from.display(),
+            to.display(),
+            if replace { " (replace)" } else { "" }
+        ));
+        if let Some(parent) = to.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let env = sidecar::build_env(std::env::vars().collect(), &DesktopConfig::default(), &[]);
+        let outcome = sidecar::run_import_data(
+            state.sidecar.command(),
+            &state.layout,
+            from,
+            &to,
+            replace,
+            &env,
+            sidecar::IMPORT_TIMEOUT,
+        );
+        logs.app(&match &outcome {
+            ImportOutcome::Imported {
+                files,
+                bytes,
+                backup,
+                ..
+            } => format!(
+                "import-data done: {files} files, {bytes} bytes{}",
+                backup
+                    .as_ref()
+                    .map(|b| format!(", previous data moved to {b}"))
+                    .unwrap_or_default()
+            ),
+            ImportOutcome::TargetPopulated { .. } => {
+                "import-data refused: the data directory already holds a wardrobe".into()
+            }
+            ImportOutcome::Failed { code, message, .. } => {
+                format!("import-data failed ({code}): {message}")
+            }
+        });
+        outcome
+    }))
+}
+
+/// Deletes `<cache>/transformers` with the server stopped (the loaded model
+/// files can be locked on Windows), then starts it again. Blocking.
+pub fn clear_model_cache(app: &AppHandle) -> Result<(), String> {
+    with_server_stopped(app, |state| {
+        let cache = state.config().effective_cache_dir(&state.dirs);
+        state
+            .sidecar
+            .logs()
+            .app(&format!("clearing the model cache in {}", cache.display()));
+        storage::clear_model_cache(&cache)
+    })
+}
+
+/// The secret store: the OS keychain, or the session-only memory store when
+/// `WARDROBE_DESKTOP_SECRETS=memory`.
+fn secret_store() -> (Box<dyn SecretStore>, bool) {
+    let memory = std::env::var(secrets::SECRETS_BACKEND_ENV)
+        .map(|v| v.eq_ignore_ascii_case("memory"))
+        .unwrap_or(false);
+    if memory {
+        log::warn!(
+            "secrets are kept in memory for this session only ({}=memory)",
+            secrets::SECRETS_BACKEND_ENV
+        );
+        (Box::new(MemorySecretStore::default()), false)
+    } else {
+        (
+            Box::new(KeyringSecretStore::new(secrets::KEYRING_SERVICE)),
+            true,
+        )
     }
 }
 
@@ -213,8 +343,12 @@ fn on_server_state(app: &AppHandle, state: &ServerState) {
             } else if app_state.has_provider_key()
                 && app_state.auto_open_wardrobe.swap(false, Ordering::SeqCst)
             {
-                if let Err(error) = windows::open_wardrobe(&handle) {
-                    log::warn!("cannot open the Wardrobe window: {error}");
+                let opened = match app_state.config().open_wardrobe_in {
+                    OpenTarget::Window => windows::open_wardrobe(&handle),
+                    OpenTarget::Browser => windows::open_in_browser(&handle),
+                };
+                if let Err(error) = opened {
+                    log::warn!("cannot open Wardrobe: {error}");
                 }
             }
         });
@@ -243,6 +377,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_window_state::Builder::new()
                 .with_state_flags(StateFlags::all() & !StateFlags::VISIBLE)
@@ -300,12 +435,15 @@ pub fn run() {
                 logs,
                 Timing::default(),
             );
+            let (secret_store, secrets_persistent) = secret_store();
             app.manage(AppState {
                 sidecar: manager.clone(),
                 dirs,
                 layout,
-                secrets: Box::new(MemorySecretStore::default()),
+                secrets: secret_store,
+                secrets_persistent,
                 config: Mutex::new(config),
+                lifecycle: Mutex::new(()),
                 auto_open_wardrobe: AtomicBool::new(!hidden),
             });
             let tray = windows::build_tray(&handle)?;
@@ -338,6 +476,13 @@ pub fn run() {
             commands::secret_set,
             commands::secret_delete,
             commands::app_info,
+            commands::server_health,
+            commands::data_import,
+            commands::cache_status,
+            commands::cache_clear_models,
+            commands::pick_directory,
+            commands::reveal_location,
+            commands::open_help,
         ])
         .build(tauri::generate_context!())
         .expect("error while building the Wardrobe desktop app");

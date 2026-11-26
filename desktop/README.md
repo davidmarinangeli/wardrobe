@@ -120,19 +120,47 @@ the data directory and (Feature 04) the keychain entries are keyed on it.
 | Settings (`config.json`) | `~/Library/Application Support/app.wardrobe.desktop/config.json` | `%APPDATA%\app.wardrobe.desktop\config.json` |
 | Logs | `~/Library/Logs/app.wardrobe.desktop` | `%LOCALAPPDATA%\app.wardrobe.desktop\logs` |
 | Window size and position | `.window-state.json` next to `config.json` | same |
+| API keys, Drive client secret | Keychain, service `wardrobe (app.wardrobe.desktop)`, one item per name | Credential Manager, generic credentials `<NAME>.wardrobe` |
 | WebView data | managed by WKWebView | `%LOCALAPPDATA%\app.wardrobe.desktop\EBWebView` |
 
 On Windows the default cache directory is the same folder as the logs and the
 WebView2 data; the server only creates `transformers/` and `drapes/` in it.
 The installed bundle is never written to.
 
+## Control panel
+
+The control window (tray › Settings…) has the sections Status, AI provider,
+Storage, Google Drive, General, plus placeholders for Remote access (Feature 07)
+and Updates (Feature 06). It replaces `.env` editing:
+
+- API keys and the Google Drive client secret go to the OS keychain and reach
+  the server only as environment variables. The panel only ever sees
+  "Set, ends with …ab12".
+- Provider, non-secret overrides (`KEY=value` lines), port, data directory,
+  Drive client ID / redirect URI / folder ID and the general options are in
+  `config.json`.
+- Every change that affects the server restarts it; the Wardrobe window
+  reloads when it is back.
+- **Import existing data…** runs `import-data` (Feature 02) with the sidecar's
+  Node while the server is stopped, then starts it again.
+
+On macOS, an unsigned build changes its signature with every update, so the
+Keychain asks "Wardrobe wants to use your confidential information" once per
+key after an update. Choose **Always Allow**.
+
+`WARDROBE_DESKTOP_SECRETS=memory` keeps secrets in memory for the session
+instead of the keychain (manual testing on a machine whose keychain must not be
+touched).
+
 ## Tests
 
 ```bash
 cd desktop
-npm test                         # build-script tests (no network)
+npm test                         # build-script tests (no network), then the
+                                 # control-panel tests (Vitest, jsdom, mocked IPC)
 npm run build                    # control panel, needed once by cargo
-cd src-tauri && cargo test       # config, secrets, sidecar; lifecycle tests run the
+cd src-tauri && cargo test       # config, secrets (keyring mock store), sidecar,
+                                 # storage; lifecycle and import-data tests run the
                                  # real server with node from PATH and the root dist/
 ```
 

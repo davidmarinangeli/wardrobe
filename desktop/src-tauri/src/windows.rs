@@ -107,8 +107,9 @@ pub fn open_control(app: &AppHandle) -> Result<(), String> {
     }
     let window = WebviewWindowBuilder::new(app, CONTROL, WebviewUrl::App("index.html".into()))
         .title("Wardrobe Settings")
-        .inner_size(520.0, 720.0)
-        .min_inner_size(420.0, 480.0)
+        // Wide enough for the section rail plus one column of settings.
+        .inner_size(780.0, 720.0)
+        .min_inner_size(600.0, 480.0)
         .center()
         .build()
         .map_err(|e| e.to_string())?;

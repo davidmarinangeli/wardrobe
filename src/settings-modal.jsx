@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { ViewerPanel } from "./components/ViewerPanel.jsx";
 import { ArchiveSettings, GoogleDriveOfflineNotice, useGoogleDriveStorage } from "./google-drive-storage.jsx";
-import { AiSettings } from "./onboarding.jsx";
+import { AiSettings, useSetupProviders } from "./onboarding.jsx";
 import "./settings-modal.css";
 
 const TABS = [
@@ -16,11 +16,14 @@ const TABS = [
  * archive-maintenance lock the rest of the app waits on.
  *
  * The Archive tab is only usable once the four GOOGLE_DRIVE_* values are in
- * .env. Until then it stays visible but greyed out, and selecting it explains
- * what is missing instead of opening an empty Drive panel.
+ * .env (or, with the desktop app, in its control panel). Until then it stays
+ * visible but greyed out, and selecting it explains what is missing instead of
+ * opening an empty Drive panel.
  */
 export function SettingsModal({ open, tab, onTabChange, onClose, aiSetup, aiBadge, onAiSetupChange, onAiModeChange, onArchiveChanged, onMaintenanceChange }) {
   const { controller, snapshot } = useGoogleDriveStorage({ onArchiveChanged, onMaintenanceChange });
+  // Desktop app: the Drive values come from its control panel, not .env.
+  const managed = useSetupProviders()?.managed === true;
   const status = snapshot.status;
   // Unknown until the first status poll answers; don't grey it out in the meantime.
   const archiveDisabled = Boolean(status && !status.configured);
@@ -114,12 +117,20 @@ export function SettingsModal({ open, tab, onTabChange, onClose, aiSetup, aiBadg
               <div className="settings-archive-off" lang="it">
                 <p className="onboarding-eyebrow">Archive</p>
                 <h3>Google Drive non è configurato</h3>
-                <p>
-                  L’archivio resta su questo computer. Per tenerne una copia su Google Drive, imposta{" "}
-                  <code>GOOGLE_DRIVE_CLIENT_ID</code>, <code>GOOGLE_DRIVE_CLIENT_SECRET</code>,{" "}
-                  <code>GOOGLE_DRIVE_REDIRECT_URI</code> e <code>GOOGLE_DRIVE_FOLDER_ID</code> nel file <code>.env</code>,
-                  poi riavvia l’app. I passaggi sono in <code>docs/google-drive-operations.md</code>.
-                </p>
+                {managed ? (
+                  <p>
+                    L’archivio resta su questo computer. Per tenerne una copia su Google Drive, inserisci Client ID,
+                    Client secret, Redirect URI e Folder ID nelle impostazioni dell’app desktop (icona di Wardrobe nella
+                    barra dei menu o nell’area di notifica › Settings… › Google Drive). Il server si riavvia da solo.
+                  </p>
+                ) : (
+                  <p>
+                    L’archivio resta su questo computer. Per tenerne una copia su Google Drive, imposta{" "}
+                    <code>GOOGLE_DRIVE_CLIENT_ID</code>, <code>GOOGLE_DRIVE_CLIENT_SECRET</code>,{" "}
+                    <code>GOOGLE_DRIVE_REDIRECT_URI</code> e <code>GOOGLE_DRIVE_FOLDER_ID</code> nel file <code>.env</code>,
+                    poi riavvia l’app. I passaggi sono in <code>docs/google-drive-operations.md</code>.
+                  </p>
+                )}
               </div>
             ) : (
               <ArchiveSettings controller={controller} snapshot={snapshot} open={open && showArchive} />

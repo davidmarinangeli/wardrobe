@@ -18,6 +18,13 @@ const COMMANDS: &[&str] = &[
     "secret_set",
     "secret_delete",
     "app_info",
+    "server_health",
+    "data_import",
+    "cache_status",
+    "cache_clear_models",
+    "pick_directory",
+    "reveal_location",
+    "open_help",
 ];
 
 const PLACEHOLDER: &str = "Placeholder written by build.rs for debug builds. Run `npm run prepare:app` in desktop/ to produce the real file.\n";

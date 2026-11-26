@@ -276,7 +276,9 @@ fn put(env: &mut BTreeMap<String, String>, key: &str, value: &str) {
 
 /// The sidecar environment: the inherited environment without
 /// `STRIPPED_ENV_KEYS`, then `WARDROBE_MANAGED_CONFIG=1`, the non-secret
-/// overrides in order, `AI_PROVIDER` when configured, and every present secret.
+/// overrides in order, the Google Drive values from the panel (when any Drive
+/// value is configured), `AI_PROVIDER` when configured, and every present
+/// secret.
 pub fn build_env(
     inherited: Vec<(String, String)>,
     config: &DesktopConfig,
@@ -296,6 +298,12 @@ pub fn build_env(
     put(&mut env, "WARDROBE_MANAGED_CONFIG", "1");
     for entry in &config.overrides {
         put(&mut env, &entry.key, &entry.value);
+    }
+    let drive_secret = secrets
+        .iter()
+        .any(|(name, _)| name == "GOOGLE_DRIVE_CLIENT_SECRET");
+    for (key, value) in config.drive_env(drive_secret) {
+        put(&mut env, &key, &value);
     }
     if let Some(provider) = &config.provider {
         put(&mut env, "AI_PROVIDER", provider);
@@ -319,6 +327,253 @@ pub fn build_launch(inputs: LaunchInputs<'_>) -> LaunchSpec {
         ),
         env: build_env(inputs.inherited_env, config, &inputs.secrets),
         cwd: inputs.cwd.to_path_buf(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// `import-data` (Feature 02 subcommand), run through the sidecar Node binary
+// ---------------------------------------------------------------------------
+
+/// How long `import-data` may run before it is killed. Copying a large
+/// wardrobe takes a while; a hung process must not block the panel forever.
+pub const IMPORT_TIMEOUT: Duration = Duration::from_secs(15 * 60);
+
+/// The result of `import-data`, as the control panel shows it. Serialized as
+/// `{ "status": "imported" | "targetPopulated" | "failed", ... }`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(
+    tag = "status",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum ImportOutcome {
+    /// Exit 0: the JSON summary from stdout.
+    Imported {
+        files: u64,
+        bytes: u64,
+        warnings: Vec<String>,
+        to: String,
+        /// Where a previous target was moved (`<to>.before-import-<time>`).
+        backup: Option<String>,
+    },
+    /// Exit 3: the target already holds a wardrobe; the panel offers Replace.
+    TargetPopulated { to: String, message: String },
+    /// Any other exit: the error from stderr (`archive_invalid` carries `errors`).
+    Failed {
+        exit_code: Option<i32>,
+        code: String,
+        message: String,
+        errors: Vec<String>,
+    },
+}
+
+pub fn import_data_args(
+    layout: &ServerLayout,
+    from: &Path,
+    to: &Path,
+    replace: bool,
+) -> Vec<OsString> {
+    let mut args: Vec<OsString> = vec![
+        layout.script().into_os_string(),
+        "import-data".into(),
+        "--from".into(),
+        from.as_os_str().to_owned(),
+        "--to".into(),
+        to.as_os_str().to_owned(),
+    ];
+    if replace {
+        args.push("--replace".into());
+    }
+    args
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct ImportSummary {
+    files: u64,
+    bytes: u64,
+    warnings: Vec<String>,
+    to: String,
+    backup: Option<String>,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct ImportErrorBody {
+    code: String,
+    message: String,
+    errors: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct ImportErrorLine {
+    error: ImportErrorBody,
+}
+
+/// Turns the exit code and output of `import-data` into an outcome.
+pub fn parse_import_output(
+    exit_code: Option<i32>,
+    stdout: &str,
+    stderr: &str,
+    to: &Path,
+) -> ImportOutcome {
+    let error = stderr
+        .lines()
+        .rev()
+        .find_map(|line| serde_json::from_str::<ImportErrorLine>(line.trim()).ok())
+        .map(|line| line.error);
+    if exit_code == Some(0) {
+        if let Some(summary) = stdout
+            .lines()
+            .rev()
+            .find_map(|line| serde_json::from_str::<ImportSummary>(line.trim()).ok())
+        {
+            return ImportOutcome::Imported {
+                files: summary.files,
+                bytes: summary.bytes,
+                warnings: summary.warnings,
+                to: if summary.to.is_empty() {
+                    to.display().to_string()
+                } else {
+                    summary.to
+                },
+                backup: summary.backup,
+            };
+        }
+        return ImportOutcome::Failed {
+            exit_code,
+            code: "import_failed".into(),
+            message: "The import finished but printed no summary.".into(),
+            errors: Vec::new(),
+        };
+    }
+    if exit_code == Some(3) {
+        return ImportOutcome::TargetPopulated {
+            to: to.display().to_string(),
+            message: error
+                .map(|e| e.message)
+                .unwrap_or_else(|| "The data directory already holds a wardrobe.".into()),
+        };
+    }
+    match error {
+        Some(error) => ImportOutcome::Failed {
+            exit_code,
+            code: if error.code.is_empty() {
+                "import_failed".into()
+            } else {
+                error.code
+            },
+            message: error.message,
+            errors: error.errors,
+        },
+        None => {
+            let text: Vec<&str> = stderr
+                .lines()
+                .filter(|l| !l.trim().is_empty())
+                .take(20)
+                .collect();
+            ImportOutcome::Failed {
+                exit_code,
+                code: if exit_code == Some(2) {
+                    "usage".into()
+                } else {
+                    "import_failed".into()
+                },
+                message: text
+                    .first()
+                    .map(|line| line.to_string())
+                    .unwrap_or_else(|| "The import failed without a message.".into()),
+                errors: text.iter().skip(1).map(|l| l.to_string()).collect(),
+            }
+        }
+    }
+}
+
+/// Runs `import-data` with `command` (a base command for the Node binary) and
+/// waits for it, killing it after `timeout`. The server must be stopped first:
+/// the subcommand renames directories.
+pub fn run_import_data(
+    mut command: Command,
+    layout: &ServerLayout,
+    from: &Path,
+    to: &Path,
+    replace: bool,
+    env: &BTreeMap<String, String>,
+    timeout: Duration,
+) -> ImportOutcome {
+    command
+        .args(import_data_args(layout, from, to, replace))
+        .env_clear()
+        .envs(env)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    if let Some(parent) = to.parent() {
+        command.current_dir(parent);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    let failed = |message: String| ImportOutcome::Failed {
+        exit_code: None,
+        code: "import_failed".into(),
+        message,
+        errors: Vec::new(),
+    };
+    let mut child = match command.spawn() {
+        Ok(child) => child,
+        Err(error) => return failed(format!("Could not start the import: {error}")),
+    };
+    let collect = |pipe: Option<Box<dyn Read + Send>>| {
+        thread::spawn(move || {
+            let mut text = String::new();
+            if let Some(mut pipe) = pipe {
+                let mut bytes = Vec::new();
+                let _ = pipe.read_to_end(&mut bytes);
+                text = String::from_utf8_lossy(&bytes).into_owned();
+            }
+            text
+        })
+    };
+    let stdout = collect(
+        child
+            .stdout
+            .take()
+            .map(|p| Box::new(p) as Box<dyn Read + Send>),
+    );
+    let stderr = collect(
+        child
+            .stderr
+            .take()
+            .map(|p| Box::new(p) as Box<dyn Read + Send>),
+    );
+    let started = Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break Some(status),
+            Ok(None) if started.elapsed() >= timeout => {
+                let _ = child.kill();
+                let _ = child.wait();
+                break None;
+            }
+            Ok(None) => thread::sleep(Duration::from_millis(100)),
+            Err(error) => {
+                let _ = child.kill();
+                return failed(format!("Could not wait for the import: {error}"));
+            }
+        }
+    };
+    let stdout = stdout.join().unwrap_or_default();
+    let stderr = stderr.join().unwrap_or_default();
+    match status {
+        Some(status) => parse_import_output(status.code(), &stdout, &stderr, to),
+        None => failed(format!(
+            "The import did not finish within {} minutes and was stopped.",
+            timeout.as_secs() / 60
+        )),
     }
 }
 
@@ -622,6 +877,12 @@ impl SidecarManager {
 
     pub fn logs(&self) -> &LogBuffer {
         &self.inner.logs
+    }
+
+    /// A new base command for the same Node binary the server runs with
+    /// (used for one-shot subcommands such as `import-data`).
+    pub fn command(&self) -> Command {
+        (self.inner.factory)()
     }
 
     /// The pid of the child this manager owns, if any.
@@ -1102,6 +1363,9 @@ mod tests {
             "the legacy name is never written"
         );
 
+        // No Drive value configured: nothing Drive-related is exported.
+        assert!(!env.keys().any(|k| k.starts_with("GOOGLE_DRIVE_")));
+
         // Without a configured provider the inherited one passes through.
         let env = build_env(
             vec![("AI_PROVIDER".into(), "minimax".into())],
@@ -1283,5 +1547,110 @@ mod tests {
             resource_dir: dir.path().to_path_buf(),
         };
         assert!(bundled.check().unwrap_err().contains("Reinstall"));
+    }
+
+    #[test]
+    fn environment_includes_drive_values_secrets_and_overrides_only() {
+        use crate::config::{GoogleDriveConfig, DRIVE_ENV_KEYS};
+        let config = DesktopConfig {
+            port: 5174,
+            overrides: vec![OverrideEntry {
+                key: "OPENAI_IMAGE_MODEL".into(),
+                value: "gpt-image-2.5".into(),
+            }],
+            google_drive: GoogleDriveConfig {
+                client_id: "client.apps.googleusercontent.com".into(),
+                redirect_uri: None,
+                folder_id: "1FolderId_-".into(),
+            },
+            ..Default::default()
+        };
+        // `secrets::present` only yields managed names; this is what it returns.
+        let secrets = vec![
+            ("OPENAI_API_KEY".to_string(), "sk-1234567890".to_string()),
+            (
+                "GOOGLE_DRIVE_CLIENT_SECRET".to_string(),
+                "GOCSPX-abc".to_string(),
+            ),
+        ];
+        let env = build_env(
+            vec![("GOOGLE_DRIVE_CLIENT_ID".into(), "inherited".into())],
+            &config,
+            &secrets,
+        );
+        assert_eq!(env["OPENAI_API_KEY"], "sk-1234567890");
+        assert_eq!(env["GOOGLE_DRIVE_CLIENT_SECRET"], "GOCSPX-abc");
+        assert_eq!(env["OPENAI_IMAGE_MODEL"], "gpt-image-2.5");
+        assert_eq!(
+            env["GOOGLE_DRIVE_CLIENT_ID"],
+            "client.apps.googleusercontent.com"
+        );
+        assert_eq!(
+            env["GOOGLE_DRIVE_REDIRECT_URI"],
+            "http://localhost:5174/api/google-drive/oauth/callback"
+        );
+        assert_eq!(env["GOOGLE_DRIVE_FOLDER_ID"], "1FolderId_-");
+        for key in DRIVE_ENV_KEYS {
+            assert!(env.contains_key(key), "{key}");
+        }
+        assert!(!env.contains_key("GEMINI_API_KEY"));
+        assert!(!env.contains_key("AI_PROVIDER"));
+    }
+
+    #[test]
+    fn import_outcomes_from_cli_output() {
+        let to = Path::new("/u/data");
+        let ok = parse_import_output(
+            Some(0),
+            "{\"files\":3,\"bytes\":1200,\"warnings\":[\"w\"],\"to\":\"/u/data\",\"backup\":null}\n",
+            "",
+            to,
+        );
+        assert_eq!(
+            ok,
+            ImportOutcome::Imported {
+                files: 3,
+                bytes: 1200,
+                warnings: vec!["w".into()],
+                to: "/u/data".into(),
+                backup: None
+            }
+        );
+        let json = serde_json::to_value(&ok).unwrap();
+        assert_eq!(json["status"], "imported");
+        let populated = parse_import_output(
+            Some(3),
+            "",
+            "{\"error\":{\"code\":\"target_populated\",\"message\":\"already a wardrobe\"}}\n",
+            to,
+        );
+        assert!(
+            matches!(populated, ImportOutcome::TargetPopulated { ref message, .. } if message == "already a wardrobe")
+        );
+        assert_eq!(
+            serde_json::to_value(&populated).unwrap()["status"],
+            "targetPopulated"
+        );
+        let invalid = parse_import_output(
+            Some(2),
+            "",
+            "{\"error\":{\"code\":\"archive_invalid\",\"message\":\"bad\",\"errors\":[\"missing a.png\"],\"historicalMissing\":[]}}\n",
+            to,
+        );
+        assert_eq!(
+            invalid,
+            ImportOutcome::Failed {
+                exit_code: Some(2),
+                code: "archive_invalid".into(),
+                message: "bad".into(),
+                errors: vec!["missing a.png".into()]
+            }
+        );
+        let usage = parse_import_output(Some(2), "", "Unknown option '--x'\n\nUsage: ...\n", to);
+        assert!(
+            matches!(usage, ImportOutcome::Failed { ref code, ref message, .. } if code == "usage" && message.starts_with("Unknown option"))
+        );
+        let crashed = parse_import_output(Some(0), "not json", "", to);
+        assert!(matches!(crashed, ImportOutcome::Failed { .. }));
     }
 }

@@ -7,15 +7,22 @@
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::time::Duration;
 
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_autostart::ManagerExt as _;
+use tauri_plugin_dialog::DialogExt as _;
+use tauri_plugin_opener::OpenerExt as _;
 
 use crate::config::{ConfigPatch, DesktopConfig};
 use crate::secrets::{self, SecretStatus};
-use crate::sidecar::{LogLine, ServerState};
+use crate::sidecar::{self, Health, ImportOutcome, LogLine, ServerState};
+use crate::storage::{self, CacheStatus};
 use crate::{windows, AppState};
+
+/// The repository the help links point at.
+pub const REPO_URL: &str = "https://github.com/davidmarinangeli/wardrobe";
 
 #[tauri::command]
 pub fn server_state(state: State<'_, AppState>) -> ServerState {
@@ -46,6 +53,10 @@ pub fn open_in_browser(app: AppHandle) -> Result<(), String> {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ConfigView {
+    /// The Google Drive redirect URI the server gets (stored, or the port default).
+    pub drive_redirect_uri: String,
+    /// `http://localhost:<port>/api/google-drive/oauth/callback` for the current port.
+    pub default_drive_redirect_uri: String,
     /// What is stored in `config.json` (`None` paths mean the defaults).
     pub config: DesktopConfig,
     /// The data and cache directories the server uses with this config.
@@ -60,6 +71,8 @@ pub struct ConfigView {
 fn config_view(state: &AppState) -> ConfigView {
     let config = state.config();
     ConfigView {
+        drive_redirect_uri: config.effective_drive_redirect_uri(),
+        default_drive_redirect_uri: crate::config::default_drive_redirect_uri(config.port),
         data_dir: config.effective_data_dir(&state.dirs),
         cache_dir: config.effective_cache_dir(&state.dirs),
         default_data_dir: state.dirs.default_data_dir(),
@@ -123,13 +136,16 @@ pub fn secret_status(state: State<'_, AppState>) -> BTreeMap<String, SecretStatu
     secrets::status(state.secrets.as_ref())
 }
 
-/// Stores a secret (Feature 03: for this session only) and restarts the server.
+/// Stores a secret in the keychain (trimmed; empty or multi-line values and
+/// unknown names are rejected) and restarts the server. Returns nothing: the
+/// value never comes back.
 #[tauri::command]
 pub async fn secret_set(app: AppHandle, name: String, value: String) -> Result<(), String> {
     secrets::set(app.state::<AppState>().secrets.as_ref(), &name, &value)?;
     restart_server(app).await.map(|_| ())
 }
 
+/// Removes a secret from the keychain and restarts the server.
 #[tauri::command]
 pub async fn secret_delete(app: AppHandle, name: String) -> Result<(), String> {
     secrets::delete(app.state::<AppState>().secrets.as_ref(), &name)?;
@@ -149,8 +165,11 @@ pub struct AppInfo {
     pub server_log: PathBuf,
     /// True when a provider key exists (stored secret or inherited environment).
     pub has_provider_key: bool,
-    /// Feature 03 keeps secrets for the session only; Feature 04 persists them.
+    /// True when secrets live in the OS keychain; false for the session-only
+    /// store (`WARDROBE_DESKTOP_SECRETS=memory`).
     pub secrets_persistent: bool,
+    /// `macos` or `windows` (help text differs, for example the Keychain prompt).
+    pub platform: String,
 }
 
 #[tauri::command]
@@ -166,8 +185,122 @@ pub fn app_info(app: AppHandle) -> AppInfo {
         log_dir: state.dirs.log.clone(),
         server_log: state.dirs.server_log(),
         has_provider_key: state.has_provider_key(),
-        secrets_persistent: false,
+        secrets_persistent: state.secrets_persistent,
+        platform: std::env::consts::OS.into(),
     }
+}
+
+/// `/api/health` of the running server (version, uptime), or `None` when it
+/// does not answer.
+#[tauri::command]
+pub async fn server_health(app: AppHandle) -> Option<Health> {
+    let port = app.state::<AppState>().sidecar.state().running_port()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        sidecar::probe_health(port, Duration::from_millis(1500))
+    })
+    .await
+    .ok()
+    .flatten()
+}
+
+/// Imports an existing data folder into the data directory (`import-data`
+/// through the sidecar binary). The server is stopped meanwhile and started
+/// again afterwards. Exit 3 comes back as `targetPopulated`; the panel then
+/// offers to call again with `replace: true`.
+#[tauri::command]
+pub async fn data_import(
+    app: AppHandle,
+    from: String,
+    replace: bool,
+) -> Result<ImportOutcome, String> {
+    let from = PathBuf::from(from.trim());
+    tauri::async_runtime::spawn_blocking(move || crate::import_data(&app, &from, replace))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Sizes of `<cache>/transformers` and `<cache>/drapes`.
+#[tauri::command]
+pub async fn cache_status(app: AppHandle) -> Result<CacheStatus, String> {
+    let cache = {
+        let state = app.state::<AppState>();
+        state.config().effective_cache_dir(&state.dirs)
+    };
+    tauri::async_runtime::spawn_blocking(move || storage::cache_status(&cache))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Deletes the background-removal model cache (`<cache>/transformers`), with
+/// the server stopped meanwhile.
+#[tauri::command]
+pub async fn cache_clear_models(app: AppHandle) -> Result<CacheStatus, String> {
+    let handle = app.clone();
+    tauri::async_runtime::spawn_blocking(move || crate::clear_model_cache(&handle))
+        .await
+        .map_err(|e| e.to_string())??;
+    cache_status(app).await
+}
+
+/// A native folder picker, attached to the control window. `None` when the
+/// user cancels. The frontend gets no dialog permission of its own.
+#[tauri::command]
+pub async fn pick_directory(
+    app: AppHandle,
+    title: Option<String>,
+    start: Option<String>,
+) -> Result<Option<String>, String> {
+    let mut dialog = app.dialog().file();
+    if let Some(window) = app.get_webview_window(windows::CONTROL) {
+        dialog = dialog.set_parent(&window);
+    }
+    if let Some(title) = title {
+        dialog = dialog.set_title(title);
+    }
+    if let Some(start) = start.map(PathBuf::from).filter(|p| p.is_dir()) {
+        dialog = dialog.set_directory(start);
+    }
+    let picked = tauri::async_runtime::spawn_blocking(move || dialog.blocking_pick_folder())
+        .await
+        .map_err(|e| e.to_string())?;
+    match picked {
+        None => Ok(None),
+        Some(path) => path
+            .into_path()
+            .map(|p| Some(p.display().to_string()))
+            .map_err(|e| e.to_string()),
+    }
+}
+
+/// Opens one of the app's own folders in Finder or Explorer: `data`, `cache`,
+/// `logs` or `config`. Arbitrary paths are not accepted.
+#[tauri::command]
+pub fn reveal_location(app: AppHandle, location: String) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    let config = state.config();
+    let path = match location.as_str() {
+        "data" => config.effective_data_dir(&state.dirs),
+        "cache" => config.effective_cache_dir(&state.dirs),
+        "logs" => state.dirs.log.clone(),
+        "config" => state.dirs.config.clone(),
+        other => return Err(format!("unknown location {other:?}")),
+    };
+    std::fs::create_dir_all(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    app.opener()
+        .open_path(path.display().to_string(), None::<&str>)
+        .map_err(|e| e.to_string())
+}
+
+/// Opens a fixed help page in the default browser: `google-drive`.
+#[tauri::command]
+pub fn open_help(app: AppHandle, topic: String) -> Result<(), String> {
+    let url = match topic.as_str() {
+        "google-drive" => format!("{REPO_URL}/blob/main/docs/google-drive-operations.md"),
+        other => return Err(format!("unknown help topic {other:?}")),
+    };
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|e| e.to_string())
 }
 
 /// The single restart path for commands: rebuilds the launch spec from the

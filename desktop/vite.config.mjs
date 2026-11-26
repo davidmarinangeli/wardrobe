@@ -17,4 +17,9 @@ export default defineConfig({
     emptyOutDir: true,
     target: ["es2022", "safari15", "chrome110"],
   },
+  // Frontend tests (Vitest, jsdom, Tauri IPC mocked with @tauri-apps/api/mocks).
+  test: {
+    environment: "jsdom",
+    include: ["test-ui/**/*.test.{js,jsx}"],
+  },
 });
