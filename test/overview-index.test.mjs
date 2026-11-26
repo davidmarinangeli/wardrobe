@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildOverviewIndex, buildOverviewSections, commonOverviewTags, filterByPart, filterByTags, filterOverviewIndex } from "../shared/overview-index.mjs";
+import { buildOverviewIndex, buildOverviewSections, commonOverviewTags, filterByPart, filterByTags, filterOverviewIndex, overviewSuggestions, overviewTagKey } from "../shared/overview-index.mjs";
 
 const item = (id, name, part = "upperbody", tags = [], color = null) => ({ id, name, part, tags, color });
 const find = (items, query) => filterOverviewIndex(buildOverviewIndex(items), query).map((entry) => entry.id);
@@ -135,6 +135,23 @@ test("filterByTags keeps entries carrying every tag, ignoring case and whitespac
 
   assert.deepEqual(ids(index), before);
   assert.deepEqual(tags, ["linen", "summer"]);
+});
+
+test("overviewTagKey is the one tag identity: chip counts agree with the filter", () => {
+  assert.equal(overviewTagKey("  Linen "), "linen");
+  assert.equal(overviewTagKey("T-Shirt"), "t-shirt");
+  assert.notEqual(overviewTagKey("t-shirt"), overviewTagKey("t shirt"));
+  for (const value of [undefined, null, 7, {}, "   "]) assert.equal(overviewTagKey(value), "");
+
+  const items = [
+    item("a", "Shirt", "upperbody", ["Linen", "work"]),
+    item("b", "Trousers", "lowerbody", [" linen ", "Summer"]),
+    item("c", "Jacket", "wholebody_up", ["LINEN", 7, "  "]),
+  ];
+  const index = buildOverviewIndex(items);
+  const chips = overviewSuggestions(items);
+  assert.deepEqual(chips.map(({ tag }) => tag), ["Linen", "Summer", "work"]);
+  for (const chip of chips) assert.equal(filterByTags(index, [chip.tag]).length, chip.count, chip.tag);
 });
 
 test("filterByPart keeps one garment part; all or empty returns the entries unchanged", () => {

@@ -6,14 +6,10 @@ import { useIsPhone } from "../hooks/useIsPhone.js";
 import { ViewerPanel } from "./ViewerPanel.jsx";
 import { ConfirmDialog } from "./ConfirmDialog.jsx";
 import { blockedCoverages, blockedReason, isPieceBlocked } from "../../shared/outfit-rules.mjs";
-import { buildOverviewIndex, filterByPart, filterByTags, filterOverviewIndex, overviewSuggestions } from "../../shared/overview-index.mjs";
+import { buildOverviewIndex, filterByPart, filterByTags, filterOverviewIndex, overviewSuggestions, overviewTagKey as tagKey } from "../../shared/overview-index.mjs";
 import { normalizePieceSelection, selectionChanged } from "../../shared/piece-selection.mjs";
 import { initialVariantForPiece, variantImage, variantOwnImage } from "../../shared/wardrobe-model.mjs";
 import "./piece-picker.css";
-
-// Same key as overviewSuggestions and filterByTags, so an active chip always
-// finds the suggestion it came from.
-const tagKey = (tag) => String(tag || "").trim().toLocaleLowerCase("en");
 
 /**
  * Full-screen picker for choosing wardrobe pieces (and how each is worn).

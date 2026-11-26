@@ -273,17 +273,19 @@ export function filterOverviewIndex(index, query = "", facet = null) {
   return index.filter((entry) => matchesQuery(entry, queryGroups) && matchesFacet(entry, facet));
 }
 
-// Tag identity is trim + "en" lowercase, the same key overviewSuggestions and
-// commonOverviewTags use, so a chip from overviewSuggestions always matches the
-// pieces it counted.
-const tagKey = (tag) => (typeof tag === "string" ? tag.trim().toLocaleLowerCase("en") : "");
+// Tag identity: trim + "en" lowercase, "" for anything that isn't a string.
+// The one key filterByTags, overviewSuggestions, commonOverviewTags and the
+// picker's chips share, so a chip's count always matches the pieces it filters.
+// Not normalizeOverviewText: that folds plurals and punctuation, which would
+// merge tags counted separately (e.g. "t-shirt" and "t shirt").
+export const overviewTagKey = (tag) => (typeof tag === "string" ? tag.trim().toLocaleLowerCase("en") : "");
 
 /** Keep only entries that carry every tag (AND, case-insensitive). Empty tags → entries unchanged. */
 export function filterByTags(entries, tags) {
-  const wanted = [...new Set((Array.isArray(tags) ? tags : []).map(tagKey).filter(Boolean))];
+  const wanted = [...new Set((Array.isArray(tags) ? tags : []).map(overviewTagKey).filter(Boolean))];
   if (!wanted.length) return entries;
   return entries.filter((entry) => {
-    const own = new Set((Array.isArray(entry.item?.tags) ? entry.item.tags : []).map(tagKey));
+    const own = new Set((Array.isArray(entry.item?.tags) ? entry.item.tags : []).map(overviewTagKey));
     return wanted.every((key) => own.has(key));
   });
 }
@@ -358,8 +360,8 @@ export function overviewSuggestions(items = []) {
   const counts = new Map();
   for (const item of items) {
     for (const tag of Array.isArray(item.tags) ? item.tags : []) {
-      if (typeof tag !== "string" || !tag.trim()) continue;
-      const key = tag.trim().toLocaleLowerCase("en");
+      const key = overviewTagKey(tag);
+      if (!key) continue;
       const previous = counts.get(key);
       counts.set(key, previous ? { ...previous, count: previous.count + 1 } : { tag: tag.trim(), count: 1 });
     }
@@ -372,7 +374,7 @@ export function commonOverviewTags(indexedItems) {
   for (const entry of indexedItems) {
     const seen = new Set();
     for (const tag of Array.isArray(entry.item.tags) ? entry.item.tags : []) {
-      const key = typeof tag === "string" ? tag.trim().toLocaleLowerCase("en") : "";
+      const key = overviewTagKey(tag);
       if (!key || seen.has(key)) continue;
       seen.add(key);
       const current = counts.get(key);
