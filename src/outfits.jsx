@@ -4,6 +4,7 @@ import { CheckCircle } from "@phosphor-icons/react";
 import { OptimizedImage } from "./OptimizedImage.jsx";
 import { api } from "./api.js";
 import { GARMENT_PART_MAP } from "../shared/garments.mjs";
+import { OUTFIT_MAX_PIECES } from "../shared/outfit-rules.mjs";
 import { migrateOutfit, resolveOutfitPieces } from "../shared/wardrobe-model.mjs";
 import { GenerateButton, RefineComposer, StageChip, StageError, StageStatus, useRememberedTier } from "./components/ModelPhotoControls.jsx";
 import { SuggestionPanel } from "./suggestions.jsx";
@@ -153,18 +154,15 @@ function OutfitFlatLay({ outfitId, pieces }) {
 function OutfitPicker({ items, outfit, onCancel, onSave }) {
   const [name, setName] = useState(outfit?.name || "");
   const [error, setError] = useState("");
-  // Snapshot at mount. `items` holds active pieces only (App.jsx), so retired
-  // pieces can't be shown, but the server validates against the full library
-  // and accepts them. Dropping them would change the lineup, and the server
-  // would then wipe the modeled photo, description and tags
-  // (scripts/outfits-api.mjs normalizeOutfit). Send them back unchanged.
-  const [{ initialSelection, hidden }] = useState(() => {
+  // Snapshot at mount. `items` holds active pieces only (App.jsx): retired or
+  // deleted pieces can't be shown, so they are dropped on save, and the notice
+  // says so. The lineup then changes, so the server also clears the modeled
+  // photo, description and tags (scripts/outfits-api.mjs normalizeOutfit).
+  const [{ initialSelection, missing }] = useState(() => {
     const all = outfit ? migrateOutfit(outfit, items).pieces : [];
     const ids = new Set(items.map((item) => item.id));
-    return {
-      initialSelection: all.filter((piece) => ids.has(piece.itemId)),
-      hidden: all.filter((piece) => !ids.has(piece.itemId)),
-    };
+    const initialSelection = all.filter((piece) => ids.has(piece.itemId));
+    return { initialSelection, missing: all.length - initialSelection.length };
   });
 
   // Rejecting (not returning quietly) keeps the picker open and opens its
@@ -175,7 +173,7 @@ function OutfitPicker({ items, outfit, onCancel, onSave }) {
     if (!name.trim()) fail("Give this outfit a name.");
     if (!pieces.length) fail("Pick at least one piece.");
     try {
-      await onSave({ name: name.trim(), pieces: [...pieces, ...hidden] });
+      await onSave({ name: name.trim(), pieces });
     } catch (saveError) {
       fail(saveError.message || "Could not save this outfit.");
     }
@@ -189,6 +187,13 @@ function OutfitPicker({ items, outfit, onCancel, onSave }) {
       rules="outfit"
       confirmLabel="Save"
       minPieces={0}
+      maxPieces={OUTFIT_MAX_PIECES}
+      notice={missing > 0 && (
+        <p className="piece-picker__notice">
+          {missing === 1 ? "1 piece is" : `${missing} pieces are`} no longer in your wardrobe and will be removed when you save.
+          {(outfit.modeledImage || outfit.description) && " The model photo and style notes show the old lineup, so saving clears them too."}
+        </p>
+      )}
       renderPreview={(selectedPieces) => <OutfitStack items={selectedPieces} emptyMessage="Pick pieces to build the look." />}
       footer={(
         <>
@@ -259,6 +264,8 @@ function OutfitCard({ outfit, itemMap, onOpen, wornToday, wearReady, onWear }) {
 function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateModeled, onRename, premiumAllowed, provider, openedFrom, wornToday, wearReady, onWear }) {
   const closeButtonRef = useRef(null);
   const pieces = resolveOutfitPieces(outfit, itemMap);
+  // Retired or deleted pieces: itemMap holds active pieces only.
+  const missing = migrateOutfit(outfit).pieces.filter((piece) => !itemMap[piece.itemId]).length;
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [refining, setRefining] = useState(false);
@@ -376,6 +383,11 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
               </div>
             )}
           </div>
+        )}
+        {missing > 0 && (
+          <p className="outfit-outdated">
+            Out of date: {missing === 1 ? "1 piece is" : `${missing} pieces are`} no longer in your wardrobe. Edit and save the outfit to remove {missing === 1 ? "it" : "them"}.
+          </p>
         )}
         <p className="details-label">{pieces.length} {pieces.length === 1 ? "piece" : "pieces"}</p>
         <div className="outfit-viewer-pieces-grid">

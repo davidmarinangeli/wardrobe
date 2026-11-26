@@ -5,7 +5,7 @@ import { CATEGORY_LABEL, WARDROBE_TYPES } from "../categories.js";
 import { useIsPhone } from "../hooks/useIsPhone.js";
 import { ViewerPanel } from "./ViewerPanel.jsx";
 import { ConfirmDialog } from "./ConfirmDialog.jsx";
-import { blockedCoverages, blockedReason, isPieceBlocked } from "../../shared/outfit-rules.mjs";
+import { blockedCoverages, blockedReason } from "../../shared/outfit-rules.mjs";
 import { buildOverviewIndex, filterByPart, filterByTags, filterOverviewIndex, overviewSuggestions, overviewTagKey as tagKey } from "../../shared/overview-index.mjs";
 import { normalizePieceSelection, selectionChanged } from "../../shared/piece-selection.mjs";
 import { initialVariantForPiece, variantImage, variantOwnImage } from "../../shared/wardrobe-model.mjs";
@@ -31,6 +31,10 @@ import "./piece-picker.css";
  * renderPreview     fn      – (selectedPieces) => node; pieces carry variantId/image/thumbnail.
  * confirmLabel      string  – Confirm button label.
  * minPieces         number  – Confirm is disabled below this count.
+ * maxPieces         number  – Once this many are picked, unpicked pieces are
+ *                             blocked and a notice says why (default: no cap).
+ * notice            node    – Shown above the grid (e.g. why the selection
+ *                             differs from what was saved).
  * footer            node    – Rendered under the preview (e.g. a name field and error).
  * onConfirm         fn      – ([{ itemId, variantId }]) => maybe a promise.
  * onClose           fn      – Called once the picker may close.
@@ -43,6 +47,8 @@ export function PiecePicker({
   renderPreview,
   confirmLabel = "Done",
   minPieces = 1,
+  maxPieces = Infinity,
+  notice,
   footer,
   onConfirm,
   onClose,
@@ -92,6 +98,8 @@ export function PiecePicker({
   const pieces = useMemo(() => selectedPieces.map(({ id, variantId }) => ({ itemId: id, variantId })), [selectedPieces]);
   const hasChanges = selectionChanged(baseline, pieces);
   const coverage = rules === "outfit" ? blockedCoverages(selectedPieces) : null;
+  const atLimit = count >= maxPieces;
+  const canConfirm = !pending && count >= minPieces && count <= maxPieces;
 
   const focusDefault = () => {
     // On a phone the close button, so opening the picker doesn't pop the
@@ -136,7 +144,7 @@ export function PiecePicker({
   };
 
   const confirm = async () => {
-    if (pending || count < minPieces) return;
+    if (!canConfirm) return;
     setPending(true);
     try {
       await onConfirm(pieces);
@@ -213,7 +221,7 @@ export function PiecePicker({
             type="button"
             className="primary-button piece-picker__confirm"
             onClick={confirm}
-            disabled={pending || count < minPieces}
+            disabled={!canConfirm}
             aria-busy={pending || undefined}
           >
             {confirmLabel}
@@ -266,6 +274,12 @@ export function PiecePicker({
           )}
         </div>
 
+        {/* Always mounted, so the limit notice is announced when it appears. */}
+        <div className="piece-picker__notices" aria-live="polite">
+          {notice}
+          {atLimit && <p className="piece-picker__notice">That’s the limit of {maxPieces} pieces. Remove one to pick another.</p>}
+        </div>
+
         <div className="piece-picker__body">
           <section className="piece-picker__grid-pane" aria-label="Wardrobe pieces">
             {visible.length ? (
@@ -274,7 +288,9 @@ export function PiecePicker({
                   const isSelected = selected.has(item.id);
                   // Only unselected pieces are ever blocked: a picked piece must
                   // never grey itself out (see shared/outfit-rules.mjs).
-                  const blocked = Boolean(coverage && !isSelected && isPieceBlocked(item, coverage));
+                  const reason = isSelected ? null
+                    : (coverage && blockedReason(item, coverage)) || (atLimit ? `already ${maxPieces} pieces picked` : null);
+                  const blocked = Boolean(reason);
                   const variantId = selected.get(item.id) ?? item.defaultVariantId;
                   return (
                     <div key={item.id} className={`piece-picker__card${isSelected ? " is-selected" : ""}${blocked ? " is-blocked" : ""}`}>
@@ -283,7 +299,7 @@ export function PiecePicker({
                         className="piece-picker__card-button"
                         aria-pressed={isSelected}
                         aria-disabled={blocked || undefined}
-                        title={blocked ? `${item.name} — ${blockedReason(item, coverage)}` : item.name}
+                        title={blocked ? `${item.name} — ${reason}` : item.name}
                         onClick={() => !blocked && toggle(item)}
                       >
                         <span className="piece-picker__art" data-part={item.part}>

@@ -9,6 +9,9 @@ import { GARMENT_PART_MAP } from "./garments.mjs";
 // over a dress equally well, so it never blocks and is never blocked (see the
 // `layer` note in shared/garments.mjs).
 
+/** The most pieces an outfit holds. The API keeps only this many; the picker stops here. */
+export const OUTFIT_MAX_PIECES = 12;
+
 /** Coverages that unselected pieces may no longer take, given the current selection. */
 export function blockedCoverages(selectedItems = []) {
   const coverages = new Set();

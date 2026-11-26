@@ -6,6 +6,7 @@ import { mimeForExtension, readReferenceBytes, resolveArchiveFile } from "./arch
 
 import { recordSignal } from "./preferences-api.mjs";
 import { summarizeOutfits } from "../shared/outfit-index.mjs";
+import { OUTFIT_MAX_PIECES } from "../shared/outfit-rules.mjs";
 import { migrateOutfit, normalizeItemV2, validateOutfitPieces, variantApprovedImage } from "../shared/wardrobe-model.mjs";
 import { catalogForHttp } from "../shared/portable-assets.mjs";
 import { createArchiveRequestHandler, ensureArchiveRecovered, trackArchivePromise, withArchiveWriteLease } from "./archive-coordinator.mjs";
@@ -34,9 +35,9 @@ async function body(req, limit = 256 * 1024) {
 
 function normalizeOutfit(value = {}, existing = null, items = []) {
   const name = typeof value.name === "string" ? value.name.trim().slice(0, 120) : "";
-  const itemIds = Array.isArray(value.itemIds) ? value.itemIds.filter((id) => typeof id === "string").slice(0, 12) : [];
+  const itemIds = Array.isArray(value.itemIds) ? value.itemIds.filter((id) => typeof id === "string").slice(0, OUTFIT_MAX_PIECES) : [];
   const pieces = Array.isArray(value.pieces)
-    ? value.pieces.slice(0, 12)
+    ? value.pieces.slice(0, OUTFIT_MAX_PIECES)
     : itemIds.map((itemId) => ({ itemId, variantId: items.find((item) => item.id === itemId)?.defaultVariantId || null }));
   if (!name) throw Object.assign(new Error("An outfit name is required"), { status: 400 });
   const normalizedPieces = validateOutfitPieces(pieces, items);
