@@ -356,12 +356,15 @@ export function overviewItemMatchesEvidence(indexEntry, evidence) {
   return matchesFacet(indexEntry, evidence);
 }
 
+/** Tag chips, each counting the pieces that carry it (once per piece, like filterByTags). */
 export function overviewSuggestions(items = []) {
   const counts = new Map();
   for (const item of items) {
+    const seen = new Set();
     for (const tag of Array.isArray(item.tags) ? item.tags : []) {
       const key = overviewTagKey(tag);
-      if (!key) continue;
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
       const previous = counts.get(key);
       counts.set(key, previous ? { ...previous, count: previous.count + 1 } : { tag: tag.trim(), count: 1 });
     }

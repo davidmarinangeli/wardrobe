@@ -147,11 +147,13 @@ test("overviewTagKey is the one tag identity: chip counts agree with the filter"
     item("a", "Shirt", "upperbody", ["Linen", "work"]),
     item("b", "Trousers", "lowerbody", [" linen ", "Summer"]),
     item("c", "Jacket", "wholebody_up", ["LINEN", 7, "  "]),
+    item("d", "Scarf", "accessories_up", ["Linen", "linen"]),
   ];
   const index = buildOverviewIndex(items);
   const chips = overviewSuggestions(items);
   assert.deepEqual(chips.map(({ tag }) => tag), ["Linen", "Summer", "work"]);
   for (const chip of chips) assert.equal(filterByTags(index, [chip.tag]).length, chip.count, chip.tag);
+  assert.equal(chips[0].count, 4, "a piece tagged both Linen and linen counts once");
 });
 
 test("filterByPart keeps one garment part; all or empty returns the entries unchanged", () => {
