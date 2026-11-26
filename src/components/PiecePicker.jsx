@@ -277,7 +277,13 @@ export function PiecePicker({
         {/* Always mounted, so the limit notice is announced when it appears. */}
         <div className="piece-picker__notices" aria-live="polite">
           {notice}
-          {atLimit && <p className="piece-picker__notice">That’s the limit of {maxPieces} pieces. Remove one to pick another.</p>}
+          {atLimit && (
+            <p className="piece-picker__notice">
+              {count > maxPieces
+                ? `That’s more than the limit of ${maxPieces} pieces. Remove ${count - maxPieces} to save.`
+                : `That’s the limit of ${maxPieces} pieces. Remove one to pick another.`}
+            </p>
+          )}
         </div>
 
         <div className="piece-picker__body">

@@ -5,6 +5,7 @@ import { pipeline } from "node:stream/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { archivePathFromAsset, catalogForDisk, isArchiveAssetField, safeArchivePath } from "../shared/portable-assets.mjs";
+import { OUTFIT_MAX_PIECES } from "../shared/outfit-rules.mjs";
 import { ensureArchiveRecovered, withArchiveWriteLease } from "./archive-coordinator.mjs";
 
 export const ARCHIVE_SCHEMA_VERSION = 1;
@@ -433,8 +434,8 @@ function validateCatalogShape(name, value, { allowLegacyMedia = false } = {}) {
             || (Object.hasOwn(entry, "modeledStatus") && ![null, "processing", "error", "approved", "stale"].includes(entry.modeledStatus))
             || (Object.hasOwn(entry, "modeledTier") && ![null, "standard", "premium", "openrouter"].includes(entry.modeledTier))) return "Invalid library catalog shape";
       } else if (name === "outfits.json") {
-        if ((Object.hasOwn(entry, "pieces") && !validPieces(entry.pieces, 12))
-            || !validStrings(entry, "itemIds", 12, 512)
+        if ((Object.hasOwn(entry, "pieces") && !validPieces(entry.pieces, OUTFIT_MAX_PIECES))
+            || !validStrings(entry, "itemIds", OUTFIT_MAX_PIECES, 512)
             || !validStrings(entry, "tags", 100, 256)
             || (Object.hasOwn(entry, "modeledStatus") && ![null, "processing", "error"].includes(entry.modeledStatus))
             || (Object.hasOwn(entry, "modeledTier") && ![null, "standard", "premium", "openrouter"].includes(entry.modeledTier))) return "Invalid outfits.json catalog shape";

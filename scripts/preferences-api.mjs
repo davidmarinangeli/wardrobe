@@ -8,6 +8,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { atomicJson } from "./import-job-api.mjs";
 import { SIGNAL_TYPES, deriveDeclutter, derivePreferences, deriveWearStats } from "./preferences.mjs";
+import { OUTFIT_MAX_PIECES } from "../shared/outfit-rules.mjs";
 
 const PREFERENCES_VERSION = 1;
 // Signals are cheap and small, but the log is append-only and read on every
@@ -39,9 +40,9 @@ export function normalizeSignal(input) {
     ? input.pieces.filter((piece) => piece && typeof piece.itemId === "string").map((piece) => piece.itemId)
     : input.itemIds;
   if (Array.isArray(pieceIds)) {
-    signal.itemIds = pieceIds.filter((id) => typeof id === "string").slice(0, 12);
+    signal.itemIds = pieceIds.filter((id) => typeof id === "string").slice(0, OUTFIT_MAX_PIECES);
   }
-  if (Array.isArray(input.pieces)) signal.pieces = input.pieces.filter((piece) => piece && typeof piece.itemId === "string" && typeof piece.variantId === "string").slice(0, 12).map((piece) => ({ itemId: piece.itemId, variantId: piece.variantId }));
+  if (Array.isArray(input.pieces)) signal.pieces = input.pieces.filter((piece) => piece && typeof piece.itemId === "string" && typeof piece.variantId === "string").slice(0, OUTFIT_MAX_PIECES).map((piece) => ({ itemId: piece.itemId, variantId: piece.variantId }));
   for (const field of ["itemId", "pinId", "part", "category", "color", "source", "name"]) {
     if (typeof input[field] === "string" && input[field]) signal[field] = input[field].slice(0, 120);
   }

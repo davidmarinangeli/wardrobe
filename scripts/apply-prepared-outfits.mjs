@@ -5,6 +5,7 @@ import { copyFile, mkdir, open, readFile, rename, stat } from "node:fs/promises"
 import path from "node:path";
 import sharp from "sharp";
 import { migrateOutfit, normalizeItemV2 } from "../shared/wardrobe-model.mjs";
+import { OUTFIT_MAX_PIECES } from "../shared/outfit-rules.mjs";
 import { catalogForDisk, safeArchivePath } from "../shared/portable-assets.mjs";
 import { buildArchiveInventory, prepareArchiveDirectory, validateArchive } from "./archive-store.mjs";
 import { withArchiveWriteLease } from "./archive-coordinator.mjs";
@@ -83,6 +84,7 @@ async function run() {
       ids.add(outfit.id);
       const rawPieces = Array.isArray(outfit.pieces) ? outfit.pieces
         : (outfit.garmentIds || outfit.itemIds || []).map((itemId) => ({ itemId }));
+      if (rawPieces.length > OUTFIT_MAX_PIECES) throw new Error(`${outfit.id}: an outfit holds at most ${OUTFIT_MAX_PIECES} pieces`);
       const migrated = migrateOutfit({ ...outfit, pieces: rawPieces }, normalizedLibrary);
       if (!migrated.pieces.length || migrated.pieces.length !== rawPieces.length) throw new Error(`${outfit.id}: every selected wardrobe item must still exist`);
       for (const piece of migrated.pieces) {

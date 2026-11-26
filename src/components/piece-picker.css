@@ -31,7 +31,8 @@
 
 /* ─── Notices: limit reached, pieces no longer in the wardrobe ───────────── */
 .piece-picker__notices { display: grid; gap: 8px; padding: 12px 24px 0; }
-.piece-picker__notices:empty { display: none; }
+/* Kept rendered when empty (no padding) so the live region announces the limit notice. */
+.piece-picker__notices:empty { padding: 0; }
 .piece-picker__notice { margin: 0; padding: 9px 12px; border: 1px solid color-mix(in srgb, var(--accent-warm) 35%, var(--line)); border-radius: var(--r-sm); background: color-mix(in srgb, var(--accent-warm) 7%, var(--paper-raised)); color: var(--ink-soft); font-size: 12px; line-height: 1.4; }
 
 /* ─── Body: grid + side panel ────────────────────────────────────────────── */
