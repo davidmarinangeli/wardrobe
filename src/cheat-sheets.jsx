@@ -869,7 +869,6 @@ export function CheatSheetsArea({ items, premiumAllowed = true, provider = null,
   const openSheetViewer = async (sheet, event) => {
     const requestId = ++openRequestId.current;
     const trigger = event?.currentTarget || null;
-    trigger?.focus?.({ preventScroll: true });
     setOpeningId(sheet.id); setError(""); setEntry(null); setCollectionViewer(null);
     try {
       const result = await api(`/api/cheat-sheets/${encodeURIComponent(sheet.id)}`);
@@ -889,7 +888,6 @@ export function CheatSheetsArea({ items, premiumAllowed = true, provider = null,
   const openSheetEditor = async (sheet, event) => {
     const requestId = ++openRequestId.current;
     const trigger = event?.currentTarget || null;
-    trigger?.focus?.({ preventScroll: true });
     editorReturnFocus.current = trigger;
     setOpeningId(sheet.id); setError(""); setCollectionViewer(null);
     try {
