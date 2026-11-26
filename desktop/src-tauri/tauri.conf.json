@@ -35,7 +35,9 @@
       "icons/icon.ico"
     ],
     "macOS": {
-      "minimumSystemVersion": "11.0"
+      "minimumSystemVersion": "11.0",
+      "signingIdentity": "-",
+      "hardenedRuntime": false
     },
     "windows": {
       "nsis": {
@@ -48,6 +50,11 @@
     "resources": {
       "resources/server/": "server/",
       "resources/web/": "web/"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": ""
     }
   }
 }

@@ -166,6 +166,61 @@ Prefer to do it by hand? Copy `.env.example` to `.env`, add `OPENAI_API_KEY` (or
 
 Google Drive archive settings live in the **Archive** tab of **Settings** (gear icon), or the shortcut in the wizard. The tab stays greyed out until the four `GOOGLE_DRIVE_*` values are set in `.env`. Drive connection and backup are opt-in; connecting does not turn synchronization on. See [Google Drive archive setup and recovery](docs/google-drive-operations.md) for OAuth configuration, what is copied, and restore behavior. No AI key is needed to configure or use storage.
 
+## Desktop app
+
+Wardrobe also ships as an app for **macOS (Apple Silicon)** and **Windows (x64)**. It runs the server on your computer, opens Wardrobe in its own window, keeps going in the menu bar or tray when you close the window, and has a **Settings** window for keys, storage and options. While it runs you can also use Wardrobe from any browser on the same computer at [localhost:5173](http://localhost:5173).
+
+### Download
+
+Get the latest version from the [Releases page](https://github.com/davidmarinangeli/wardrobe/releases/latest):
+
+| Your computer | File |
+| --- | --- |
+| Mac with Apple Silicon (M1 or later) | `Wardrobe_<version>_aarch64.dmg` |
+| Windows 10 or 11 (64-bit) | `Wardrobe_<version>_x64-setup.exe` |
+
+The other files on the page (`.tar.gz`, `.sig`, `latest.json`) are for the app's built-in updater; you don't need them.
+
+### Install on macOS
+
+The app is not notarized by Apple (this is a hobby project without a paid developer account), so macOS blocks it the first time.
+
+1. Open the `.dmg` and drag **Wardrobe** into **Applications**.
+2. Do one of these, once:
+   - In Terminal, run `xattr -cr /Applications/Wardrobe.app`, then open Wardrobe normally; or
+   - Open Wardrobe, dismiss the warning, then go to **System Settings › Privacy & Security**, scroll down and click **Open Anyway** next to the Wardrobe message, and confirm.
+
+You only need this once per downloaded copy. Updates installed from inside the app do not ask again.
+
+### Install on Windows
+
+1. Run `Wardrobe_<version>_x64-setup.exe`.
+2. SmartScreen shows "Windows protected your PC", because the installer is not code-signed. Click **More info**, then **Run anyway**.
+
+The installer installs for your user only (no administrator prompt). Wardrobe needs Microsoft Edge WebView2, which Windows 10 and 11 already include; if it is missing, the installer downloads it.
+
+### First launch
+
+1. Wardrobe starts in the menu bar (macOS) or tray (Windows). If you have no AI key yet, the **Settings** window opens by itself; otherwise open it from the menu bar or tray icon › **Settings…**.
+2. Under **AI provider**, choose a provider and paste its key. Keys are kept in the macOS Keychain or Windows Credential Manager, never in a file.
+3. Optional: under **Storage**, **Import existing data…** copies a `data/` folder from a previous `npm run dev` setup into the app.
+4. The Wardrobe window opens. Add your reference photo in the setup wizard as usual.
+
+On macOS, after an update the Keychain may ask once per key whether Wardrobe can use it; choose **Always Allow**.
+
+### Where your data lives
+
+| | macOS | Windows |
+| --- | --- | --- |
+| Wardrobe data | `~/Library/Application Support/app.wardrobe.desktop/data` | `%APPDATA%\app.wardrobe.desktop\data` |
+| Settings | `~/Library/Application Support/app.wardrobe.desktop/config.json` | `%APPDATA%\app.wardrobe.desktop\config.json` |
+| Cache (background-removal model) | `~/Library/Caches/app.wardrobe.desktop` | `%LOCALAPPDATA%\app.wardrobe.desktop` |
+| Logs | `~/Library/Logs/app.wardrobe.desktop` | `%LOCALAPPDATA%\app.wardrobe.desktop\logs` |
+
+Uninstalling the app keeps these folders, so a reinstall finds your wardrobe again: on macOS you just delete Wardrobe from Applications, and the Windows uninstaller leaves them alone unless you tick its **Delete the application data** box. To remove everything, delete them by hand (or tick that box). Keys stay in the Keychain or Credential Manager until you remove them in Settings before uninstalling.
+
+Building the app yourself and publishing releases are covered in [desktop/README.md](desktop/README.md).
+
 ## More setup options
 
 Manual `.env` configuration (all providers and variables), the Codex import/outfit skills, the standalone bulk-import script, and agent-specific setup instructions all live in [AGENTS.md](AGENTS.md) — reach for it if you're scripting a setup, importing in bulk, or configuring something the wizard doesn't cover.

@@ -168,3 +168,127 @@ CI (`.github/workflows/desktop.yml`) runs `desktop-smoke` (prepare, then the
 packaged sidecar's `/api/health`) and `desktop-rust` (`cargo test`) on
 `macos-14` and `windows-latest` for pull requests touching `desktop/`,
 `scripts/`, `shared/` or `package.json`.
+
+## Releases
+
+Releases are built by `.github/workflows/release.yml` from a manual `v*` tag
+and land as a **draft** on
+[davidmarinangeli/wardrobe](https://github.com/davidmarinangeli/wardrobe/releases).
+Nothing is published until the owner publishes the draft.
+
+### Version
+
+The root `package.json` is the only version. `src-tauri/tauri.conf.json` says
+`"version": "../../package.json"`, the server bundle reports the same value on
+`/api/health`, and `desktop/package.json` (`0.0.0`) and `Cargo.toml` are not
+used for it. The tag must be exactly `v<version>`; the workflow's first step
+fails otherwise.
+
+### Cutting a release
+
+```bash
+git checkout main && git pull
+npm version minor          # or patch / major / 0.1.0: bumps package.json, commits, tags vX.Y.Z
+git push --follow-tags
+```
+
+Then, in the Actions tab, wait for the **Release** run to be green:
+
+1. `verify` (Ubuntu): `node desktop/scripts/release.mjs check --tag <tag>`
+   (tag equals `v<package.json version>`, bundle targets `app`/`dmg`/`nsis`,
+   ad-hoc signing, updater public key present, release overlay present), then
+   `npm ci` and `npm run check`.
+2. `draft`: finds or creates the draft release `Wardrobe <tag>` (`release.mjs draft`).
+3. `build` on `macos-14` (`aarch64-apple-darwin`) and `windows-latest`
+   (`x86_64-pc-windows-msvc`): `npm ci` at the root and here,
+   `node desktop/scripts/prepare.mjs --target <triple>`, then
+   `tauri-apps/tauri-action@v0` builds with
+   `--config src-tauri/tauri.release.conf.json` and uploads to the draft. On
+   macOS the job then checks `codesign -dv` reports `Signature=adhoc` and
+   `codesign --verify --deep --strict` passes. Both legs then run the smoke
+   test against the built app (`smoke-sidecar.mjs --app <bundle>`).
+4. `finalize`: `release.mjs latest-json --verify-artifacts --upload` rebuilds
+   `latest.json` from both legs' `.sig` files, downloads both updater artifacts
+   and verifies their signatures against the committed public key, then
+   replaces the release's `latest.json`.
+
+Finally write the release notes in the draft, run
+
+```bash
+node desktop/scripts/release.mjs latest-json --tag vX.Y.Z --upload
+```
+
+so `latest.json` carries the notes the updater shows (it uses `GH_TOKEN`, or
+`gh auth token`), and publish the draft. Only publish a draft whose run was
+entirely green: a failed leg leaves an incomplete draft, which you delete
+(together with the tag, if the version is abandoned).
+
+A broken tag can be rebuilt while its release is still a draft: delete the
+draft's assets or the draft itself, fix, move the tag
+(`git tag -f vX.Y.Z && git push -f origin vX.Y.Z`) and the workflow runs again.
+`release.mjs draft` refuses a tag whose release is already published; bump the
+version instead.
+
+### Release assets
+
+| Asset | What it is |
+| --- | --- |
+| `Wardrobe_<ver>_aarch64.dmg` | macOS installer (drag to Applications) |
+| `Wardrobe_aarch64.app.tar.gz` + `.sig` | macOS updater archive and its signature (`tauri-action` adds the `_aarch64` suffix) |
+| `Wardrobe_<ver>_x64-setup.exe` + `.sig` | Windows NSIS installer (current-user), also the Windows updater payload |
+| `latest.json` | Updater manifest with `darwin-aarch64`, `darwin-aarch64-app`, `windows-x86_64` and `windows-x86_64-nsis` |
+
+There is no MSI. The updater (Feature 06) reads
+`https://github.com/davidmarinangeli/wardrobe/releases/latest/download/latest.json`.
+
+### Updater signing key
+
+The updater only installs files signed with the project's own minisign key.
+This has nothing to do with Apple or Windows code signing. Generate it once:
+
+```bash
+cd desktop
+npm run tauri signer generate -- -w ~/.tauri/wardrobe.key
+```
+
+Choose a password when asked. Then:
+
+1. Put the content of `~/.tauri/wardrobe.key.pub` (one base64 line) into
+   `src-tauri/tauri.conf.json` as `plugins.updater.pubkey` and commit it. It is
+   public. Until it is there, `release.mjs check` fails every tag.
+2. In GitHub › Settings › Secrets and variables › Actions, add the repository
+   secrets `TAURI_SIGNING_PRIVATE_KEY` (the content of `~/.tauri/wardrobe.key`)
+   and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
+3. Keep a backup of the private key and its password outside this computer
+   (a password manager).
+
+**If the private key or its password is lost, installed copies can never
+auto-update again**: every user would have to download and install a new
+version by hand once, after a new key is committed. Never commit the private key.
+
+Local builds do not need the key: `bundle.createUpdaterArtifacts` lives only in
+`src-tauri/tauri.release.conf.json`. To produce the updater files locally, set
+`TAURI_SIGNING_PRIVATE_KEY` (a path or the key itself) and
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, then run
+`npm run tauri build -- --config src-tauri/tauri.release.conf.json`.
+
+### Signing on macOS and Windows
+
+There is no Apple Developer ID and no Windows certificate.
+
+- macOS: `bundle.macOS.signingIdentity` is `"-"` (CI also sets
+  `APPLE_SIGNING_IDENTITY=-`), so the bundler **ad-hoc signs** the app,
+  including the Node sidecar. Apple Silicon refuses to run unsigned code, so
+  this is required. `bundle.macOS.hardenedRuntime` is `false`. The hardened
+  runtime only matters for notarization, and it would stop the re-signed Node
+  from using its JIT without extra entitlements. Users clear the quarantine once
+  per download (README, "Install on macOS").
+- Windows: unsigned; SmartScreen asks once (README, "Install on Windows").
+
+### Dry run
+
+To exercise the pipeline without a real version, on a throwaway branch: set
+the root version to a prerelease such as `0.0.1-rc1` (`npm version 0.0.1-rc1`),
+push the branch and the tag `v0.0.1-rc1`, and check the draft's assets and
+`latest.json`. Afterwards delete the draft and the tag
+(`git push origin :refs/tags/v0.0.1-rc1`). NSIS accepts prerelease versions.

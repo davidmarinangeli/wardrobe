@@ -1,0 +1,174 @@
+name: Release
+
+# Builds the desktop installers from a manual v* tag (Feature 05):
+#
+#   npm version minor && git push --follow-tags
+#
+# verify   - the tag equals v<package.json version>, the Tauri config is
+#            release-ready (desktop/scripts/release.mjs check), npm run check.
+# draft    - finds or creates the draft release "Wardrobe <tag>" once, so the
+#            two build legs never race to create two drafts.
+# build    - macOS Apple Silicon (.dmg, .app.tar.gz + .sig, ad-hoc signed) and
+#            Windows x64 (NSIS -setup.exe + .sig), uploaded to the draft by
+#            tauri-action, then smoke-tested from the built bundle.
+# finalize - rebuilds latest.json from both legs' signatures (tauri-action
+#            merges it per leg with a read-modify-write that can race), checks
+#            every signature against the committed public key and the
+#            downloaded artifacts, and replaces the release's latest.json.
+#
+# The owner writes the notes, re-runs `node desktop/scripts/release.mjs
+# latest-json --tag <tag> --upload` so latest.json carries them, and publishes.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # Before npm ci, so a wrong tag fails within seconds.
+      # The tag reaches the shell through env, never as ${{ }} text in the script.
+      - name: Tag matches package.json and the Tauri config is release-ready
+        run: node desktop/scripts/release.mjs check --tag "$TAG"
+        env:
+          TAG: ${{ github.ref_name }}
+      - run: npm ci
+      - run: npm run check
+
+  draft:
+    needs: verify
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.draft.outputs.release_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - id: draft
+        name: Find or create the draft release
+        run: node desktop/scripts/release.mjs draft --tag "$TAG" --repo "$REPO"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+
+  build:
+    name: build (${{ matrix.target }})
+    needs: [verify, draft]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: aarch64-apple-darwin
+            tauri_args: --target aarch64-apple-darwin
+            app: desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Wardrobe.app
+            bundle_dir: desktop/src-tauri/target/aarch64-apple-darwin/release/bundle
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            tauri_args: ""
+            app: desktop/src-tauri/target/release
+            bundle_dir: desktop/src-tauri/target/release/bundle
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Updater signing key is configured
+        shell: bash
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::Repository secret TAURI_SIGNING_PRIVATE_KEY is not set. See desktop/README.md, 'Updater signing key'."
+            exit 1
+          fi
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      - uses: actions/setup-node@v4
+        with:
+          # The build tools run on the same Node the sidecar ships.
+          node-version-file: desktop/node-version.txt
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            desktop/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+          key: release-${{ matrix.target }}
+      - run: npm ci
+      - run: npm ci
+        working-directory: desktop
+      - name: Prepare the sidecar (web build, server bundle, native modules, Node)
+        run: node desktop/scripts/prepare.mjs --target ${{ matrix.target }}
+      - name: Build and upload to the draft release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # "-" is an ad-hoc signature (tauri.conf.json says the same); only the macOS bundler reads it.
+          APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && '-' || '' }}
+        with:
+          projectPath: desktop
+          tauriScript: npm run tauri
+          releaseId: ${{ needs.draft.outputs.release_id }}
+          tagName: ${{ github.ref_name }}
+          releaseName: "Wardrobe ${{ github.ref_name }}"
+          releaseDraft: true
+          prerelease: false
+          includeUpdaterJson: true
+          # The overlay turns on createUpdaterArtifacts (.tar.gz/.sig), kept out of
+          # tauri.conf.json so local builds work without the signing key.
+          args: --config src-tauri/tauri.release.conf.json ${{ matrix.tauri_args }}
+      - name: Check the ad-hoc signature
+        if: runner.os == 'macOS'
+        run: |
+          codesign -dv --verbose=2 "${{ matrix.app }}" 2>&1 | tee codesign.txt
+          grep -q "Signature=adhoc" codesign.txt
+          codesign --verify --deep --strict --verbose=2 "${{ matrix.app }}"
+          codesign -dv --verbose=2 "${{ matrix.app }}/Contents/MacOS/node" 2>&1 | grep "Signature="
+      - name: Start the sidecar from the built app and check /api/health
+        run: node desktop/scripts/smoke-sidecar.mjs --target ${{ matrix.target }} --app "${{ matrix.app }}"
+      - name: Artifact sizes
+        shell: bash
+        run: find "${{ matrix.bundle_dir }}" -maxdepth 2 -type f \( -name '*.dmg' -o -name '*.tar.gz' -o -name '*.sig' -o -name '*-setup.exe' \) -exec ls -l {} \;
+
+  finalize:
+    needs: [draft, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Rebuild, verify and upload latest.json
+        run: >-
+          node desktop/scripts/release.mjs latest-json
+          --tag "$TAG"
+          --repo "$REPO"
+          --release-id "$RELEASE_ID"
+          --verify-artifacts --upload --out latest.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+          RELEASE_ID: ${{ needs.draft.outputs.release_id }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: latest.json
+          path: latest.json

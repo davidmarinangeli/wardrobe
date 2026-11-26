@@ -2,7 +2,13 @@
 /**
  * Smoke test of the packaged sidecar, run after prepare.mjs on the host target.
  *
- *   node scripts/smoke-sidecar.mjs [--port 0] [--keep]
+ *   node scripts/smoke-sidecar.mjs [--port 0] [--keep] [--app <bundle>]
+ *
+ * --app runs the same checks against a built app instead of the prepared
+ * resources: a macOS `Wardrobe.app` (Contents/MacOS/node, Contents/Resources/
+ * server and web) or a Windows folder holding node.exe, server/ and web/ (such
+ * as src-tauri/target/release). The release workflow uses it on the signed
+ * bundle.
  *
  * 1. Loads the native modules with the packaged Node from resources/server
  *    (sharp, onnxruntime-node, @huggingface/transformers, ipx).
@@ -61,17 +67,34 @@ const ort = require("onnxruntime-node");
 })().catch((error) => { process.stderr.write(String(error?.stack || error) + "\\n"); process.exit(1); });
 `;
 
-async function checkNativeModules(node) {
-  const result = await runCapture(node, ["-e", NATIVE_CHECK], { cwd: SERVER_RESOURCES_DIR, env: sidecarEnv() });
+/**
+ * Where the Node binary, the server bundle and the web app are: the prepared
+ * resources by default, or inside a built app (`app`, see the header).
+ */
+export function sidecarLayout({ target, app } = {}) {
+  if (!app) return { node: nodeBinaryPath(target.triple), serverDir: SERVER_RESOURCES_DIR, webDir: WEB_RESOURCES_DIR };
+  const root = path.resolve(app);
+  if (target.os === "darwin") {
+    return {
+      node: path.join(root, "Contents", "MacOS", "node"),
+      serverDir: path.join(root, "Contents", "Resources", "server"),
+      webDir: path.join(root, "Contents", "Resources", "web"),
+    };
+  }
+  return { node: path.join(root, `node${target.exe}`), serverDir: path.join(root, "server"), webDir: path.join(root, "web") };
+}
+
+async function checkNativeModules(node, serverDir) {
+  const result = await runCapture(node, ["-e", NATIVE_CHECK], { cwd: serverDir, env: sidecarEnv() });
   if (result.code !== 0) throw new Error(`native module check failed (exit ${result.code}):\n${result.stderr}${result.stdout}`);
   log(`native modules load with the packaged node: ${result.stdout.trim()}`);
 }
 
-export async function smoke({ target, port = 0, keep = false } = {}) {
-  const node = nodeBinaryPath(target.triple);
-  const serverScript = path.join(SERVER_RESOURCES_DIR, "server.cjs");
-  for (const required of [node, serverScript, path.join(SERVER_RESOURCES_DIR, "node_modules"), path.join(WEB_RESOURCES_DIR, "index.html")]) {
-    if (!await exists(required)) throw new Error(`${required} is missing. Run node scripts/prepare.mjs first.`);
+export async function smoke({ target, port = 0, keep = false, app } = {}) {
+  const { node, serverDir, webDir } = sidecarLayout({ target, app });
+  const serverScript = path.join(serverDir, "server.cjs");
+  for (const required of [node, serverScript, path.join(serverDir, "node_modules"), path.join(webDir, "index.html")]) {
+    if (!await exists(required)) throw new Error(`${required} is missing. ${app ? `Is ${app} a built Wardrobe app?` : "Run node scripts/prepare.mjs first."}`);
   }
   const version = (await runCapture(node, ["--version"], { env: sidecarEnv() })).stdout.trim();
   log(`packaged node ${version} at ${node}`);
@@ -80,13 +103,13 @@ export async function smoke({ target, port = 0, keep = false } = {}) {
   const dataDir = path.join(work, "data");
   const cacheDir = path.join(work, "cache");
   try {
-    await checkNativeModules(node);
+    await checkNativeModules(node, serverDir);
     const args = [
       serverScript,
       "--port", String(port),
       "--host", "127.0.0.1",
-      "--root", SERVER_RESOURCES_DIR,
-      "--dist", WEB_RESOURCES_DIR,
+      "--root", serverDir,
+      "--dist", webDir,
       "--data-dir", dataDir,
       "--cache-dir", cacheDir,
       "--watch-stdin", "on",
@@ -128,8 +151,8 @@ export async function smoke({ target, port = 0, keep = false } = {}) {
       const index = await fetch(`${url}/`);
       const html = await index.text();
       if (index.status !== 200 || !html.includes("<div id=\"root\"")) failures.push(`/ answered ${index.status} without the app root`);
-      const expectedHtml = await readFile(path.join(WEB_RESOURCES_DIR, "index.html"), "utf8");
-      if (html !== expectedHtml) failures.push("/ does not serve resources/web/index.html");
+      const expectedHtml = await readFile(path.join(webDir, "index.html"), "utf8");
+      if (html !== expectedHtml) failures.push(`/ does not serve ${path.join(webDir, "index.html")}`);
       const providers = await (await fetch(`${url}/api/setup/providers`)).json();
       if (providers.managed !== true) failures.push("/api/setup/providers is not managed");
       if (failures.length) throw new Error(`health checks failed: ${failures.join("; ")}`);
@@ -142,7 +165,7 @@ export async function smoke({ target, port = 0, keep = false } = {}) {
     const exit = await Promise.race([exited, timeout]);
     if (!exit) { child.kill(); throw new Error(`server did not exit within ${EXIT_TIMEOUT_MS / 1000} s after stdin closed`); }
     if (exit.code !== 0) throw new Error(`server exited with ${exit.code ?? exit.signal} after stdin closed\n${lines.join("\n")}`);
-    log(`sidecar stopped cleanly after stdin closed (exit 0). Smoke test passed for ${target.triple}.`);
+    log(`sidecar stopped cleanly after stdin closed (exit 0). Smoke test passed for ${target.triple}${app ? ` (${app})` : ""}.`);
     return { health: true };
   } finally {
     if (!keep) await rm(work, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
@@ -153,7 +176,10 @@ export async function smoke({ target, port = 0, keep = false } = {}) {
 if (isMain(import.meta.url)) {
   const index = process.argv.indexOf("--port");
   const port = index > 0 ? Number(process.argv[index + 1]) : 0;
-  smoke({ target: targetFromArgv(), port, keep: process.argv.includes("--keep") }).catch((error) => {
+  const appIndex = process.argv.indexOf("--app");
+  const app = appIndex > 0 ? process.argv[appIndex + 1] : undefined;
+  if (appIndex > 0 && (!app || app.startsWith("--"))) throw new Error("--app needs a path");
+  smoke({ target: targetFromArgv(), port, keep: process.argv.includes("--keep"), app }).catch((error) => {
     process.stderr.write(`smoke test failed: ${error?.stack || error}\n`);
     process.exit(1);
   });
