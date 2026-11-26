@@ -583,3 +583,25 @@
 .provider-switch__state.is-add { color: var(--accent-warm); font-weight: 500; }
 
 .onboarding-status.is-success { color: var(--success); }
+
+/* Managed by the desktop app (WARDROBE_MANAGED_CONFIG): the provider list is a
+   read-only view, so it greys out without the "busy" cursor, and the provider
+   in use keeps full contrast. */
+.provider-switch.is-managed .provider-switch__option:disabled { cursor: default; }
+.provider-switch.is-managed .provider-switch__option.is-active:disabled { opacity: 1; }
+.provider-switch__hint { align-items: flex-start; line-height: 1.45; }
+.provider-switch__hint svg { flex: none; margin-top: 2px; }
+
+.onboarding-managed-provider {
+  display: grid;
+  gap: 4px;
+  margin: 4px 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--wash-1);
+}
+.onboarding-managed-provider p { margin: 0; font-size: 14px; }
+.onboarding-managed-provider .is-ready { display: inline-flex; align-items: center; gap: 4px; color: var(--success); }
+.onboarding-managed-provider .is-missing { color: var(--muted); }
+.onboarding-managed-provider p.onboarding-managed-provider__others { color: var(--muted); font-size: 12px; }

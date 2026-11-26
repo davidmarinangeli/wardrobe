@@ -27,6 +27,7 @@ import { recordSignal } from "./preferences-api.mjs";
 import { catalogForHttp } from "../shared/portable-assets.mjs";
 import { createArchiveRequestHandler, ensureArchiveRecovered, trackArchivePromise, withArchiveWriteLease } from "./archive-coordinator.mjs";
 import { mimeForExtension, preserveOriginal, resolveArchiveFile } from "./archive-store.mjs";
+import { resolveCacheDir } from "./runtime-config.mjs";
 
 const ASSET_ROOT = "/api/wishlist/assets";
 const PARTS = GARMENT_PART_ID_SET;
@@ -143,7 +144,7 @@ export async function detectAndCreateWishlistItems({ imageBytes, sourcePinId = n
 async function generateCutout({ cropBytes, metadata, provider, key, apiBaseUrl, setting }) {
   // An unworn product photo's pixels are already correct — segment it out of whatever
   // background it's actually on instead of asking the AI edit model to repaint the garment.
-  if (metadata.worn === false) return removeUnwornGarmentBackground(cropBytes, { rotationDegrees: metadata.rotationDegrees });
+  if (metadata.worn === false) return removeUnwornGarmentBackground(cropBytes, { rotationDegrees: metadata.rotationDegrees, cacheDir: resolveCacheDir({ setting }) });
   const requestedChromaKey = chooseChromaKey(metadata.color);
   const prompt = buildGarmentPrompt(metadata, requestedChromaKey);
   const source = { data: cropBytes, mime: "image/png", name: "crop.png" };

@@ -46,6 +46,7 @@ import { readReferenceBytes } from "./archive-store.mjs";
 import { migrateCatalogAssetPaths } from "./archive-store.mjs";
 import { markBrowserStateFields } from "./browser-state-api.mjs";
 import { createArchiveRequestHandler, ensureArchiveRecovered, trackArchivePromise, withArchiveWriteLease } from "./archive-coordinator.mjs";
+import { resolveCacheDir } from "./runtime-config.mjs";
 
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 
@@ -271,7 +272,7 @@ export function variantApi(options = {}) {
 
   async function createCutout({ source, metadata, provider, key, tier, direction = "" }) {
     if (metadata.worn === false && !direction) {
-      return removeUnwornGarmentBackground(source, { rotationDegrees: metadata.rotationDegrees });
+      return removeUnwornGarmentBackground(source, { rotationDegrees: metadata.rotationDegrees, cacheDir: resolveCacheDir({ root, setting }) });
     }
     const chromaKey = chooseChromaKey(metadata.color);
     const basePrompt = buildGarmentPrompt(metadata, chromaKey);

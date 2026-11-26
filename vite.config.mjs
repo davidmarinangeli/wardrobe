@@ -16,6 +16,12 @@ export default defineConfig(({ mode }) => {
         // private OAuth control directory, including custom nested data roots.
         deny: [".env", ".env.*", "*.{crt,pem}", "**/.git/**", "**/.google-drive/**"],
       },
+      // The runtime cache (WARDROBE_CACHE_DIR, default .cache/) holds the
+      // ~470 MB background-removal model and the drape portrait: nothing in it
+      // is source, so the watcher has no reason to follow it.
+      watch: {
+        ignored: ["**/.cache/**"],
+      },
       warmup: {
         clientFiles: ["./src/main.jsx"],
       },

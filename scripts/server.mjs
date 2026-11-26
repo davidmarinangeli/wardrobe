@@ -6,6 +6,7 @@
  *   node scripts/server.mjs [--port 5173] [--host 127.0.0.1] [--root <dir>]
  *     [--data-dir <dir>] [--cache-dir <dir>] [--dist <dir>]
  *     [--allowed-hosts a.example,.ts.net] [--watch-stdin auto|on|off]
+ *   node scripts/server.mjs import-data --from <dir> --to <dataDir> [--replace]
  *
  * Prints `wardrobe-server listening on http://<host>:<port>` and then `READY`
  * on its own line once it accepts requests. SIGINT, SIGTERM, SIGHUP (and SIGBREAK on
@@ -22,11 +23,18 @@ import sirv from "sirv";
 import { apiPlugins } from "./api-plugins.mjs";
 import { drainArchiveWriters } from "./archive-coordinator.mjs";
 import { ALLOWED_HOSTS_ENV, createHostAllowlist, parseAllowedHosts } from "./host-allowlist.mjs";
+import { runImportDataCli } from "./data-import.mjs";
+import { CACHE_DIR_ENV, isManagedConfigValue, MANAGED_CONFIG_ENV } from "./runtime-config.mjs";
+import { parseEnvContent } from "./setup-api.mjs";
 
 export const DEFAULT_PORT = 5173;
 export const DEFAULT_HOST = "127.0.0.1";
 export const READY_LINE = "READY";
 export const SHUTDOWN_TIMEOUT_MS = 10_000;
+
+// Settings the server fixes at startup (from flags or the parent process). A
+// reload of .env never changes them while the server runs.
+export const PINNED_ENV_KEYS = Object.freeze(["WARDROBE_DATA_DIR", CACHE_DIR_ENV, MANAGED_CONFIG_ENV, ALLOWED_HOSTS_ENV]);
 
 // Undefined once esbuild turns this module into CommonJS (Feature 03): the
 // bundle always receives --root, and defines WARDROBE_VERSION.
@@ -116,13 +124,33 @@ export async function startServer(options = {}) {
   catch { throw new Error(`Built frontend not found at ${path.join(dist, "index.html")}. Run \`npm run build\` first or pass --dist.`); }
 
   // One settings object shared by every plugin, like Vite's loadEnv result.
-  const env = { ...baseEnv, WARDROBE_DATA_DIR: dataDir, WARDROBE_CACHE_DIR: cacheDir };
+  const env = { ...baseEnv, WARDROBE_DATA_DIR: dataDir, [CACHE_DIR_ENV]: cacheDir };
+  const managed = isManagedConfigValue(env[MANAGED_CONFIG_ENV]);
+
+  // There is no Vite here to restart after the setup API writes .env, so the
+  // file is parsed again and applied to the shared settings in place (and to
+  // process.env too when that is where the settings came from, as under
+  // `npm run start`). Keys removed from the file keep their current values.
+  // Empty values are skipped: every setting() reader treats "" as unset, and a
+  // .env seeded from .env.example holds many blank keys (OPENAI_API_KEY=,
+  // GOOGLE_DRIVE_*=) that must not wipe a value from the real environment.
+  function reloadEnvFile({ content }) {
+    const values = parseEnvContent(content);
+    const applied = [];
+    for (const [key, value] of Object.entries(values)) {
+      if (PINNED_ENV_KEYS.includes(key) || value === "") continue;
+      env[key] = value;
+      if (baseEnv === process.env) process.env[key] = value;
+      applied.push(key);
+    }
+    return applied;
+  }
   const version = readVersion(root);
   const startedAt = Date.now();
 
   const app = connect();
   const httpServer = http.createServer(app);
-  const plugins = (options.plugins || apiPlugins({ env }));
+  const plugins = (options.plugins || apiPlugins({ env, onEnvSaved: reloadEnvFile }));
   const config = {
     root,
     publicDir: path.join(root, "public"),
@@ -164,7 +192,7 @@ export async function startServer(options = {}) {
       version,
       dataDir,
       cacheDir,
-      managed: false,
+      managed,
       pid: process.pid,
       uptime: Math.floor((Date.now() - startedAt) / 1000),
     });
@@ -218,6 +246,7 @@ export async function startServer(options = {}) {
     port,
     url: formatUrl(host, port),
     version,
+    managed,
     env,
     app,
     httpServer,
@@ -233,6 +262,7 @@ export async function startServer(options = {}) {
 }
 
 const HELP = `Usage: node scripts/server.mjs [options]
+       node scripts/server.mjs import-data --from <dir> --to <dataDir> [--replace]
 
   --port <n>             Port to listen on (default ${DEFAULT_PORT}; 0 picks a free port)
   --host <addr>          Address to bind (default ${DEFAULT_HOST})
@@ -245,6 +275,10 @@ const HELP = `Usage: node scripts/server.mjs [options]
   --watch-stdin <mode>   auto (default: when stdin is a pipe), on, off.
                          When on, the end of stdin shuts the server down.
   -h, --help             Show this help
+
+Environment: ${MANAGED_CONFIG_ENV}=1 hands AI keys and the provider to the
+Wardrobe desktop app, so the web UI stops writing .env.
+Run "import-data --help" for the data folder import command.
 `;
 
 function stdinIsPipe() {
@@ -255,6 +289,8 @@ function stdinIsPipe() {
 }
 
 export async function main(argv = process.argv.slice(2)) {
+  // A subcommand, not a flag, so the server's own flags stay strict.
+  if (argv[0] === "import-data") return runImportDataCli(argv.slice(1));
   let parsed;
   try {
     parsed = parseArgs({

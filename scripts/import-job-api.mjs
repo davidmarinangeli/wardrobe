@@ -12,6 +12,7 @@ import { catalogForDisk, catalogForHttp } from "../shared/portable-assets.mjs";
 import { inspectArchiveCatalogs, migrateCatalogAssetPaths, prepareArchiveDirectory, preserveOriginal, pruneUnreferencedOriginals, readReferenceBytes, reportSkippedArchiveStartup, resolveArchiveFile, mimeForExtension } from "./archive-store.mjs";
 import { markBrowserStateFields } from "./browser-state-api.mjs";
 import { createArchiveRequestHandler, trackArchivePromise, withArchiveWriteLease } from "./archive-coordinator.mjs";
+import { resolveCacheDir, resolveTransformersCacheDir } from "./runtime-config.mjs";
 
 const API_ROOT = "/api/import/jobs";
 const ASSET_ROOT = "/api/import/assets";
@@ -621,10 +622,26 @@ export async function removeChromaBackground(bytes, key, options = {}) {
 }
 
 let backgroundRemovalPipelinePromise = null;
-function loadBackgroundRemovalPipeline() {
+
+/**
+ * Points `@huggingface/transformers` at `<cacheDir>/transformers` instead of its
+ * default (`node_modules/@huggingface/transformers/.cache`, read-only inside an
+ * installed app). Must run before the first `pipeline()` call. The library's
+ * `env` is global, so the first caller's cache directory wins for the process.
+ */
+export function configureTransformersCache(transformers, cacheDir) {
+  const directory = resolveTransformersCacheDir({ cacheDir: cacheDir || resolveCacheDir() });
+  transformers.env.cacheDir = directory;
+  return directory;
+}
+
+function loadBackgroundRemovalPipeline(cacheDir) {
   if (!backgroundRemovalPipelinePromise) {
     backgroundRemovalPipelinePromise = import("@huggingface/transformers")
-      .then(({ pipeline }) => pipeline("background-removal", "onnx-community/BiRefNet-ONNX", { dtype: "fp16" }));
+      .then((transformers) => {
+        configureTransformersCache(transformers, cacheDir);
+        return transformers.pipeline("background-removal", "onnx-community/BiRefNet-ONNX", { dtype: "fp16" });
+      });
   }
   return backgroundRemovalPipelinePromise;
 }
@@ -632,10 +649,11 @@ function loadBackgroundRemovalPipeline() {
 // Segments the garment out of an arbitrary background (a patterned floor, a table, a rug — not
 // just a plain studio backdrop) using a real ML segmentation model instead of a color threshold.
 // Only the alpha channel is touched, so source colors and texture never drift. Needs its model
-// (~490MB) cached on first use. Returns the keyed image at its original size/orientation — not
-// yet rotated or framed.
-export async function removeBackgroundML(bytes) {
-  const segmenter = await loadBackgroundRemovalPipeline();
+// (~490MB) cached on first use under `<cacheDir>/transformers` (options.cacheDir, else
+// WARDROBE_CACHE_DIR, else `.cache` in the working directory). Returns the keyed image at its
+// original size/orientation — not yet rotated or framed.
+export async function removeBackgroundML(bytes, options = {}) {
+  const segmenter = await loadBackgroundRemovalPipeline(options.cacheDir);
   const result = await segmenter(new Blob([bytes]));
   return result.toSharp().png().toBuffer();
 }
@@ -693,7 +711,7 @@ async function zeroTransparentRgb(bytes, alphaThreshold = 8) {
 export async function removeUnwornGarmentBackground(bytes, options = {}) {
   let keyed;
   try {
-    keyed = await removeBackgroundML(bytes);
+    keyed = await removeBackgroundML(bytes, { cacheDir: options.cacheDir });
   } catch (error) {
     console.warn(`ML background removal failed (${error.message}); falling back to color-based cleanup.`);
     keyed = await removeStudioBackground(bytes, options);
@@ -1528,7 +1546,7 @@ export function wardrobeImportApi(options = {}) {
         // explicitly asking for a repaint.
         let bytes;
         if (current.metadata.worn === false && !current.stages.garment.prompt) {
-          bytes = await removeUnwornGarmentBackground(original.data, { rotationDegrees: current.metadata.rotationDegrees });
+          bytes = await removeUnwornGarmentBackground(original.data, { rotationDegrees: current.metadata.rotationDegrees, cacheDir: resolveCacheDir({ root, setting }) });
         } else {
           const provider = activeProvider();
           const mode = await currentMode();

@@ -74,11 +74,15 @@ The setup wizard covers the essentials for AI import and image generation (`AI_P
 | `WARDROBE_MODEL_REFERENCE` | `data/model-reference.png` |
 | `WARDROBE_FACE_REFERENCE` | `data/model-reference-face.png` (optional) |
 | `WARDROBE_DATA_DIR` | `data` |
+| `WARDROBE_CACHE_DIR` | `.cache`; regenerable runtime files: the background-removal model (`transformers/`) and the drape portrait (`drapes/`, served at `/drapes/*`). `npm run start` also takes `--cache-dir` |
+| `WARDROBE_MANAGED_CONFIG` | Off; `1`/`true` means the Wardrobe desktop app owns provider and keys: the web UI shows them read-only and `POST /api/setup/config` answers `409` |
 | `WARDROBE_ALLOWED_HOSTS` | Empty; extra `Host` names `npm run start` accepts besides `localhost` and IP addresses (comma list, `.ts.net` allows every subdomain) |
 | `GOOGLE_DRIVE_CLIENT_ID` | Empty; optional OAuth Web application client ID |
 | `GOOGLE_DRIVE_CLIENT_SECRET` | Empty; optional backend-only OAuth client secret |
 | `GOOGLE_DRIVE_REDIRECT_URI` | Empty; callback URL registered in Google Cloud Console |
 | `GOOGLE_DRIVE_FOLDER_ID` | Empty; ID of the existing Drive folder used for archive snapshots |
+
+To copy an existing data folder into another data directory (what the desktop app does when it adopts a clone's `data/`), stop the server that uses the target and run `node scripts/server.mjs import-data --from <dir> --to <dataDir> [--replace]`. It copies only the portable archive (catalogs, images, reference photos; never `.env`, `.google-drive/` or `jobs/`), refuses an invalid source with exit code `2` and a target that already has a `library.json` with exit code `3` unless `--replace`, and prints a JSON summary.
 
 Configure all four Google Drive values together, then restart the backend. See [Google Drive archive setup and recovery](docs/google-drive-operations.md) for the callback example, scope implications, archive boundary, and restore procedure. OAuth consent connects an account only; the user must separately choose **Locale + Google Drive** in **Settings › Archive** to activate synchronization.
 

@@ -24,6 +24,7 @@ import { migrateLibrary, normalizeItemV2, normalizeReference, variantIdFor } fro
 import { mutateLibrary } from "../shared/wardrobe-library.mjs";
 import { withArchiveWriteLease } from "./archive-coordinator.mjs";
 import { preserveOriginal, prepareArchiveDirectory, readReferenceBytes } from "./archive-store.mjs";
+import { resolveCacheDir } from "./runtime-config.mjs";
 
 // This script reads configuration straight from process.env rather than the app's settings
 // store, so shape it like the setting() lookups the shared helpers expect.
@@ -337,7 +338,7 @@ async function detectPhotoItems({ provider, key, baseUrl, filePath, originalData
 async function generateGarmentCutout({ provider, key, baseUrl, item }) {
   // An unworn product photo's pixels are already correct — segment it out of whatever
   // background it's actually on instead of asking the AI edit model to repaint the garment.
-  if (item.metadata.worn === false) return removeUnwornGarmentBackground(item.crop, { rotationDegrees: item.metadata.rotationDegrees });
+  if (item.metadata.worn === false) return removeUnwornGarmentBackground(item.crop, { rotationDegrees: item.metadata.rotationDegrees, cacheDir: resolveCacheDir({ root: path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."), setting: envSetting }) });
   const requestedChromaKey = chooseChromaKey(item.metadata.color);
   const prompt = buildGarmentPrompt(item.metadata, requestedChromaKey);
   const source = { data: item.crop, mime: "image/png", name: "source.png" };

@@ -23,8 +23,10 @@ import { googleDriveApi } from "./google-drive-api.mjs";
  * it (right after the Drive plugin); the standalone server leaves it empty.
  *
  * `env` is the settings object every plugin reads before `process.env`.
+ * `onEnvSaved` is the standalone server's hook for reloading `.env` after the
+ * setup API writes it (Vite restarts itself instead); see wardrobeSetupApi.
  */
-export function apiPlugins({ env, react } = {}) {
+export function apiPlugins({ env, react, onEnvSaved } = {}) {
   return [
     googleDriveApi({ env }),
     ...(react ? [react] : []),
@@ -35,7 +37,7 @@ export function apiPlugins({ env, react } = {}) {
     wishlistApi({ env }),
     suggestionsApi({ env }),
     mirrorApi({ env }),
-    wardrobeSetupApi({ env }),
+    wardrobeSetupApi({ env, onEnvSaved }),
     preferencesApi({ env }),
     colorProfileApi({ env }),
     variantApi({ env }),

@@ -13,16 +13,37 @@ export const RESUME_KEY = "open-wardrobe-onboarding-resume-v1";
 export const SWITCHED_KEY = "open-wardrobe-provider-switched-v1";
 
 const STEPS = ["welcome", "provider", "keys", "photos", "done"];
+// With WARDROBE_MANAGED_CONFIG on, the desktop app owns keys: no key step.
+const MANAGED_STEPS = ["welcome", "provider", "photos", "done"];
 const STEP_LABELS = { welcome: "Welcome", provider: "Provider", keys: "API key", photos: "Reference photo", done: "Done" };
+export const MANAGED_KEYS_HINT = "API keys are managed by the Wardrobe desktop app. Open Settings from the tray icon to change them.";
+
+/**
+ * GET /api/setup/providers: the provider in use, which providers have a key
+ * (yes/no only), and `managed` when the desktop app owns keys and provider.
+ * Null until it answers; a failed request leaves it null.
+ */
+function useSetupProviders() {
+  const [providers, setProviders] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    api("/api/setup/providers").then((value) => { if (!cancelled) setProviders(value); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  return providers;
+}
 
 // Lives on the "done" step (Settings, once setup is complete) rather than the
 // topbar — a developer setting shouldn't compete with primary navigation for
 // space. The gear button carries a small status dot (see AiModeBadge in
 // App.jsx) so the current mode is still visible without opening this panel.
-function AiModeToggle({ setup, onChange }) {
+function AiModeToggle({ setup, onChange, managed = false }) {
   if (!setup || setup.provider !== "gemini") return null;
   const mode = setup.mode;
   const missingKey = mode === "test" ? !setup.hasTestKey : !setup.hasProdKey;
+  const missingKeyHint = managed
+    ? `Add the Gemini ${mode === "test" ? "TEST" : "PROD"} key in the Wardrobe desktop app (Settings, from the tray icon).`
+    : mode === "test" ? "Add GEMINI_API_KEY_TEST to .env, then restart." : "Add GEMINI_API_KEY_PROD (or GEMINI_API_KEY) to .env, then restart.";
   return (
     <div className="onboarding-mode-switch">
       <span className="onboarding-mode-switch__label">Gemini key</span>
@@ -32,7 +53,7 @@ function AiModeToggle({ setup, onChange }) {
       </div>
       {missingKey && (
         <p className="onboarding-mode-switch__warning" role="alert">
-          {mode === "test" ? "Add GEMINI_API_KEY_TEST to .env, then restart." : "Add GEMINI_API_KEY_PROD (or GEMINI_API_KEY) to .env, then restart."}
+          {missingKeyHint}
         </p>
       )}
     </div>
@@ -90,11 +111,11 @@ function initialStepFor(setup) {
   return "done";
 }
 
-function StepDots({ step }) {
-  const activeIndex = STEPS.indexOf(step);
+function StepDots({ step, steps = STEPS }) {
+  const activeIndex = steps.indexOf(step);
   return (
     <ol className="onboarding-dots" aria-label="Setup progress">
-      {STEPS.map((id, index) => (
+      {steps.map((id, index) => (
         <li key={id} className={index === activeIndex ? "is-active" : index < activeIndex ? "is-done" : ""} title={STEP_LABELS[id]} />
       ))}
     </ol>
@@ -133,7 +154,7 @@ function Dropzone({ label, hint, required, uploaded, previewUrl, busy, onFile })
   );
 }
 
-function WelcomeStep({ onNext }) {
+function WelcomeStep({ onNext, managed = false }) {
   return (
     <div className="onboarding-step">
       <p className="onboarding-eyebrow">Setup</p>
@@ -143,7 +164,9 @@ function WelcomeStep({ onNext }) {
         <li>Detects every clothing item in a photo and cuts it out cleanly</li>
         <li>Generates an editorial photo of you wearing each piece — or a full outfit</li>
         <li>Suggests outfits from your own wardrobe, tuned to occasion, weather, and your colors</li>
-        <li>The working archive lives in <code>data/</code>; an optional Drive backup copies it. AI keys stay in the local <code>.env</code> and are excluded from the archive.</li>
+        {managed
+          ? <li>The working archive lives on this computer; an optional Drive backup copies it. AI keys stay in the Wardrobe desktop app and are excluded from the archive.</li>
+          : <li>The working archive lives in <code>data/</code>; an optional Drive backup copies it. AI keys stay in the local <code>.env</code> and are excluded from the archive.</li>}
       </ul>
       <div className="onboarding-actions">
         <span className="action-spacer" />
@@ -187,6 +210,43 @@ function ProviderStep({ provider, setProvider, onNext, onBack }) {
   );
 }
 
+/**
+ * The provider step when the desktop app owns configuration: what the server
+ * detected, as read-only text, and where to change it. Nothing here writes.
+ */
+function ManagedProviderStep({ providers, onNext, onBack }) {
+  const current = PROVIDERS.find((option) => option.id === providers?.provider);
+  const configured = providers?.configured || {};
+  const anyKey = Object.values(configured).some(Boolean);
+  const others = PROVIDERS.filter((option) => option.id !== current?.id && configured[option.id]);
+  return (
+    <div className="onboarding-step">
+      <p className="onboarding-eyebrow">Step 1 of 2</p>
+      <h2>AI provider</h2>
+      <div className="onboarding-managed-provider" aria-live="polite">
+        {current ? (
+          <p>
+            <strong>{current.label}</strong>{" · "}
+            {configured[current.id]
+              ? <span className="is-ready"><CheckCircle size={13} weight="fill" aria-hidden="true" /> key saved</span>
+              : <span className="is-missing">no key yet</span>}
+          </p>
+        ) : <p>Checking the configuration…</p>}
+        {others.length > 0 && <p className="onboarding-managed-provider__others">Also has a key: {others.map((option) => option.label).join(", ")}</p>}
+      </div>
+      <p className="onboarding-lede">{MANAGED_KEYS_HINT}</p>
+      {providers && !anyKey && (
+        <p className="onboarding-status" role="note"><Info size={14} aria-hidden="true" /> Imports and modeled photos stay off until a key is added there. You can still add your reference photo now.</p>
+      )}
+      <div className="onboarding-actions">
+        <button className="secondary-button" type="button" onClick={onBack}><ArrowLeft size={14} /> Back</button>
+        <span className="action-spacer" />
+        <button className="primary-button" type="button" onClick={onNext}>Continue <ArrowRight size={14} weight="bold" /></button>
+      </div>
+    </div>
+  );
+}
+
 function KeysStep({ provider, onSaved, onBack, fromSettings = false }) {
   const option = PROVIDERS.find((item) => item.id === provider);
   const [openaiKey, setOpenaiKey] = useState("");
@@ -220,7 +280,16 @@ function KeysStep({ provider, onSaved, onBack, fromSettings = false }) {
       if (provider === "gemini") {
         await api("/api/import/mode", { method: "POST", body: JSON.stringify({ mode: values.GEMINI_API_KEY_TEST ? "test" : "prod" }) });
       }
-      await api("/api/setup/config", { method: "POST", body: JSON.stringify({ provider, values }) });
+      const saved = await api("/api/setup/config", { method: "POST", body: JSON.stringify({ provider, values }) });
+      // The standalone server (npm run start) reloads .env in place and says so:
+      // nothing restarts and the page stays, so read the new status right away.
+      if (saved.restarting === false) {
+        sessionStorage.removeItem(fromSettings ? SWITCHED_KEY : RESUME_KEY);
+        const latest = await api(CONFIG_API);
+        if (latest.hasApiKey) onSaved(latest);
+        else setError("The key was saved, but the server does not report it yet. Refresh the page.");
+        return;
+      }
       setRestarting(true);
       let latest = null;
       for (let attempt = 0; attempt < 40; attempt += 1) {
@@ -441,12 +510,12 @@ function ReferencePhotos({ setup, onSetupChange, onFullUploaded }) {
   );
 }
 
-function PhotosStep({ setup, onSetupChange, onNext, onBack }) {
+function PhotosStep({ setup, onSetupChange, onNext, onBack, eyebrow = "Step 3 of 3" }) {
   const [fullUploaded, setFullUploaded] = useState(setup?.hasModelReference || false);
 
   return (
     <div className="onboarding-step">
-      <p className="onboarding-eyebrow">Step 3 of 3</p>
+      <p className="onboarding-eyebrow">{eyebrow}</p>
       <h2>Add a reference photo</h2>
       <p className="onboarding-lede">Wardrobe uses this to put you in every modeled photo. A clear, well-lit full-body shot works best — plain background, facing the camera.</p>
 
@@ -468,11 +537,17 @@ function PhotosStep({ setup, onSetupChange, onNext, onBack }) {
  * learns whether each one exists.
  */
 function ProviderSwitcher({ setup, onSetupChange, onAddKey }) {
-  const [configured, setConfigured] = useState(null);
+  const providers = useSetupProviders();
+  const configured = providers?.configured || null;
+  // The desktop app owns provider and keys: the list stays as a read-only view.
+  const managed = providers?.managed === true;
   const [switchingTo, setSwitchingTo] = useState(null);
+  // Only once the server says a restart is coming (Vite); never in managed mode.
+  const [restarting, setRestarting] = useState(false);
   const [error, setError] = useState("");
-  // A switch reloads the page; this is the note it left for after the reload.
-  const [justSwitched] = useState(() => {
+  // A switch under Vite reloads the page; this is the note it left for after
+  // the reload. Under the standalone server the switch lands in place instead.
+  const [justSwitched, setJustSwitched] = useState(() => {
     try {
       const value = sessionStorage.getItem(SWITCHED_KEY);
       sessionStorage.removeItem(SWITCHED_KEY);
@@ -483,14 +558,8 @@ function ProviderSwitcher({ setup, onSetupChange, onAddKey }) {
   });
   const current = setup?.provider;
 
-  useEffect(() => {
-    let cancelled = false;
-    api("/api/setup/providers").then((value) => { if (!cancelled) setConfigured(value.configured); }).catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
-
   const choose = async (id) => {
-    if (id === current || switchingTo) return;
+    if (managed || id === current || switchingTo) return;
     if (configured && !configured[id]) {
       onAddKey(id);
       return;
@@ -499,9 +568,18 @@ function ProviderSwitcher({ setup, onSetupChange, onAddKey }) {
     setError("");
     try {
       sessionStorage.setItem(SWITCHED_KEY, id);
-      await api("/api/setup/config", { method: "POST", body: JSON.stringify({ provider: id }) });
+      const saved = await api("/api/setup/config", { method: "POST", body: JSON.stringify({ provider: id }) });
+      if (saved.restarting === false) {
+        sessionStorage.removeItem(SWITCHED_KEY);
+        const latest = await api(CONFIG_API);
+        onSetupChange?.(latest);
+        setJustSwitched(id);
+        setSwitchingTo(null);
+        return;
+      }
       // The .env write restarts the dev server. Poll until it answers with the
       // new provider; usually the page reloads on its own before this finishes.
+      setRestarting(true);
       for (let attempt = 0; attempt < 40; attempt += 1) {
         await wait(750);
         try {
@@ -510,6 +588,7 @@ function ProviderSwitcher({ setup, onSetupChange, onAddKey }) {
             sessionStorage.removeItem(SWITCHED_KEY);
             onSetupChange?.(latest);
             setSwitchingTo(null);
+            setRestarting(false);
             return;
           }
         } catch {
@@ -522,14 +601,15 @@ function ProviderSwitcher({ setup, onSetupChange, onAddKey }) {
       setError(requestError.message);
     }
     setSwitchingTo(null);
+    setRestarting(false);
   };
 
   const confirmed = justSwitched && justSwitched === current ? PROVIDERS.find((option) => option.id === current) : null;
 
   return (
-    <section className="provider-switch" aria-labelledby="provider-switch-title">
+    <section className={`provider-switch${managed ? " is-managed" : ""}`} aria-labelledby="provider-switch-title" aria-describedby={managed ? "provider-switch-managed" : undefined}>
       <p id="provider-switch-title" className="provider-switch__label">AI provider</p>
-      <div className="provider-switch__list" role="radiogroup" aria-labelledby="provider-switch-title">
+      <div className="provider-switch__list" role="radiogroup" aria-labelledby="provider-switch-title" aria-disabled={managed || undefined}>
         {PROVIDERS.map((option) => {
           const active = option.id === current;
           const ready = configured ? configured[option.id] : null;
@@ -540,7 +620,7 @@ function ProviderSwitcher({ setup, onSetupChange, onAddKey }) {
               type="button"
               role="radio"
               aria-checked={active}
-              disabled={Boolean(switchingTo) && !busy}
+              disabled={managed || (Boolean(switchingTo) && !busy)}
               aria-busy={busy}
               className={`provider-switch__option${active ? " is-active" : ""}${busy ? " is-busy" : ""}`}
               onClick={() => choose(option.id)}
@@ -549,29 +629,30 @@ function ProviderSwitcher({ setup, onSetupChange, onAddKey }) {
                 <span className="provider-switch__name">{option.label}</span>
                 <span className="provider-switch__tagline">{option.tagline}</span>
               </span>
-              <span className={`provider-switch__state${active ? " is-active" : ready === false ? " is-add" : ""}`}>
+              <span className={`provider-switch__state${active ? " is-active" : ready === false && !managed ? " is-add" : ""}`}>
                 {busy
                   ? <><SpinnerGap size={13} className="onboarding-spinner" aria-hidden="true" /> Switching…</>
                   : active
                     ? <><CheckCircle size={14} weight="fill" aria-hidden="true" /> In use</>
                     : ready === false
-                      ? <>Add key <ArrowRight size={12} weight="bold" aria-hidden="true" /></>
+                      ? (managed ? "No key" : <>Add key <ArrowRight size={12} weight="bold" aria-hidden="true" /></>)
                       : ready ? "Key saved" : ""}
               </span>
             </button>
           );
         })}
       </div>
+      {managed && <p id="provider-switch-managed" className="onboarding-status provider-switch__hint" role="note"><Info size={14} aria-hidden="true" /> {MANAGED_KEYS_HINT}</p>}
       {confirmed && (
         <p className="onboarding-status is-success" role="status"><CheckCircle size={14} weight="fill" aria-hidden="true" /> Now using {confirmed.label}.</p>
       )}
-      {switchingTo && <p className="onboarding-status" role="status">Saving to .env and restarting the dev server…</p>}
+      {switchingTo && restarting && <p className="onboarding-status" role="status">Saving to .env and restarting the dev server…</p>}
       {error && <p className="onboarding-status is-error" role="alert"><WarningCircle size={14} aria-hidden="true" /> {error}</p>}
     </section>
   );
 }
 
-function DoneStep({ setup, onSetupChange, onModeChange, onAddKey, onClose }) {
+function DoneStep({ setup, onSetupChange, onModeChange, onAddKey, onClose, managed = false }) {
   return (
     <div className="onboarding-step">
       <p className="onboarding-eyebrow">All set</p>
@@ -582,7 +663,7 @@ function DoneStep({ setup, onSetupChange, onModeChange, onAddKey, onClose }) {
         <li>Have a whole camera roll? <code>npm run bulk-import -- --input ~/Pictures/outfits --dry-run</code></li>
       </ul>
       <ProviderSwitcher setup={setup} onSetupChange={onSetupChange} onAddKey={onAddKey} />
-      <AiModeToggle setup={setup} onChange={onModeChange} />
+      <AiModeToggle setup={setup} onChange={onModeChange} managed={managed} />
       <div className="onboarding-actions">
         <span className="action-spacer" />
         <button className="primary-button" type="button" onClick={onClose}><Check size={14} weight="bold" /> Start building your wardrobe</button>
@@ -594,12 +675,15 @@ function DoneStep({ setup, onSetupChange, onModeChange, onAddKey, onClose }) {
 /**
  * The AI tab in Settings: provider, keys, the Gemini TEST/PROD switch and the
  * reference photos. Keys are write-only here — the server only ever says
- * whether one is saved, never what it is.
+ * whether one is saved, never what it is. When the desktop app manages the
+ * configuration, provider and keys are read-only; the TEST/PROD switch and the
+ * reference photos (server state and data, not secrets) keep working.
  */
 export function AiSettings({ setup, onSetupChange, onModeChange }) {
   const [addingKeyFor, setAddingKeyFor] = useState(null);
+  const managed = useSetupProviders()?.managed === true;
 
-  if (addingKeyFor) {
+  if (addingKeyFor && !managed) {
     return (
       <KeysStep
         provider={addingKeyFor}
@@ -613,7 +697,7 @@ export function AiSettings({ setup, onSetupChange, onModeChange }) {
   return (
     <div className="onboarding-step settings-ai">
       <ProviderSwitcher setup={setup} onSetupChange={onSetupChange} onAddKey={setAddingKeyFor} />
-      <AiModeToggle setup={setup} onChange={onModeChange} />
+      <AiModeToggle setup={setup} onChange={onModeChange} managed={managed} />
       <section className="settings-ai__photos" aria-labelledby="settings-ai-photos-title">
         <p id="settings-ai-photos-title" className="provider-switch__label">Reference photos</p>
         <ReferencePhotos setup={setup} onSetupChange={onSetupChange} />
@@ -631,6 +715,10 @@ export function Onboarding({ setup, onSetupChange, onModeChange, onClose, onOpen
   const [provider, setProvider] = useState(setup?.hasApiKey ? setup.provider : "gemini");
   // Whether the key step was reached from Settings, so Back returns there.
   const [keysFromSettings, setKeysFromSettings] = useState(false);
+  // The desktop app owns keys: the provider step turns read-only, the key step
+  // goes away, and the reference-photo step stays.
+  const providers = useSetupProviders();
+  const managed = providers?.managed === true;
 
   useEffect(() => {
     sessionStorage.removeItem(RESUME_KEY);
@@ -654,14 +742,17 @@ export function Onboarding({ setup, onSetupChange, onModeChange, onClose, onOpen
       entryClassName="onboarding-entry"
       panelClassName="onboarding"
     >
-      <StepDots step={step} />
+      <StepDots step={step} steps={managed ? MANAGED_STEPS : STEPS} />
       <div className="onboarding-storage-shortcut">
         <span>Archive settings</span>
         <button type="button" onClick={onOpenStorage}><span aria-hidden="true">↗</span> Archive / Google Drive</button>
       </div>
-      {step === "welcome" && <WelcomeStep onNext={() => setStep("provider")} />}
-      {step === "provider" && <ProviderStep provider={provider} setProvider={setProvider} onNext={() => setStep("keys")} onBack={() => setStep("welcome")} />}
-      {step === "keys" && (
+      {step === "welcome" && <WelcomeStep managed={managed} onNext={() => setStep("provider")} />}
+      {(step === "provider" || step === "keys") && managed && (
+        <ManagedProviderStep providers={providers} onNext={() => setStep("photos")} onBack={() => setStep("welcome")} />
+      )}
+      {step === "provider" && !managed && <ProviderStep provider={provider} setProvider={setProvider} onNext={() => setStep("keys")} onBack={() => setStep("welcome")} />}
+      {step === "keys" && !managed && (
         <KeysStep
           provider={provider}
           fromSettings={keysFromSettings}
@@ -669,7 +760,15 @@ export function Onboarding({ setup, onSetupChange, onModeChange, onClose, onOpen
           onSaved={(latest) => { onSetupChange?.(latest); setStep(latest.hasModelReference ? "done" : "photos"); }}
         />
       )}
-      {step === "photos" && <PhotosStep setup={setup} onSetupChange={onSetupChange} onNext={() => setStep("done")} onBack={() => setStep(setup?.hasApiKey ? "welcome" : "keys")} />}
+      {step === "photos" && (
+        <PhotosStep
+          setup={setup}
+          onSetupChange={onSetupChange}
+          eyebrow={managed ? "Step 2 of 2" : undefined}
+          onNext={() => setStep("done")}
+          onBack={() => setStep(managed ? "provider" : setup?.hasApiKey ? "welcome" : "keys")}
+        />
+      )}
       {step === "done" && (
         <DoneStep
           setup={setup}
@@ -677,6 +776,7 @@ export function Onboarding({ setup, onSetupChange, onModeChange, onClose, onOpen
           onModeChange={onModeChange}
           onAddKey={(id) => { setProvider(id); setKeysFromSettings(true); setStep("keys"); }}
           onClose={finish}
+          managed={managed}
         />
       )}
     </ViewerPanel>

@@ -15,6 +15,8 @@ import { SEASONS } from "../shared/color-seasons.mjs";
 import { prepareSubject, renderDrapedPortrait, DRAPE_SETS } from "./draping-service.mjs";
 import { readReferenceBytes } from "./archive-store.mjs";
 import { markBrowserStateFields } from "./browser-state-api.mjs";
+import sirv from "sirv";
+import { resolveDrapesDir } from "./runtime-config.mjs";
 
 function sanitizeHex(hex, fallback = "#888888") {
   const match = String(hex || "").match(/#[0-9a-fA-F]{6}\b/i);
@@ -364,6 +366,20 @@ async function openAIAnalyzeDrapes({ key, baseUrl, model, candidates }) {
 export function colorProfileApi(options = {}) {
   let root;
   let dataDir;
+  // <cacheDir>/drapes: the derived drape portrait, regenerated from the
+  // reference photo whenever it changes. Served at /drapes/* by this plugin, in
+  // Vite and in the standalone server alike.
+  let drapesDir;
+  let drapesStatic;
+
+  // Mounted at /drapes, so req.url arrives without the prefix. Only the
+  // portrait images go out; the manifest next to them stays server-side.
+  function serveDrapes(req, res, next) {
+    if ((req.method !== "GET" && req.method !== "HEAD") || !drapesStatic) return next();
+    const pathname = new URL(req.url || "/", "http://localhost").pathname;
+    if (!/^\/[a-z0-9][a-z0-9_-]*\.webp$/i.test(pathname)) return next();
+    return drapesStatic(req, res, next);
+  }
   const setting = (name, fallback = "") => options.env?.[name] || process.env[name] || fallback;
   const apiBaseUrl = (provider) => resolveOpenAICompatibleBaseUrl(setting, provider);
 
@@ -426,8 +442,7 @@ export function colorProfileApi(options = {}) {
       // The browser recolours the drape itself, so this only has to hand over
       // the portrait and where its neck is. One image, cached on disk.
       if (url.pathname === "/api/color-profile/drapes" && req.method === "GET") {
-        const publicDrapesDir = path.resolve(root, "public/drapes");
-        const subject = await prepareSubject(root, publicDrapesDir, { dataDir, setting });
+        const subject = await prepareSubject(root, drapesDir, { dataDir, setting });
         return json(res, 200, { subject, sets: DRAPE_SETS });
       }
 
@@ -436,7 +451,6 @@ export function colorProfileApi(options = {}) {
         const setId = reqBody.setId || "sisterDeep";
         const targetSet = DRAPE_SETS[setId] || DRAPE_SETS.sisterDeep;
         const fabricIndex = Number.isInteger(reqBody.fabricIndex) ? reqBody.fabricIndex : 0;
-        const publicDrapesDir = path.resolve(root, "public/drapes");
 
         // Rasterise only the fabrics actually on screen — the same ones the
         // user is looking at, so the verdict answers the question they asked.
@@ -447,7 +461,7 @@ export function colorProfileApi(options = {}) {
             id: candidate.id,
             name: candidate.name,
             type: candidate.type,
-            buffer: await renderDrapedPortrait(root, publicDrapesDir, color, { dataDir, setting }),
+            buffer: await renderDrapedPortrait(root, drapesDir, color, { dataDir, setting }),
           });
         }
 
@@ -601,8 +615,18 @@ export function colorProfileApi(options = {}) {
     async configResolved(config) {
       root = config.root;
       dataDir = path.resolve(root, setting("WARDROBE_DATA_DIR", "data"));
+      drapesDir = resolveDrapesDir({ root, setting });
+      // dev mode: the portrait is written at runtime, so look files up per
+      // request (sirv answers with no-cache and an ETag) instead of indexing the folder once.
+      drapesStatic = sirv(drapesDir, { dev: true, etag: true, dotfiles: false });
     },
-    configureServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },
-    configurePreviewServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },
+    configureServer(server) {
+      server.middlewares.use("/drapes", serveDrapes);
+      server.middlewares.use(createArchiveRequestHandler(dataDir, handler));
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use("/drapes", serveDrapes);
+      server.middlewares.use(createArchiveRequestHandler(dataDir, handler));
+    },
   };
 }

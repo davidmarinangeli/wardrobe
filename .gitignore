@@ -10,9 +10,14 @@ data/
 # covers custom WARDROBE_DATA_DIR values inside the repository.
 .google-drive/
 
-# Derived from data/model-reference-face.png at runtime (see prepareSubject in
-# scripts/draping-service.mjs). It is a crop of a personal reference photo and
-# it regenerates itself, so it has no business in the history.
+# Runtime cache (WARDROBE_CACHE_DIR, default .cache): the background-removal
+# model under transformers/ and the drape portrait under drapes/, a crop of a
+# personal reference photo. Everything in it regenerates itself.
+.cache/
+
+# Legacy location of the drape portrait. Nothing writes here any more (it moved
+# to .cache/drapes/), but older checkouts still have a personal crop in it, so
+# it stays ignored. Delete the folder by hand: `vite build` would copy it to dist/.
 public/drapes/
 
 # Source screen recordings for the README. These are hundreds of MB each and

@@ -1,9 +1,11 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createArchiveRequestHandler } from "./archive-coordinator.mjs";
 import path from "node:path";
+import { parseEnv } from "node:util";
 import sharp from "sharp";
 import { AI_PROVIDERS, atomicJson, isSameOriginRequest, resolveApiKey, resolveProvider } from "./import-job-api.mjs";
 import { ArchiveCatalogPreflightError, prepareArchiveDirectory, preserveOriginal, reportSkippedArchiveStartup } from "./archive-store.mjs";
+import { isManagedConfig, MANAGED_CONFIG_MESSAGE } from "./runtime-config.mjs";
 
 const WRITABLE_KEYS = new Set(["AI_PROVIDER", "OPENAI_API_KEY", "OPENROUTER_API_KEY", "GEMINI_API_KEY_TEST", "GEMINI_API_KEY_PROD", "MINIMAX_API_KEY"]);
 const ENV_LINE = /^([A-Z0-9_]+)=/;
@@ -56,6 +58,14 @@ export function upsertEnvValues(content, values) {
 }
 
 /**
+ * Parses .env text the way `node --env-file` does (`KEY=value`, quotes,
+ * `export`, comments), so a reload sees exactly what a restart would.
+ */
+export function parseEnvContent(content) {
+  return parseEnv(String(content ?? ""));
+}
+
+/**
  * Which providers have a key saved, as yes/no — the keys themselves never leave
  * the server. Gemini counts as ready with either of its two keys, since the
  * TEST/PROD switch in Settings chooses between them after the fact.
@@ -68,16 +78,30 @@ export function configuredProviders(setting) {
   ]));
 }
 
+/**
+ * The setup API. Options:
+ * - `env`: the settings object read before `process.env`.
+ * - `onEnvSaved({ envPath, content })`: set by the standalone server, which has
+ *   no Vite to restart it. Called after `.env` is written so the new values
+ *   apply in place; the response then says `restarting: false`.
+ *
+ * With WARDROBE_MANAGED_CONFIG on, the desktop app owns keys and provider: the
+ * `.env` write is refused with 409 and `providers` reports `managed: true`.
+ * Reference photos are data, not configuration, and keep working.
+ */
 export function wardrobeSetupApi(options = {}) {
   let root;
   let dataDir;
   const setting = (name, fallback = "") => options.env?.[name] || process.env[name] || fallback;
+  const managed = () => isManagedConfig(setting);
 
   async function saveEnvValues(values) {
     const envPath = path.join(root, ".env");
     const examplePath = path.join(root, ".env.example");
     const existing = (await readTextFile(envPath)) ?? (await readTextFile(examplePath)) ?? "";
-    await writeFile(envPath, upsertEnvValues(existing, values));
+    const content = upsertEnvValues(existing, values);
+    await writeFile(envPath, content);
+    return { envPath, content };
   }
 
   async function handler(req, res, next) {
@@ -88,9 +112,12 @@ export function wardrobeSetupApi(options = {}) {
       // What the Settings provider picker needs: the one in use, and which
       // others could be switched to without asking for a key first.
       if (url.pathname === "/api/setup/providers" && req.method === "GET") {
-        return json(res, 200, { provider: resolveProvider(setting).provider, configured: configuredProviders(setting) });
+        return json(res, 200, { provider: resolveProvider(setting).provider, configured: configuredProviders(setting), managed: managed() });
       }
       if (url.pathname === "/api/setup/config" && req.method === "POST") {
+        // The desktop app keeps keys in the OS keychain and passes them in
+        // through the environment; a .env written here would never be read.
+        if (managed()) return json(res, 409, { error: MANAGED_CONFIG_MESSAGE, managedBy: "desktop" });
         const input = await body(req);
         const values = {};
         if (typeof input.provider === "string" && AI_PROVIDERS.has(input.provider)) values.AI_PROVIDER = input.provider;
@@ -104,7 +131,12 @@ export function wardrobeSetupApi(options = {}) {
           }
         }
         if (!Object.keys(values).length) throw Object.assign(new Error("Nothing to save"), { status: 400 });
-        await saveEnvValues(values);
+        const saved = await saveEnvValues(values);
+        // The standalone server reloads the file into its settings in place.
+        if (typeof options.onEnvSaved === "function") {
+          await options.onEnvSaved(saved);
+          return json(res, 200, { saved: true, restarting: false });
+        }
         // Vite watches .env files itself and restarts the dev server (and the browser's HMR
         // client reloads the page) as soon as this write lands — no explicit restart needed here.
         return json(res, 200, { saved: true, restarting: true });
