@@ -149,6 +149,18 @@ function OutfitFlatLay({ outfitId, pieces }) {
   return <div className="outfit-card-flatlay">{scatteredPieces(outfitId, pieces)}</div>;
 }
 
+// What a lineup change wipes (scripts/outfits-api.mjs normalizeOutfit), naming
+// only what this outfit has. Null when there's nothing to lose.
+function clearedOnSave(outfit) {
+  const parts = [
+    outfit?.modeledImage && "the model photo",
+    outfit?.description && "the style notes",
+    outfit?.tags?.length && "the tags",
+  ].filter(Boolean);
+  if (!parts.length) return null;
+  return parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`;
+}
+
 // Create and edit both go through the shared picker; the name and its error
 // live here, in the picker's footer.
 function OutfitPicker({ items, outfit, onCancel, onSave }) {
@@ -191,7 +203,7 @@ function OutfitPicker({ items, outfit, onCancel, onSave }) {
       notice={missing > 0 && (
         <p className="piece-picker__notice">
           {missing === 1 ? "1 piece is" : `${missing} pieces are`} no longer in your wardrobe and will be removed when you save.
-          {(outfit.modeledImage || outfit.description) && " The model photo and style notes show the old lineup, so saving clears them too."}
+          {clearedOnSave(outfit) && ` Saving also clears ${clearedOnSave(outfit)}, made for the old lineup.`}
         </p>
       )}
       renderPreview={(selectedPieces) => <OutfitStack items={selectedPieces} emptyMessage="Pick pieces to build the look." />}
@@ -275,6 +287,8 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
   const { tier, tiers, chooseTier, tierReady, tierStateError } = useRememberedTier(provider, premiumAllowed);
   const hasModeledImage = Boolean(outfit.modeledImage);
   const processing = outfit.modeledStatus === "processing";
+  // The server refuses a photo of pieces that left the wardrobe.
+  const photoHint = missing > 0 ? "Edit the outfit first" : undefined;
 
   useViewerKeyboard(onClose, closeButtonRef);
 
@@ -304,6 +318,8 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
       icon={<ArrowCounterClockwise size={15} weight="bold" aria-hidden="true" />}
       label="Refine photo"
       onClick={() => setRefining(true)}
+      disabled={missing > 0}
+      title={photoHint}
       concealed={refining}
     />
   ) : (
@@ -311,7 +327,8 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
       icon={<Sparkle size={16} weight="bold" aria-hidden="true" />}
       label="Generate model photo"
       busy={busy}
-      disabled={!tierReady}
+      disabled={!tierReady || missing > 0}
+      title={photoHint}
       onGenerate={generate}
       tier={tier}
       tiers={tiers}
@@ -386,7 +403,10 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
         )}
         {missing > 0 && (
           <p className="outfit-outdated">
-            Out of date: {missing === 1 ? "1 piece is" : `${missing} pieces are`} no longer in your wardrobe. Edit and save the outfit to remove {missing === 1 ? "it" : "them"}.
+            {pieces.length
+              ? `Out of date: ${missing === 1 ? "1 piece is" : `${missing} pieces are`} no longer in your wardrobe. Edit the outfit first to remove ${missing === 1 ? "it" : "them"}, then make a new photo.`
+              : "Out of date: none of this outfit’s pieces are in your wardrobe any more. Delete it, or Edit to pick new pieces."}
+            {hasModeledImage && " The photo shows the old pieces."}
           </p>
         )}
         <p className="details-label">{pieces.length} {pieces.length === 1 ? "piece" : "pieces"}</p>
@@ -540,6 +560,8 @@ export function OutfitsSection({ items, premiumAllowed = true, provider = null, 
   }, [hasProcessingOutfit]);
 
   const itemMap = useMemo(() => Object.fromEntries(items.map((item) => [item.id, item])), [items]);
+  // The wear signal is per piece; pieces no longer in the wardrobe weren't worn.
+  const wearOutfit = (outfit) => logWear({ ...outfit, itemIds: (outfit.itemIds || []).filter((id) => itemMap[id]) });
 
   const generateOutfitModeled = async (outfit, tier, prompt) => {
     const response = await fetch(`/api/outfits/${outfit.id}/modeled`, {
@@ -659,7 +681,7 @@ export function OutfitsSection({ items, premiumAllowed = true, provider = null, 
               onOpen={(id, element) => { setOpenedFrom(element); setViewingOutfitId(id); }}
               wornToday={isWornToday(outfit.id)}
               wearReady={wearReady}
-              onWear={logWear}
+              onWear={wearOutfit}
             />
           ))}
         </section>
@@ -679,7 +701,7 @@ export function OutfitsSection({ items, premiumAllowed = true, provider = null, 
           provider={provider}
           wornToday={isWornToday(viewingOutfit.id)}
           wearReady={wearReady}
-          onWear={logWear}
+          onWear={wearOutfit}
         />
       )}
 

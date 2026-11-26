@@ -90,10 +90,14 @@ export function outfitsApi(options = {}) {
     const hasFullLengthBottom = outfitRecords.some((record) => isLikelyBottom(record) && !isLikelySocks(record) && !isLikelyCroppedOrShortBottom(record));
     const garments = [];
     const garmentMeta = [];
+    // A retired or deleted piece is no longer worn, so it can't be photographed;
+    // the viewer asks for an edit first (which drops it).
+    if (outfit.pieces.some((piece) => { const record = recordsById.get(piece.itemId); return !record || (record.status && record.status !== "active"); })) {
+      throw Object.assign(new Error("Some of this outfit's pieces are no longer in your wardrobe. Edit the outfit first."), { status: 409 });
+    }
     for (const piece of outfit.pieces) {
       const record = recordsById.get(piece.itemId);
       if (hasFullLengthBottom && isLikelySocks(record)) continue;
-      if (!record) throw Object.assign(new Error(`Wardrobe item ${piece.itemId} not found`), { status: 409 });
       const variant = record.variants.find((candidate) => candidate.id === piece.variantId);
       const image = variant && variantApprovedImage(record, piece.variantId);
       if (!image) throw Object.assign(new Error(`Variant ${piece.variantId} of ${piece.itemId} has no approved cutout yet`), { status: 409 });
@@ -232,6 +236,15 @@ export function outfitsApi(options = {}) {
         const existing = outfits.find((outfit) => outfit.id === match[1]);
         if (!existing) return json(res, 404, { error: "Outfit not found" });
         const input = await body(req);
+        // A rename leaves the lineup alone: re-validating it would fail on a
+        // deleted piece, and re-normalizing it could wipe the photo.
+        if (!Object.hasOwn(input, "pieces") && !Object.hasOwn(input, "itemIds")) {
+          const name = typeof input.name === "string" ? input.name.trim().slice(0, 120) : "";
+          if (!name) return json(res, 400, { error: "An outfit name is required" });
+          const renamed = { ...existing, name, updatedAt: new Date().toISOString() };
+          await atomicJson(outfitsFile, outfits.map((outfit) => outfit.id === renamed.id ? renamed : outfit));
+          return json(res, 200, migrateOutfit(renamed, await loadLibrary()));
+        }
         const items = await loadLibrary();
         const value = input.pieces === undefined && Object.hasOwn(input, "itemIds")
           ? { ...existing, ...input, pieces: undefined }

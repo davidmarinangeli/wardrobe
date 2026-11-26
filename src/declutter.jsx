@@ -202,8 +202,10 @@ function Pile({ title, empty, items, onRestore }) {
  * The declutter session.
  *
  * Nothing here deletes anything. A piece leaves the wardrobe you dress from and
- * goes into a pile you can empty at your own pace, or put straight back — the
- * outfits it appears in are history and stay exactly as they were.
+ * goes into a pile you can empty at your own pace, or put straight back. The
+ * outfits it appears in keep it until they are next saved: they show as out of
+ * date, and saving one drops the piece (the owner's call). Restoring the piece
+ * brings it back only to outfits that weren't saved in the meantime.
  */
 export function DeclutterPanel({ wear, itemsById, retiredItems, onSetStatus, onClose, onGoToOutfits }) {
   const closeRef = useRef(null);

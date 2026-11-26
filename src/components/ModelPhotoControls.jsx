@@ -38,7 +38,7 @@ export function useRememberedTier(provider, premiumAllowed) {
  * "Merge ▾". Without `tiers` it is the same pill with no caret, for actions
  * that have no quality to choose (detecting the pieces in a pin).
  */
-export function GenerateButton({ icon, label, busy = false, busyLabel = "Starting…", disabled = false, onGenerate, tier, tiers = null, onTierChange, premiumAllowed = true, block = false, tierStateError = "" }) {
+export function GenerateButton({ icon, label, busy = false, busyLabel = "Starting…", disabled = false, title, onGenerate, tier, tiers = null, onTierChange, premiumAllowed = true, block = false, tierStateError = "" }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   const menuRef = useRef(null);
@@ -61,7 +61,7 @@ export function GenerateButton({ icon, label, busy = false, busyLabel = "Startin
   return (
     <div ref={rootRef} className={`generate-button${block ? " generate-button--block" : ""}`}>
       <div className="generate-button__pill">
-        <button type="button" className="generate-button__main" disabled={disabled || busy} onClick={() => onGenerate(tier)}>
+        <button type="button" className="generate-button__main" disabled={disabled || busy} title={title} onClick={() => onGenerate(tier)}>
           {busy ? <SpinnerGap size={16} className="modeled-photo-spinner" aria-hidden="true" /> : icon}
           {busy ? busyLabel : label}
         </button>
@@ -180,7 +180,7 @@ export function StageError({ message }) {
  * `concealed` hides it without unmounting — while the composer it opened is
  * showing, it is still the shape that composer grows from and shrinks back to.
  */
-export function StageChip({ ref, icon, label, onClick, disabled = false, concealed = false }) {
+export function StageChip({ ref, icon, label, onClick, disabled = false, title, concealed = false }) {
   return (
     <button
       ref={ref}
@@ -188,6 +188,7 @@ export function StageChip({ ref, icon, label, onClick, disabled = false, conceal
       className={`stage-chip${concealed ? " is-concealed" : ""}`}
       onClick={onClick}
       disabled={disabled}
+      title={title}
       aria-hidden={concealed || undefined}
       inert={concealed}
     >
