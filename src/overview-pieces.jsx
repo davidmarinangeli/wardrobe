@@ -115,14 +115,6 @@ export function OverviewPieces({ items, loading = false, error = "", selectedIte
       : evidence);
   };
 
-  const addSelection = (entries) => {
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      entries.forEach((entry) => next.add(entry.id));
-      return next;
-    });
-  };
-
   const applyTagOperation = async ({ addTags = [], removeTags = [] }) => {
     if (saving || !selectedIds.size) return;
     setSaving(true);
@@ -150,8 +142,6 @@ export function OverviewPieces({ items, loading = false, error = "", selectedIte
     void applyTagOperation({ addTags: [tag] });
   };
 
-  const selectAllResults = () => addSelection(results);
-  const selectSection = (section) => addSelection(section.entries);
   const selectedCount = selectedIds.size;
 
   const panel = (mobile = false) => (
@@ -175,11 +165,7 @@ export function OverviewPieces({ items, loading = false, error = "", selectedIte
 
   let cardIndex = 0;
   return (
-    <section className="overview-pieces" aria-labelledby="overview-pieces-title">
-      <header className="overview-panel-head">
-        <h2 id="overview-pieces-title">Pieces <span>{items.length}</span></h2>
-      </header>
-
+    <section className="overview-pieces" aria-label="Pieces">
       <div className="overview-toolbar">
         <div className="overview-search" role="search">
           <MagnifyingGlass size={19} weight="regular" aria-hidden="true" />
@@ -194,15 +180,6 @@ export function OverviewPieces({ items, loading = false, error = "", selectedIte
             spellCheck="false"
           />
           {query && <button type="button" className="overview-search__clear" aria-label="Clear search" onClick={() => setQuery("")}><X size={17} aria-hidden="true" /></button>}
-        </div>
-        <div className="overview-result-row">
-          <div className="overview-result-row__count" aria-live="polite" aria-atomic="true">
-            <strong>{results.length}</strong> {results.length === 1 ? "piece" : "pieces"}
-          </div>
-          <div className="overview-result-row__actions">
-            <button type="button" onClick={selectAllResults} disabled={!results.length}>Select results</button>
-            {selectedCount > 0 && <button type="button" onClick={() => setSelectedIds(new Set())}>Clear selection <span>{selectedCount}</span></button>}
-          </div>
         </div>
         {facet && (
           <div className="overview-active-filter">
@@ -231,9 +208,6 @@ export function OverviewPieces({ items, loading = false, error = "", selectedIte
                   <h3 id={`overview-section-${section.id}`}>{section.label}</h3>
                   <span>{section.count} {section.count === 1 ? "piece" : "pieces"}</span>
                 </div>
-                <button type="button" className="overview-section__select" onClick={() => selectSection(section)}>
-                  Select area
-                </button>
               </header>
               {section.evidence.length > 0 && (
                 <div className="overview-evidence" aria-label={`${section.label} highlights`}>
