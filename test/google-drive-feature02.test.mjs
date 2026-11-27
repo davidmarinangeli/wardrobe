@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomBytes as secureRandomBytes } from "node:crypto";
-import { mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, it } from "node:test";
 import { createServer as createTcpServer } from "node:net";
@@ -16,7 +17,7 @@ const OTHER_ID = "other_12345";
 const CHILD_ID = "child_12345";
 
 async function tempRoot(prefix = "wardrobe-drive-") {
-  const dir = await mkdtemp(path.join("/private/tmp", prefix));
+  const dir = await mkdtemp(path.join(await realpath(tmpdir()), prefix));
   roots.add(dir);
   return dir;
 }

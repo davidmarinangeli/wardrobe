@@ -23,7 +23,9 @@ import { findJudgmentLanguage } from "../shared/prompt-guardrails.mjs";
 import { DEGENERATE, SCENARIOS, WARDROBES, registerSweep } from "./scenarios.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const realWardrobe = JSON.parse(await readFile(path.join(ROOT, "data/library.json"), "utf8"));
+// The personal wardrobe is not in the repo, so a clean checkout (CI) skips it.
+const realWardrobe = await readFile(path.join(ROOT, "data/library.json"), "utf8").then(JSON.parse, () => null);
+const skip = !realWardrobe && "needs data/library.json";
 
 /** A judge that claims everything, at maximum confidence, about every garment. */
 const hostileJudgment = (perception) => ({
@@ -126,7 +128,7 @@ function assertInvariants(critique, perception, wardrobe, label) {
 // The matrix
 // ---------------------------------------------------------------------------
 
-const wardrobes = Object.entries({ ...WARDROBES, real: realWardrobe });
+const wardrobes = Object.entries({ ...WARDROBES, ...(realWardrobe && { real: realWardrobe }) });
 
 test("no claim survives without its evidence, across every scenario and wardrobe", () => {
   for (const scenario of [...SCENARIOS, ...registerSweep()]) {
@@ -156,7 +158,7 @@ test("each scenario's rule holds exactly when the outfit warrants it", () => {
   }
 });
 
-test("a rule that holds is actually reachable — it reaches the user when nothing outranks it", () => {
+test("a rule that holds is actually reachable — it reaches the user when nothing outranks it", { skip }, () => {
   // The companion to the check above: evidence holding is worth nothing if the
   // finding can never make it through ranking and remedy assembly.
   for (const scenario of SCENARIOS) {
@@ -192,7 +194,7 @@ test("degenerate and half-read inputs produce a critique rather than an exceptio
   }
 });
 
-test("an absent judgment is a warm, honest critique rather than a degraded one", () => {
+test("an absent judgment is a warm, honest critique rather than a degraded one", { skip }, () => {
   // This is the path taken when the judge call fails, so it must not look like
   // an error to the person who asked how they look.
   for (const scenario of SCENARIOS) {
@@ -203,7 +205,7 @@ test("an absent judgment is a warm, honest critique rather than a degraded one",
   }
 });
 
-test("the same photo always produces the same critique", () => {
+test("the same photo always produces the same critique", { skip }, () => {
   // The fix search breaks ties on a hash rather than on wardrobe order, so this
   // is the thing that keeps that from becoming "a different answer each time".
   for (const scenario of SCENARIOS) {

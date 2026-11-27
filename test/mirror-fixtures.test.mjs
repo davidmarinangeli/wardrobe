@@ -19,7 +19,10 @@ import { findJudgmentLanguage } from "../shared/prompt-guardrails.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const FIXTURES = path.join(ROOT, "test/fixtures/mirror");
 
-const wardrobe = JSON.parse(await readFile(path.join(ROOT, "data/library.json"), "utf8"));
+// The fixtures are judged against the personal wardrobe, which is not in the
+// repo, so a clean checkout (CI) skips them.
+const wardrobe = await readFile(path.join(ROOT, "data/library.json"), "utf8").then(JSON.parse, () => null);
+const skip = !wardrobe && "needs data/library.json";
 const files = (await readdir(FIXTURES)).filter((file) => file.endsWith(".json")).sort();
 assert.ok(files.length >= 5, "the fixture set should cover more than a couple of outfits");
 
@@ -27,7 +30,7 @@ for (const file of files) {
   const fixture = JSON.parse(await readFile(path.join(FIXTURES, file), "utf8"));
   const { expect } = fixture;
 
-  test(`fixture: ${fixture.name}`, () => {
+  test(`fixture: ${fixture.name}`, { skip }, () => {
     const critique = buildMirrorCritique(fixture.perception, fixture.judgment, wardrobe);
     const ids = critique.issues.map((issue) => issue.id);
 
