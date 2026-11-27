@@ -31,6 +31,11 @@ tauri-plugin-updater = "2.12"
 # OS keychain: macOS Keychain and Windows Credential Manager. Tests use the
 # crate's mock credential store and never touch the real keychain.
 keyring = { version = "3.6", features = ["apple-native", "windows-native"] }
+# Remote access (Feature 07): polls https://<machine>.ts.net/api/health. The
+# same reqwest/rustls/tokio builds tauri-plugin-updater already pulls in.
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
+tokio = { version = "1", features = ["time"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 log = "0.4"

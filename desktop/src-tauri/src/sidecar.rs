@@ -323,7 +323,9 @@ pub fn build_launch(inputs: LaunchInputs<'_>) -> LaunchSpec {
             config.port,
             inputs.data_dir,
             inputs.cache_dir,
-            &config.allowed_hosts,
+            // The configured hosts plus the tailnet name while remote access
+            // is on (Feature 07).
+            &config.effective_allowed_hosts(),
         ),
         env: build_env(inputs.inherited_env, config, &inputs.secrets),
         cwd: inputs.cwd.to_path_buf(),
@@ -1422,6 +1424,52 @@ mod tests {
         assert_eq!(spec.port, 5190);
         assert!(spec.args.iter().any(|a| a == "5190"));
         assert_eq!(spec.cwd, PathBuf::from("/d"));
+    }
+
+    #[test]
+    fn remote_access_adds_the_tailnet_name_to_the_allowed_hosts() {
+        let layout = ServerLayout::Dev {
+            repo_root: PathBuf::from("/repo"),
+        };
+        let launch = |config: &DesktopConfig| {
+            let spec = build_launch(LaunchInputs {
+                layout: &layout,
+                config,
+                data_dir: Path::new("/d"),
+                cache_dir: Path::new("/c"),
+                cwd: Path::new("/d"),
+                inherited_env: vec![],
+                secrets: vec![],
+            });
+            spec.args
+                .into_iter()
+                .map(|a| a.to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+        };
+        let mut config = DesktopConfig {
+            remote_host: Some("wardrobe-mac.tail1234.ts.net".into()),
+            ..Default::default()
+        };
+        // Recorded but off: no --allowed-hosts at all.
+        assert!(!launch(&config).iter().any(|a| a == "--allowed-hosts"));
+        config.remote_access = true;
+        let args = launch(&config);
+        assert_eq!(
+            &args[args.len() - 2..],
+            ["--allowed-hosts", "wardrobe-mac.tail1234.ts.net"]
+        );
+        // Still bound to the loopback address only.
+        let host = args.iter().position(|a| a == "--host").unwrap();
+        assert_eq!(args[host + 1], "127.0.0.1");
+        config.allowed_hosts = vec![".example.test".into()];
+        let args = launch(&config);
+        assert_eq!(
+            &args[args.len() - 2..],
+            [
+                "--allowed-hosts",
+                ".example.test,wardrobe-mac.tail1234.ts.net"
+            ]
+        );
     }
 
     #[test]

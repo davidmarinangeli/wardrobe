@@ -130,8 +130,8 @@ The installed bundle is never written to.
 ## Control panel
 
 The control window (tray › Settings…) has the sections Status, AI provider,
-Storage, Google Drive, General, Updates, plus a placeholder for Remote access
-(Feature 07). It replaces `.env` editing:
+Storage, Google Drive, General, Remote access and Updates. It replaces `.env`
+editing:
 
 - API keys and the Google Drive client secret go to the OS keychain and reach
   the server only as environment variables. The panel only ever sees
@@ -143,6 +143,12 @@ Storage, Google Drive, General, Updates, plus a placeholder for Remote access
   reloads when it is back.
 - **Import existing data…** runs `import-data` (Feature 02) with the sidecar's
   Node while the server is stopped, then starts it again.
+- **Remote access** drives `tailscale serve --bg --https=443
+  http://127.0.0.1:<port>` and passes the machine's `*.ts.net` name to the
+  server in `--allowed-hosts`; it shows the URL, a QR code and a health check
+  through the tailnet. User guide: [docs/tailscale-remote-access.md](../docs/tailscale-remote-access.md).
+  `WARDROBE_DESKTOP_TAILSCALE=<path>` overrides where the Tailscale CLI is
+  looked for.
 
 On macOS, an unsigned build changes its signature with every update, so the
 Keychain asks "Wardrobe wants to use your confidential information" once per
@@ -199,7 +205,9 @@ npm test                         # build-script tests (no network), then the
                                  # control-panel tests (Vitest, jsdom, mocked IPC)
 npm run build                    # control panel, needed once by cargo
 cd src-tauri && cargo test       # config, secrets (keyring mock store), sidecar,
-                                 # storage, updater state machine (mocked updater);
+                                 # storage, updater state machine (mocked updater),
+                                 # Tailscale status/serve parsing (fixtures in
+                                 # src-tauri/fixtures/tailscale, scripted CLI);
                                  # lifecycle and import-data tests run the
                                  # real server with node from PATH and the root dist/
 ```

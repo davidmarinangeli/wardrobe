@@ -23,13 +23,19 @@ export const cacheClearModels = () => invoke("cache_clear_models");
 export const pickDirectory = (title, start) => invoke("pick_directory", { title: title ?? null, start: start ?? null });
 /** `location`: "data" | "cache" | "logs" | "config". */
 export const revealLocation = (location) => invoke("reveal_location", { location });
-/** `topic`: "google-drive" | "releases". */
+/** `topic`: "google-drive" | "releases" | "remote-access" | "tailscale-download" | "tailscale-dns". */
 export const openHelp = (topic) => invoke("open_help", { topic });
 export const updateState = () => invoke("update_state");
 export const updateCheck = () => invoke("update_check");
 export const updateInstall = () => invoke("update_install");
 /** A version skips it; `null` stops skipping. */
 export const updateSkip = (version) => invoke("update_skip", { version: version ?? null });
+/** Remote access (Feature 07): Tailscale status, enable/disable, the URL, and a health poll through the tailnet. */
+export const tailscaleStatus = () => invoke("tailscale_status");
+export const tailscaleEnable = () => invoke("tailscale_enable");
+export const tailscaleDisable = () => invoke("tailscale_disable");
+export const tailscaleUrl = () => invoke("tailscale_url");
+export const tailscaleHealth = (timeoutSecs) => invoke("tailscale_health", { timeoutSecs: timeoutSecs ?? null });
 
 /** Calls `handler(state)` on every `server-state` event. Returns an unsubscribe function. */
 export function onServerState(handler) {

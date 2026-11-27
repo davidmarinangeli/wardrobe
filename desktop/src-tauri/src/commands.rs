@@ -19,6 +19,7 @@ use crate::config::{ConfigPatch, DesktopConfig};
 use crate::secrets::{self, SecretStatus};
 use crate::sidecar::{self, Health, ImportOutcome, LogLine, ServerState};
 use crate::storage::{self, CacheStatus};
+use crate::tailscale::{self, RemoteHealth, RemoteStatus};
 use crate::updates::{UpdateManager, UpdateStatus};
 use crate::{windows, AppState};
 
@@ -91,19 +92,28 @@ pub fn get_config(state: State<'_, AppState>) -> ConfigView {
 
 /// Applies a partial update, saves it, and restarts the server when a
 /// setting it reads changed (port, directories, allowed hosts, overrides,
-/// provider). Resolves after the restart.
+/// provider). Resolves after the restart. With remote access on, a new port
+/// also moves the `tailscale serve` rule.
 #[tauri::command]
 pub async fn set_config(app: AppHandle, patch: ConfigPatch) -> Result<ConfigView, String> {
-    let restart = {
+    let (restart, port_moved) = {
         let state = app.state::<AppState>();
         let current = state.config();
         let (next, restart) = current.apply(patch)?;
+        let port_moved = next.port != current.port && next.remote_access;
         crate::save_config(&app, &next)?;
         state.replace_config(next);
-        restart
+        (restart, port_moved)
     };
     if restart {
         restart_server(app.clone()).await?;
+    }
+    if port_moved {
+        // Remote access is on: point `tailscale serve` at the new port.
+        let handle = app.clone();
+        tauri::async_runtime::spawn_blocking(move || crate::reapply_remote_serve(&handle))
+            .await
+            .map_err(|e| e.to_string())?;
     }
     Ok(config_view(&app.state::<AppState>()))
 }
@@ -292,13 +302,17 @@ pub fn reveal_location(app: AppHandle, location: String) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-/// Opens a fixed help page in the default browser: `google-drive` or
-/// `releases`.
+/// Opens a fixed help page in the default browser: `google-drive`,
+/// `releases`, `remote-access`, `tailscale-download` or `tailscale-dns`
+/// (the admin console page with MagicDNS and HTTPS Certificates).
 #[tauri::command]
 pub fn open_help(app: AppHandle, topic: String) -> Result<(), String> {
     let url = match topic.as_str() {
         "google-drive" => format!("{REPO_URL}/blob/main/docs/google-drive-operations.md"),
         "releases" => format!("{REPO_URL}/releases"),
+        "remote-access" => format!("{REPO_URL}/blob/main/docs/tailscale-remote-access.md"),
+        "tailscale-download" => tailscale::DOWNLOAD_URL.to_string(),
+        "tailscale-dns" => tailscale::ADMIN_DNS_URL.to_string(),
         other => return Err(format!("unknown help topic {other:?}")),
     };
     app.opener()
@@ -366,4 +380,77 @@ where
     tauri::async_runtime::spawn_blocking(move || rx.recv().unwrap_or_else(|e| Err(e.to_string())))
         .await
         .map_err(|e| e.to_string())?
+}
+
+// ---------------------------------------------------------------------------
+// Remote access through Tailscale (Feature 07)
+// ---------------------------------------------------------------------------
+
+/// Tailscale's state on this computer and whether `https://<name>/` points at
+/// Wardrobe. Runs `tailscale status --json` and `tailscale serve status --json`.
+#[tauri::command]
+pub async fn tailscale_status(app: AppHandle) -> RemoteStatus {
+    let handle = app.clone();
+    match tauri::async_runtime::spawn_blocking(move || crate::remote_status(&handle)).await {
+        Ok(status) => status,
+        Err(error) => {
+            let config = app.state::<AppState>().config();
+            let mut status = RemoteStatus::new(
+                tailscale::TailscaleState::Unavailable,
+                config.port,
+                config.remote_access,
+                config.remote_host.as_deref(),
+            );
+            status.message = Some(error.to_string());
+            status
+        }
+    }
+}
+
+/// Turns remote access on (`tailscale serve --bg --https=443
+/// http://127.0.0.1:<port>`) and restarts the server with the tailnet name
+/// in its allowed hosts. `Err` explains what to fix (not logged in, MagicDNS
+/// or HTTPS off, …); nothing changed in that case.
+#[tauri::command]
+pub async fn tailscale_enable(app: AppHandle) -> Result<RemoteStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::enable_remote(&app))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Turns remote access off (`tailscale serve --https=443 off`) and restarts
+/// the server without the tailnet name. A Tailscale problem comes back in
+/// `message`; Wardrobe stops accepting the name regardless.
+#[tauri::command]
+pub async fn tailscale_disable(app: AppHandle) -> Result<RemoteStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::disable_remote(&app))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// `https://<machine>.<tailnet>.ts.net/` while remote access is on, else `None`.
+#[tauri::command]
+pub fn tailscale_url(state: State<'_, AppState>) -> Option<String> {
+    state.config().remote_url()
+}
+
+/// Polls `https://<name>/api/health` through Tailscale until Wardrobe answers
+/// or `timeout_secs` (default 60, at most 120) pass. The first request can
+/// take a few seconds while Tailscale issues the certificate.
+#[tauri::command]
+pub async fn tailscale_health(
+    app: AppHandle,
+    timeout_secs: Option<u64>,
+) -> Result<RemoteHealth, String> {
+    let config = app.state::<AppState>().config();
+    let url = config
+        .remote_url()
+        .ok_or("Remote access is off.".to_string())?;
+    let timeout = timeout_secs
+        .map(|s| Duration::from_secs(s.clamp(1, 120)))
+        .unwrap_or(tailscale::HEALTH_TIMEOUT);
+    Ok(
+        tailscale::probe_remote_health(&url, config.port, timeout, tailscale::HEALTH_INTERVAL)
+            .await,
+    )
 }

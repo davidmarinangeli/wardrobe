@@ -6,7 +6,8 @@ import * as api from "./api.js";
 import { useServerState, useUpdateStatus } from "./hooks.js";
 import { AiSection } from "./sections/AiSection.jsx";
 import { DriveSection } from "./sections/DriveSection.jsx";
-import { GeneralSection, PlaceholderSection } from "./sections/GeneralSection.jsx";
+import { GeneralSection } from "./sections/GeneralSection.jsx";
+import { RemoteSection } from "./sections/RemoteSection.jsx";
 import { StatusSection } from "./sections/StatusSection.jsx";
 import { StorageSection } from "./sections/StorageSection.jsx";
 import { UpdatesSection } from "./sections/UpdatesSection.jsx";
@@ -111,7 +112,7 @@ export function App() {
         {section === "storage" && <StorageSection {...props} />}
         {section === "drive" && <DriveSection {...props} />}
         {section === "general" && <GeneralSection {...props} />}
-        {section === "remote" && <PlaceholderSection id="remote" title="Remote access" />}
+        {section === "remote" && <RemoteSection {...props} />}
         {section === "updates" && <UpdatesSection updates={updates} onStatus={setUpdates} info={info} />}
       </main>
     </div>

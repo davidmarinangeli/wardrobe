@@ -1,0 +1,19 @@
+{
+  "TCP": {
+    "443": {
+      "HTTPS": true
+    }
+  },
+  "Web": {
+    "wardrobe-mac.tail1234.ts.net:443": {
+      "Handlers": {
+        "/": {
+          "Proxy": "http://127.0.0.1:3000"
+        }
+      }
+    }
+  },
+  "AllowFunnel": {
+    "wardrobe-mac.tail1234.ts.net:443": true
+  }
+}

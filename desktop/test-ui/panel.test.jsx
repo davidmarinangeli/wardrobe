@@ -82,6 +82,7 @@ function fakeBackend({ hasKey = true, update = UP_TO_DATE, checkResult = AVAILAB
         updateStatus = { ...updateStatus, state: "ready", version: updateStatus.version };
         return updateStatus;
       case "open_help": return null;
+      case "tailscale_status": return { state: "notInstalled", enabled: false, port: 5173, served: false, funnel: false, magicDns: false, https: false, online: false, url: null, message: null, health: [] };
       case "cache_status": return { cache_dir: "/u/cache", transformers: { path: "/u/cache/transformers", exists: false, bytes: 0 }, drapes: { path: "/u/cache/drapes", exists: false, bytes: 0 } };
       case "set_config": {
         const patch = args.patch;
@@ -269,11 +270,12 @@ describe("control panel", () => {
     expect(container.textContent).toContain("Port 5174 is in use by another program.");
   });
 
-  it("renders the placeholder for remote access", async () => {
+  it("renders the remote access section (details in remote.test.jsx)", async () => {
     fakeBackend();
     await render(<App />);
     await click(byText("button.rail__item", "Remote access"));
-    expect(container.textContent).toContain("Coming in a later version.");
+    expect(container.textContent).not.toContain("Coming in a later version.");
+    expect(container.querySelector('[data-testid="tailscale-state"]').textContent).toBe("Tailscale is not installed on this computer.");
   });
 });
 

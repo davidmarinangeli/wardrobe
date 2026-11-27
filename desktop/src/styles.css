@@ -113,6 +113,11 @@ textarea { width: 100%; font: 12.5px/1.5 ui-monospace, SFMono-Regular, Consolas,
 .result p { margin: 0; }
 .plain { margin: 0; padding-left: 18px; }
 .advanced summary { cursor: pointer; font-weight: 600; }
+.remote-url { font-size: 14px; word-break: break-all; user-select: all; }
+.remote-qr { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.remote-qr p { margin: 0; max-width: 260px; }
+.qr { border-radius: 8px; border: 1px solid var(--border); flex: none; }
+.troubleshooting li + li { margin-top: 6px; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 @media (max-width: 640px) {

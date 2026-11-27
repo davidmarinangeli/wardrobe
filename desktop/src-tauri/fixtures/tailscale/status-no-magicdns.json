@@ -1,0 +1,31 @@
+{
+  "Version": "1.104.6-t3b273a64c-gdf9d2ed85",
+  "TUN": true,
+  "BackendState": "Running",
+  "HaveNodeKey": true,
+  "AuthURL": "",
+  "TailscaleIPs": ["100.101.102.103", "fd7a:115c:a1e0::1"],
+  "Self": {
+    "ID": "nTEST1CNTRL",
+    "PublicKey": "nodekey:1111111111111111111111111111111111111111111111111111111111111111",
+    "HostName": "wardrobe-mac",
+    "DNSName": "wardrobe-mac.tail1234.ts.net.",
+    "OS": "windows",
+    "UserID": 1001,
+    "TailscaleIPs": ["100.101.102.103", "fd7a:115c:a1e0::1"],
+    "Online": true,
+    "Active": false
+  },
+  "Health": [],
+  "MagicDNSSuffix": "tail1234.ts.net",
+  "CurrentTailnet": {
+    "Name": "example.github",
+    "StableID": "TEST1",
+    "MagicDNSSuffix": "tail1234.ts.net",
+    "MagicDNSEnabled": false
+  },
+  "CertDomains": null,
+  "Peer": {},
+  "User": {},
+  "ClientVersion": null
+}

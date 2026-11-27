@@ -1,3 +1,19 @@
+/**
+ * Shown instead of the Connect button when Wardrobe is opened from another
+ * device (desktop Feature 07, Tailscale): the Google sign-in returns to
+ * http://localhost:<port>, which only exists on the computer that runs it.
+ */
+export const GOOGLE_DRIVE_REMOTE_CONNECT_NOTICE = "Collega Google Drive dal computer su cui è in esecuzione Wardrobe.";
+
+/**
+ * True when the page was not opened on this computer: any hostname except
+ * localhost, 127.0.0.1 and [::1] (for example the machine's *.ts.net name).
+ */
+export function isRemoteHostname(hostname) {
+  const value = String(hostname ?? "").trim().toLowerCase().replace(/\.$/, "");
+  return !["localhost", "127.0.0.1", "[::1]", "::1"].includes(value);
+}
+
 export const GOOGLE_DRIVE_OUTAGE_NOTICE = "Google Drive non è raggiungibile. Le modifiche restano salvate sul computer e verranno caricate su Drive appena torna la connessione.";
 
 const SAFE_ERRORS = Object.freeze({

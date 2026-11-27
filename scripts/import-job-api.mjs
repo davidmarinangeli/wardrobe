@@ -13,6 +13,7 @@ import { inspectArchiveCatalogs, migrateCatalogAssetPaths, prepareArchiveDirecto
 import { markBrowserStateFields } from "./browser-state-api.mjs";
 import { createArchiveRequestHandler, trackArchivePromise, withArchiveWriteLease } from "./archive-coordinator.mjs";
 import { resolveCacheDir, resolveTransformersCacheDir } from "./runtime-config.mjs";
+import { isSameOriginRequest } from "./same-origin.mjs";
 
 const API_ROOT = "/api/import/jobs";
 const ASSET_ROOT = "/api/import/assets";
@@ -52,20 +53,10 @@ async function body(req, limit = 25 * 1024 * 1024) {
   catch { throw Object.assign(new Error("Expected a JSON request body"), { status: 400 }); }
 }
 
-/**
- * Whether a state-changing request came from a page served by this same server.
- * The dev server listens on every interface and these endpoints carry no
- * credentials, so without this any website open in the same browser could
- * POST to localhost and swap the AI keys, the provider or the reference photo.
- * Browsers always send Origin on POST; a request without one is refused.
- */
-export function isSameOriginRequest(req) {
-  const origin = req.headers?.origin;
-  const host = req.headers?.host;
-  if (typeof origin !== "string" || typeof host !== "string") return false;
-  try { return new URL(origin).host === host; }
-  catch { return false; }
-}
+// Whether a state-changing request came from a page served by this same
+// server (Host or, behind `tailscale serve`, X-Forwarded-Host). See
+// scripts/same-origin.mjs; re-exported here for existing importers.
+export { isSameOriginRequest };
 
 function publicJob(job) {
   const copy = structuredClone(job);

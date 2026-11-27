@@ -56,11 +56,3 @@ export function GeneralSection({ config, info, onConfigChanged }) {
     </Section>
   );
 }
-
-export function PlaceholderSection({ id, title }) {
-  return (
-    <Section id={id} title={title}>
-      <p className="muted">Coming in a later version.</p>
-    </Section>
-  );
-}

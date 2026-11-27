@@ -1,0 +1,18 @@
+{
+  "Version": "1.104.6-t3b273a64c-gdf9d2ed85",
+  "BackendState": "Running",
+  "Self": {
+    "HostName": "wardrobe-mac",
+    "DNSName": "wardrobe-mac.tail1234.ts.net.",
+    "OS": "windows",
+    "Online": true
+  },
+  "Health": ["Tailscale could not connect to the DERP relay"],
+  "MagicDNSSuffix": "tail1234.ts.net",
+  "CurrentTailnet": {
+    "Name": "example.github",
+    "MagicDNSSuffix": "tail1234.ts.net",
+    "MagicDNSEnabled": true
+  },
+  "CertDomains": null
+}

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ArrowClockwise, CloudArrowDown, CloudArrowUp, Folder, HardDrive, LinkSimple, SignOut, SpinnerGap, User, X } from "@phosphor-icons/react";
-import { createGoogleDriveStorageController, formatArchiveBytes, formatBackupDate, GOOGLE_DRIVE_OUTAGE_NOTICE } from "./google-drive-storage.js";
+import { createGoogleDriveStorageController, formatArchiveBytes, formatBackupDate, GOOGLE_DRIVE_OUTAGE_NOTICE, GOOGLE_DRIVE_REMOTE_CONNECT_NOTICE, isRemoteHostname } from "./google-drive-storage.js";
 import "./google-drive-storage.css";
 
 const STAGE_COPY = {
@@ -228,6 +228,9 @@ export function ArchiveSettings({ controller, snapshot, open }) {
   // started from another tab. Say so instead of leaving every control grey.
   const otherOperation = Boolean(status?.maintenance.active && !restore?.active && restore?.stage !== "complete");
   const backup = backupState(status);
+  // Opened from a phone or another computer (Tailscale): the Google sign-in
+  // would return to localhost on that device, so Connect is not offered.
+  const remote = typeof window !== "undefined" && isRemoteHostname(window.location.hostname);
   const syncing = Boolean(status?.backupEnabled && (status.syncState === "syncing" || status.syncCurrentFiles < status.syncTotalFiles));
 
   useEffect(() => {
@@ -351,7 +354,10 @@ export function ArchiveSettings({ controller, snapshot, open }) {
           </div>
         ) : <p className="drive-hint">Nessun account collegato.</p>}
         {(status && (!status.connected || status.reconnectRequired) || needsVerify) && <div className="drive-actions">
-          {status && (!status.connected || status.reconnectRequired) && (
+          {status && (!status.connected || status.reconnectRequired) && remote && (
+            <p className="drive-hint" data-testid="drive-remote-connect">{GOOGLE_DRIVE_REMOTE_CONNECT_NOTICE}</p>
+          )}
+          {status && (!status.connected || status.reconnectRequired) && !remote && (
             <button className="primary-button" type="button" disabled={accountLocked} aria-busy={busy === "connect"} onClick={() => void controller.startOAuth()}>
               {busy === "connect" ? spinner : <LinkSimple size={15} aria-hidden="true" />}
               {status?.reconnectRequired ? "Ricollega account" : "Collega account"}

@@ -30,6 +30,11 @@
     "allow-update-state",
     "allow-update-check",
     "allow-update-install",
-    "allow-update-skip"
+    "allow-update-skip",
+    "allow-tailscale-status",
+    "allow-tailscale-enable",
+    "allow-tailscale-disable",
+    "allow-tailscale-url",
+    "allow-tailscale-health"
   ]
 }

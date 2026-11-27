@@ -5,6 +5,7 @@ import { getGoogleDriveSyncWorker } from "./google-drive-sync.mjs";
 import { hasGoogleDrivePrivatePathComponent } from "./google-drive-private-path.mjs";
 import { createArchiveAdmissionMiddleware, ensureArchiveRecovered, setArchiveRecovery } from "./archive-coordinator.mjs";
 import { createGoogleDriveArchiveManager, recoverArchiveRestore } from "./archive-restore.mjs";
+import { isForwardedSameOriginRequest } from "./same-origin.mjs";
 
 const COOKIE_NAME = "wardrobe_google_oauth_nonce";
 const workerCloseWrappedServers = new WeakSet();
@@ -314,6 +315,15 @@ function sameOrigin(req, service) {
   catch { return false; }
 }
 
+// Control POSTs other than OAuth start also accept a page reached through a
+// reverse proxy that names itself in X-Forwarded-Host (`tailscale serve`,
+// desktop Feature 07), so Settings › Archive stays usable from a phone. OAuth
+// start stays bound to the callback origin: its nonce cookie and the Google
+// redirect only work there.
+function sameOriginOrProxied(req, service) {
+  return sameOrigin(req, service) || isForwardedSameOriginRequest(req);
+}
+
 export function googleDriveApi(options = {}) {
   let service;
   let root;
@@ -371,7 +381,7 @@ export function googleDriveApi(options = {}) {
           const status = await service.getStatus();
           throw new GoogleDriveError(status.error?.code || "configuration_incomplete");
         }
-        if (!sameOrigin(req, service)) throw new GoogleDriveError("cross_origin_request", "Cross-origin request rejected", { status: 403 });
+        if (!sameOriginOrProxied(req, service)) throw new GoogleDriveError("cross_origin_request", "Cross-origin request rejected", { status: 403 });
         const body = await readJsonBody(req);
         if (previewRoutes.has(route)) return json(res, 200, await archiveManager.preview(previewRoutes.get(route)));
         if (choiceRoutes.has(route)) return json(res, 202, await archiveManager.choose({ ...body, operation: choiceRoutes.get(route) }));
@@ -411,7 +421,8 @@ export function googleDriveApi(options = {}) {
         const code = status.error?.code || (status.state === "configuration_invalid" ? "configuration_invalid" : "configuration_incomplete");
         throw new GoogleDriveError(code);
       }
-      if (!sameOrigin(req, service)) throw new GoogleDriveError("cross_origin_request", "Cross-origin request rejected", { status: 403 });
+      const allowed = route === "/api/google-drive/oauth/start" ? sameOrigin(req, service) : sameOriginOrProxied(req, service);
+      if (!allowed) throw new GoogleDriveError("cross_origin_request", "Cross-origin request rejected", { status: 403 });
       await readJsonBody(req);
 
       if (route === "/api/google-drive/oauth/start") {

@@ -212,6 +212,10 @@ On macOS, after an update the Keychain may ask once per key whether Wardrobe can
 
 Wardrobe checks for a new version shortly after it starts and every six hours. When one is out, **Settings › Updates** shows what changed, and the menu bar or tray item changes to **Update to vX.Y.Z…**. Click **Install and restart** to update; nothing is installed until you do, and **Skip this version** stops the reminders until the next release. Your wardrobe, settings and keys are kept. On Windows a small installer progress window appears for a few seconds.
 
+### Use it from your phone
+
+With [Tailscale](https://tailscale.com) on the computer and the phone, **Settings › Remote access › Enable remote access** publishes Wardrobe at an HTTPS address only your tailnet can open, with a QR code to scan. Keys and settings stay on the computer. Setup and limits: [docs/tailscale-remote-access.md](docs/tailscale-remote-access.md).
+
 ### Where your data lives
 
 | | macOS | Windows |

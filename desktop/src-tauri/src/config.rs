@@ -103,6 +103,13 @@ pub struct DesktopConfig {
     pub google_drive: GoogleDriveConfig,
     /// Open Wardrobe in the app window or the default browser at launch.
     pub open_wardrobe_in: OpenTarget,
+    /// Remote access through `tailscale serve` is on (Feature 07). Only the
+    /// `tailscale_enable` and `tailscale_disable` commands change it.
+    pub remote_access: bool,
+    /// The machine's tailnet DNS name (`mac.tail1234.ts.net`) recorded when
+    /// remote access was turned on, refreshed at launch. Passed to the server
+    /// in `--allowed-hosts` while `remote_access` is on.
+    pub remote_host: Option<String>,
 }
 
 impl Default for DesktopConfig {
@@ -118,6 +125,8 @@ impl Default for DesktopConfig {
             provider: None,
             google_drive: GoogleDriveConfig::default(),
             open_wardrobe_in: OpenTarget::Window,
+            remote_access: false,
+            remote_host: None,
         }
     }
 }
@@ -175,6 +184,30 @@ impl DesktopConfig {
         self.cache_dir
             .clone()
             .unwrap_or_else(|| dirs.default_cache_dir())
+    }
+
+    /// The `--allowed-hosts` entries: the configured ones, plus the tailnet
+    /// name while remote access is on.
+    pub fn effective_allowed_hosts(&self) -> Vec<String> {
+        let mut hosts = self.allowed_hosts.clone();
+        if self.remote_access {
+            if let Some(host) = &self.remote_host {
+                if !hosts.iter().any(|h| h.eq_ignore_ascii_case(host)) {
+                    hosts.push(host.clone());
+                }
+            }
+        }
+        hosts
+    }
+
+    /// The URL a phone opens while remote access is on: `https://<remote_host>/`.
+    pub fn remote_url(&self) -> Option<String> {
+        if !self.remote_access {
+            return None;
+        }
+        self.remote_host
+            .as_ref()
+            .map(|host| format!("https://{host}/"))
     }
 
     /// The redirect URI the server gets: the stored one, or the port default.
@@ -260,6 +293,9 @@ impl DesktopConfig {
         for host in &self.allowed_hosts {
             validate_host(host)?;
         }
+        if let Some(host) = &self.remote_host {
+            validate_host(host)?;
+        }
         validate_overrides(&self.overrides)?;
         if let Some(provider) = &self.provider {
             if !PROVIDERS.contains(&provider.as_str()) {
@@ -340,6 +376,7 @@ impl DesktopConfig {
             || self.overrides != other.overrides
             || self.provider != other.provider
             || self.google_drive != other.google_drive
+            || self.effective_allowed_hosts() != other.effective_allowed_hosts()
     }
 }
 
@@ -520,6 +557,49 @@ mod tests {
     }
 
     #[test]
+    fn remote_access_fields() {
+        let mut config = DesktopConfig::default();
+        assert!(!config.remote_access && config.remote_host.is_none());
+        assert_eq!(config.remote_url(), None);
+        config.remote_host = Some("wardrobe-mac.tail1234.ts.net".into());
+        assert!(
+            config.effective_allowed_hosts().is_empty(),
+            "off: not allowed"
+        );
+        assert_eq!(config.remote_url(), None);
+        let mut on = config.clone();
+        on.remote_access = true;
+        assert_eq!(
+            on.effective_allowed_hosts(),
+            ["wardrobe-mac.tail1234.ts.net"]
+        );
+        assert_eq!(
+            on.remote_url().as_deref(),
+            Some("https://wardrobe-mac.tail1234.ts.net/")
+        );
+        assert!(
+            on.affects_server(&config),
+            "turning it on restarts the server"
+        );
+        on.allowed_hosts = vec!["WARDROBE-MAC.tail1234.ts.net".into()];
+        assert_eq!(on.effective_allowed_hosts().len(), 1, "no duplicate entry");
+        // A patch from the panel never touches the remote fields.
+        let (patched, _) = on
+            .apply(ConfigPatch {
+                start_hidden: Some(true),
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(patched.remote_access);
+        assert_eq!(patched.remote_host, on.remote_host);
+        // An invalid stored name is ignored with a warning.
+        let entries = [("remote_host".to_string(), json!("bad host/name"))];
+        let (loaded, warnings) = DesktopConfig::from_entries(entries.iter().map(|(k, v)| (k, v)));
+        assert_eq!(loaded.remote_host, None);
+        assert_eq!(warnings.len(), 1);
+    }
+
+    #[test]
     fn round_trips_through_store_entries() {
         let config = DesktopConfig {
             port: 5174,
@@ -539,6 +619,8 @@ mod tests {
                 folder_id: "1AbCdEfGhIjK".into(),
             },
             open_wardrobe_in: OpenTarget::Browser,
+            remote_access: true,
+            remote_host: Some("wardrobe-mac.tail1234.ts.net".into()),
         };
         let entries: Map<String, Value> = config.to_entries().into_iter().collect();
         let keys: Vec<&str> = entries.keys().map(String::as_str).collect();
@@ -553,6 +635,8 @@ mod tests {
             "provider",
             "google_drive",
             "open_wardrobe_in",
+            "remote_access",
+            "remote_host",
         ] {
             assert!(keys.contains(&key), "missing store key {key}");
         }

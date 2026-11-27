@@ -29,6 +29,11 @@ const COMMANDS: &[&str] = &[
     "update_check",
     "update_install",
     "update_skip",
+    "tailscale_status",
+    "tailscale_enable",
+    "tailscale_disable",
+    "tailscale_url",
+    "tailscale_health",
 ];
 
 const PLACEHOLDER: &str = "Placeholder written by build.rs for debug builds. Run `npm run prepare:app` in desktop/ to produce the real file.\n";

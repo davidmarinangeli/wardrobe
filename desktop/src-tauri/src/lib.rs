@@ -7,6 +7,7 @@ pub mod config;
 pub mod secrets;
 pub mod sidecar;
 pub mod storage;
+pub mod tailscale;
 pub mod updates;
 pub mod windows;
 
@@ -28,6 +29,7 @@ use sidecar::{
     ImportOutcome, LaunchInputs, LaunchSpec, LogBuffer, ServerLayout, ServerState, SidecarManager,
     Timing,
 };
+use tailscale::{CliRunner, ProcessCli, RemoteStatus};
 use updates::{InstallHost, Persisted, PluginBackend, UpdateCore, UpdateManager, UpdateStatus};
 
 /// Passed by the autostart entry: start in the tray without opening a window.
@@ -50,6 +52,8 @@ pub struct AppState {
     /// so a restart requested meanwhile (a key, a setting, the Restart button)
     /// cannot start the server in the middle of an import or a cache clear.
     lifecycle: Mutex<()>,
+    /// Serializes Tailscale enable, disable and the launch-time re-check.
+    remote: Mutex<()>,
     /// Open the Wardrobe window the first time the server is ready (cleared once used).
     auto_open_wardrobe: AtomicBool,
 }
@@ -242,6 +246,185 @@ pub fn clear_model_cache(app: &AppHandle) -> Result<(), String> {
             .app(&format!("clearing the model cache in {}", cache.display()));
         storage::clear_model_cache(&cache)
     })
+}
+
+// ---------------------------------------------------------------------------
+// Remote access through Tailscale (Feature 07)
+// ---------------------------------------------------------------------------
+
+const TAILSCALE_NOT_FOUND: &str =
+    "Tailscale is not installed on this computer. Install it from https://tailscale.com/download and log in, then try again.";
+
+fn remote_guard(state: &AppState) -> std::sync::MutexGuard<'_, ()> {
+    state.remote.lock().unwrap_or_else(|p| p.into_inner())
+}
+
+/// The Tailscale CLI, when installed.
+fn tailscale_cli() -> Option<ProcessCli> {
+    tailscale::locate_installed_cli().map(|path| ProcessCli { path })
+}
+
+/// Saves a config change made by the remote-access code and restarts the
+/// server when the allowed hosts changed. Blocking.
+fn apply_remote_config(app: &AppHandle, next: DesktopConfig) -> Result<(), String> {
+    next.validate()?;
+    let state = app.state::<AppState>();
+    let restart = next.affects_server(&state.config());
+    save_config(app, &next)?;
+    state.replace_config(next);
+    if restart {
+        restart_sidecar(app);
+    }
+    Ok(())
+}
+
+/// The Remote access screen's status (blocking: runs the CLI).
+pub fn remote_status(app: &AppHandle) -> RemoteStatus {
+    let config = app.state::<AppState>().config();
+    let cli = tailscale_cli();
+    tailscale::query_status(
+        cli.as_ref().map(|c| c as &dyn CliRunner),
+        config.port,
+        config.remote_access,
+        config.remote_host.as_deref(),
+    )
+}
+
+/// Turns remote access on: `tailscale serve --bg --https=443
+/// http://127.0.0.1:<port>`, then records the tailnet name and restarts the
+/// server with it in `--allowed-hosts`. Blocking.
+pub fn enable_remote(app: &AppHandle) -> Result<RemoteStatus, String> {
+    let state = app.state::<AppState>();
+    let _remote = remote_guard(&state);
+    let cli = tailscale_cli().ok_or(TAILSCALE_NOT_FOUND)?;
+    let port = state.config().port;
+    let logs = state.sidecar.logs();
+    let dns_name = tailscale::enable(&cli, port).inspect_err(|error| {
+        logs.app(&format!("remote access: enabling failed: {error}"));
+    })?;
+    logs.app(&format!(
+        "remote access on: https://{dns_name}/ -> {}",
+        tailscale::local_target(port)
+    ));
+    let mut next = state.config();
+    next.remote_access = true;
+    next.remote_host = Some(dns_name);
+    apply_remote_config(app, next)?;
+    Ok(remote_status(app))
+}
+
+/// Turns remote access off: `tailscale serve --https=443 off` (only when the
+/// rule is ours), then restarts the server without the tailnet name. Wardrobe
+/// stops accepting the name even when Tailscale cannot be reached; the
+/// problem is then reported in `message`. Blocking.
+pub fn disable_remote(app: &AppHandle) -> Result<RemoteStatus, String> {
+    let state = app.state::<AppState>();
+    let _remote = remote_guard(&state);
+    let config = state.config();
+    let logs = state.sidecar.logs();
+    let problem = match tailscale_cli() {
+        Some(cli) => tailscale::disable(&cli, config.remote_host.as_deref(), config.port).err(),
+        None => {
+            Some("Tailscale was not found, so its serve rule could not be removed.".to_string())
+        }
+    };
+    match &problem {
+        Some(error) => logs.app(&format!(
+            "remote access off in Wardrobe; Tailscale: {error}"
+        )),
+        None => logs.app("remote access off"),
+    }
+    let mut next = config;
+    next.remote_access = false;
+    next.remote_host = None;
+    apply_remote_config(app, next)?;
+    let mut status = remote_status(app);
+    if let Some(error) = problem {
+        status.message = Some(format!(
+            "Wardrobe no longer accepts the tailnet name, but Tailscale could not stop serving: {error}"
+        ));
+    }
+    Ok(status)
+}
+
+/// After a port change: points the serve rule at the new port (blocking).
+pub fn reapply_remote_serve(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    let _remote = remote_guard(&state);
+    let config = state.config();
+    if !config.remote_access {
+        return;
+    }
+    let logs = state.sidecar.logs();
+    let result = tailscale_cli()
+        .ok_or_else(|| TAILSCALE_NOT_FOUND.to_string())
+        .and_then(|cli| tailscale::serve(&cli, config.port));
+    match result {
+        Ok(()) => logs.app(&format!(
+            "remote access: tailscale serve now points at {}",
+            tailscale::local_target(config.port)
+        )),
+        Err(error) => logs.app(&format!(
+            "remote access: could not move tailscale serve to port {}: {error}",
+            config.port
+        )),
+    }
+}
+
+/// At launch, with remote access on: refreshes the recorded tailnet name
+/// (restarting the server when it changed) and checks that the serve rule
+/// still points at this app. A missing rule is reported, not re-created: the
+/// panel offers to turn remote access on again. Blocking.
+fn reconcile_remote_access(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    let _remote = remote_guard(&state);
+    let config = state.config();
+    if !config.remote_access {
+        return;
+    }
+    let logs = state.sidecar.logs();
+    let Some(cli) = tailscale_cli() else {
+        logs.app("remote access is on, but Tailscale was not found");
+        return;
+    };
+    let info = match tailscale::read_status(&cli) {
+        Ok(info) if info.running() => info,
+        Ok(info) => {
+            logs.app(&format!(
+                "remote access is on, but Tailscale is {}",
+                info.backend_state
+            ));
+            return;
+        }
+        Err(error) => {
+            logs.app(&format!("remote access is on, but {error}"));
+            return;
+        }
+    };
+    if let Some(dns_name) = info.dns_name.clone() {
+        if config.remote_host.as_deref() != Some(dns_name.as_str()) {
+            logs.app(&format!(
+                "remote access: the tailnet name is now {dns_name} (was {})",
+                config.remote_host.as_deref().unwrap_or("unset")
+            ));
+            let mut next = config.clone();
+            next.remote_host = Some(dns_name);
+            if let Err(error) = apply_remote_config(app, next) {
+                logs.app(&format!("remote access: cannot save the new name: {error}"));
+            }
+        }
+    }
+    match tailscale::read_serve(&cli, info.dns_name.as_deref(), config.port) {
+        Ok(serve) if serve.served => logs.app(&format!(
+            "remote access: tailscale serve still points at {}",
+            tailscale::local_target(config.port)
+        )),
+        Ok(_) => logs.app(&format!(
+            "remote access is on, but tailscale serve no longer points at {}; turn it on again in Settings > Remote access",
+            tailscale::local_target(config.port)
+        )),
+        Err(error) => logs.app(&format!("remote access: {error}")),
+    }
 }
 
 /// The secret store: the OS keychain, or the session-only memory store when
@@ -596,6 +779,7 @@ pub fn run() {
                 secrets_persistent,
                 config: Mutex::new(config),
                 lifecycle: Mutex::new(()),
+                remote: Mutex::new(()),
                 auto_open_wardrobe: AtomicBool::new(!hidden),
             });
             let tray = windows::build_tray(&handle)?;
@@ -650,6 +834,7 @@ pub fn run() {
             }
             std::thread::spawn(move || {
                 start_sidecar(&handle);
+                reconcile_remote_access(&handle);
             });
             Ok(())
         })
@@ -678,6 +863,11 @@ pub fn run() {
             commands::update_check,
             commands::update_install,
             commands::update_skip,
+            commands::tailscale_status,
+            commands::tailscale_enable,
+            commands::tailscale_disable,
+            commands::tailscale_url,
+            commands::tailscale_health,
         ])
         .build(tauri::generate_context!())
         .expect("error while building the Wardrobe desktop app");
