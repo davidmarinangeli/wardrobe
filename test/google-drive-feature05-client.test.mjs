@@ -595,3 +595,21 @@ test("a slow action says so, and a completed activation leaves a notice", async 
   assert.equal(controller.getSnapshot().notice, "activated");
   controller.stop();
 });
+
+test("a sync target change asks to reactivate the backup instead of verifying access", async () => {
+  const controller = testController(async (url) => {
+    if (url.endsWith("/api/google-drive/status")) return response(driveStatus({
+      backupEnabled: true, syncState: "error",
+      syncError: { code: "target_changed", message: "server text", retryable: false },
+    }));
+    if (url.endsWith("/api/google-drive/archive/status")) return response(archiveStatus());
+    throw new Error(`Unexpected fixture request: ${url}`);
+  });
+
+  await controller.start();
+  const { syncError } = controller.getSnapshot().status;
+  assert.match(syncError.message, /Disattiva e riattiva il backup/);
+  assert.doesNotMatch(syncError.message, /Verifica/);
+  assert.equal(syncError.unreachable, false, "a different destination is not a Drive outage");
+  controller.stop();
+});

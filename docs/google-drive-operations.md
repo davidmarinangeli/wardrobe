@@ -24,7 +24,7 @@ Wardrobe remains a local-first app. Its configured data directory is authoritati
 
 5. Restart the backend, open **Settings › Archive** from the gear (or the onboarding shortcut), connect the intended account, and verify access to the configured folder. Then explicitly select **Locale + Google Drive** and complete the archive decision shown by the app. The decision is required even for an empty folder. To use storage manually without enabling background synchronization, keep **Solo locale** selected and use **Ripristina da Google Drive** when needed.
 
-Changing the account, OAuth client, callback, or folder requires a reconnect and a fresh archive decision. A successful OAuth callback never selects Drive mode for you. If the callback URI or page origin differs from the registered/configured values, correct the configuration and reconnect.
+Changing the account, OAuth client, or folder requires a reconnect and a fresh archive decision. Reconnecting the same account to the same folder (after the session expires, or after changing only the callback or secret) keeps the existing decision: the backup rebinds to the new connection on its next run and resumes. A successful OAuth callback never selects Drive mode for you. If the callback URI or page origin differs from the registered/configured values, correct the configuration and reconnect.
 
 ## Google access and publication
 

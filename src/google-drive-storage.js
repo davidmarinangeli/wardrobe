@@ -43,8 +43,11 @@ const SAFE_ERRORS = Object.freeze({
 });
 const UNREACHABLE_ERRORS = new Set([
   "google_unavailable", "google_permission_denied", "folder_access_denied", "folder_read_denied",
-  "incomplete_drive_listing", "reconnect_required", "target_changed", "stale_connection",
+  "incomplete_drive_listing", "reconnect_required", "stale_connection",
 ]);
+// Reconnecting the same account and folder resumes sync on its own, so this
+// means a different account, folder or drive: verifying access can't fix it.
+const SYNC_TARGET_CHANGED = "Google Drive ora punta a un altro account o a un’altra cartella. Disattiva e riattiva il backup per scegliere quale copia tenere.";
 
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 // After this long an action says it is slow and that Settings can be closed.
@@ -95,7 +98,8 @@ function presentStatus(raw, archive = null) {
     pendingChanges: source.pendingChanges === true,
     syncPaused: source.syncPaused === true,
     syncError: syncError ? {
-      message: messageFor(syncError, "La sincronizzazione è in attesa di essere ripresa."),
+      message: syncError.code === "target_changed" ? SYNC_TARGET_CHANGED
+        : messageFor(syncError, "La sincronizzazione è in attesa di essere ripresa."),
       retryable: syncError.retryable === true,
       unreachable: UNREACHABLE_ERRORS.has(syncError.code),
     } : null,

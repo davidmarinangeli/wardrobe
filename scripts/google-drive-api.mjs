@@ -400,6 +400,8 @@ export function googleDriveApi(options = {}) {
             nonce: cookieValue(req, COOKIE_NAME),
           });
           resultCode = "connected";
+          // A reconnect of the same folder rebinds the sync on its next run.
+          void syncWorker?.runOnce().catch(() => {});
         } catch (error) { resultCode = safeError(error).error.code; }
         res.statusCode = 303;
         res.setHeader("Cache-Control", "no-store");
@@ -430,7 +432,11 @@ export function googleDriveApi(options = {}) {
         res.setHeader("Set-Cookie", cookieHeader(started.nonce, { secure: started.secure }));
         return json(res, 200, { authorizationUrl: started.authorizationUrl });
       }
-      if (route === "/api/google-drive/verify") return json(res, 200, await service.verifyConnection());
+      if (route === "/api/google-drive/verify") {
+        const verified = await service.verifyConnection();
+        void syncWorker?.runOnce().catch(() => {});
+        return json(res, 200, verified);
+      }
       if (route === "/api/google-drive/disconnect") return json(res, 200, await service.disconnect());
     } catch (error) {
       const response = safeError(error);

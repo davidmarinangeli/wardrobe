@@ -1794,6 +1794,43 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
     return true;
   }
 
+  // Reconnecting the same account to the same folder (for example after Google
+  // expires the refresh token) issues a new connection generation. Rebind the
+  // enabled sync to it under a new epoch: work of the old generation stays
+  // fenced and its partial candidate becomes an orphan, but backups resume
+  // without a new activation. A different account, folder or drive still stops.
+  // The caller holds the writer lock.
+  async function adoptReconnectedTarget(state) {
+    if (!state.enabled || !state.target || state.restoreAuthorization?.active
+        || [...restoreAuthorizations.values()].some((authorization) => authorization.active)) return state;
+    let target;
+    try { target = await service.getTarget(); }
+    catch { return state; }
+    if (sameTarget(target, state.target) || !sameArchiveDestination(target, state.target)) return state;
+    const previousEpoch = state.epoch;
+    const stagedDirectory = state.candidate?.directory;
+    queueOrphanCandidate(state, state.target);
+    state.epoch += 1;
+    state.target = target;
+    state.phase = state.paused ? "paused" : "idle";
+    state.candidate = null;
+    state.operations = {};
+    state.lastError = null;
+    state.retry = { attempts: 0, at: null };
+    if (state.paused) state.progress = { currentFiles: 0, totalFiles: 0, currentBytes: 0, totalBytes: 0 };
+    // Check the remote copy through the new connection before trusting it.
+    state.lastVerifiedAt = null;
+    await writeState(state);
+    // Carry a pause requested for the old epoch, read after the new epoch is
+    // durable so requestPause either lands here or sees the new epoch itself.
+    // Never write false: that could erase a request made meanwhile.
+    const control = await getControl();
+    if (control.pauseRequested && control.epoch === previousEpoch) await setControl({ epoch: state.epoch, pauseRequested: true });
+    await removePrivateDirectory(stagedDirectory).catch(() => {});
+    runtimeError = null;
+    return state;
+  }
+
   async function runOnceInternal() {
     let state;
     let target = null;
@@ -1802,6 +1839,7 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
     try {
       state = await readState();
       try { await pruneOrphanSnapshotStages(state); } catch { /* Keep valid durable state usable if housekeeping fails. */ }
+      state = await adoptReconnectedTarget(state);
       if (!state.enabled || state.paused) return getSafeStatus();
       if (state.retry?.at && state.retry.at > now()) return getSafeStatus();
       target = await currentTarget(state.target);
@@ -1946,12 +1984,21 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
     }
     const status = state.paused ? (state.enabled ? "paused" : "disabled") : state.phase;
     let liveTargetMatches = true;
+    let awaitingRebind = false;
+    let connectionError = null;
     if (state.enabled && state.target) {
-      try { liveTargetMatches = sameTarget(await service.getTarget(), state.target); }
-      catch { liveTargetMatches = false; }
+      let liveTarget = null;
+      // An expired session asks for a reconnect, not a new archive decision.
+      try { liveTarget = await service.getTarget(); }
+      catch (error) { connectionError = safeErrorCode(error); }
+      // A reconnect of the same destination is adopted by the next run.
+      awaitingRebind = !sameTarget(liveTarget, state.target) && sameArchiveDestination(liveTarget, state.target)
+        && !state.restoreAuthorization?.active;
+      liveTargetMatches = awaitingRebind || sameTarget(liveTarget, state.target);
     }
-    const visibleError = !liveTargetMatches ? "target_changed"
-      : runtimeError || (state.pendingCleanups?.length || state.orphanCandidates?.length ? "cleanup_pending" : state.lastError);
+    const currentError = awaitingRebind && runtimeError === "target_changed" ? null : runtimeError;
+    const visibleError = !liveTargetMatches ? connectionError || "target_changed"
+      : currentError || (state.pendingCleanups?.length || state.orphanCandidates?.length ? "cleanup_pending" : state.lastError);
     return {
       backupEnabled: state.enabled,
       syncState: !liveTargetMatches ? "error" : (visibleError === "cleanup_pending" ? "cleanup_pending" : (visibleError && !state.paused ? "error" : status)),
@@ -2180,6 +2227,9 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
   async function requestPause(epoch) {
     await ensurePrivateDirectory(privateDir);
     await setControl({ epoch, pauseRequested: true });
+    // A run may have rebound a reconnect to a new epoch in the meantime.
+    const current = (await readState()).epoch;
+    if (current !== epoch) await setControl({ epoch: current, pauseRequested: true });
   }
 
   async function pauseAndDrain() {
@@ -2198,7 +2248,7 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
 
   async function resume() {
     return serialize(() => withWriterLock(async () => {
-      const state = await readState();
+      const state = await adoptReconnectedTarget(await readState());
       const target = await service.getTarget();
       if (!state.enabled || !sameTarget(target, state.target)) throw new GoogleDriveSyncError("target_changed");
       state.paused = false;
