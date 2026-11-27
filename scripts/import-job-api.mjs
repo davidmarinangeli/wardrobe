@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { COLOR_NAMES } from "./style-rules.mjs";
@@ -14,6 +14,7 @@ import { markBrowserStateFields } from "./browser-state-api.mjs";
 import { createArchiveRequestHandler, trackArchivePromise, withArchiveWriteLease } from "./archive-coordinator.mjs";
 import { resolveCacheDir, resolveTransformersCacheDir } from "./runtime-config.mjs";
 import { isSameOriginRequest } from "./same-origin.mjs";
+import { CatalogBusyError, isCatalogBusy, isSharingViolation, readFileWithRetry, renameWithRetry } from "./fs-durability.mjs";
 
 const API_ROOT = "/api/import/jobs";
 const ASSET_ROOT = "/api/import/assets";
@@ -774,14 +775,21 @@ export async function atomicJson(file, value) {
   const tmp = `${file}.${randomUUID()}.tmp`;
   await writeFile(tmp, `${JSON.stringify(catalogForDisk(value), null, 2)}\n`);
   try {
-    await rename(tmp, file);
+    await renameWithRetry(tmp, file);
   } catch (error) {
-    if (!["EBUSY", "EXDEV", "EPERM"].includes(error.code)) {
+    if (!["EBUSY", "EXDEV", "EPERM", "catalog_busy"].includes(error.code)) {
       await rm(tmp, { force: true });
       throw error;
     }
-    await copyFile(tmp, file);
-    await rm(tmp, { force: true });
+    // Last resort once the rename cannot happen (another volume, or a handle
+    // still open after the retries): copying over the file is not atomic, but
+    // it needs only write sharing, which a reader usually grants.
+    try { await copyFile(tmp, file); }
+    catch (copyError) {
+      if (isSharingViolation(copyError)) throw new CatalogBusyError(file, { cause: copyError });
+      throw copyError;
+    }
+    finally { await rm(tmp, { force: true }); }
   }
 }
 
@@ -1368,7 +1376,7 @@ export function wardrobeImportApi(options = {}) {
   }
 
   async function loadImported() {
-    try { return JSON.parse(await readFile(importedFile, "utf8")); }
+    try { return JSON.parse(await readFileWithRetry(importedFile, "utf8")); }
     catch (error) { if (error.code === "ENOENT") return []; throw error; }
   }
 
@@ -1869,6 +1877,8 @@ export function wardrobeImportApi(options = {}) {
       importedFile = path.join(dataDir, "library.json");
       libraryAssetDir = path.join(dataDir, "imported");
       const resume = [];
+      // A catalog held open by another program must not stop the server from
+      // starting: the replay is skipped and runs again on the next start.
       await withArchiveWriteLease(dataDir, async () => {
         const preflight = await inspectArchiveCatalogs(dataDir);
         if (!preflight.valid) {
@@ -1912,6 +1922,9 @@ export function wardrobeImportApi(options = {}) {
             resume.push(job);
           }
         }
+      }).catch((error) => {
+        if (!isCatalogBusy(error)) throw error;
+        console.warn(`[wardrobe] Skipping import-job startup replay for now: ${error.message} It runs again on the next start.`);
       });
       for (const job of resume) void generate(job, "garment").catch(() => {});
     },

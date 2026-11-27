@@ -1,13 +1,15 @@
-import { copyFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { migrateLibrary, migrateOutfits } from "../shared/wardrobe-model.mjs";
 import { mutateLibrary } from "../shared/wardrobe-library.mjs";
 import { withArchiveWriteLease } from "./archive-coordinator.mjs";
 import { inspectArchiveCatalogs, reportSkippedArchiveStartup } from "./archive-store.mjs";
+import { readFileWithRetry, renameWithRetry } from "./fs-durability.mjs";
 
 async function readArray(file) {
   try {
-    const value = JSON.parse(await readFile(file, "utf8"));
+    const value = JSON.parse(await readFileWithRetry(file, "utf8"));
     return Array.isArray(value) ? value : [];
   } catch (error) {
     if (error.code === "ENOENT") return [];
@@ -16,9 +18,13 @@ async function readArray(file) {
 }
 
 async function atomicJson(file, value) {
-  const temp = `${file}.${process.pid}.tmp`;
-  await writeFile(temp, `${JSON.stringify(value, null, 2)}\n`);
-  await rename(temp, file);
+  const temp = `${file}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temp, `${JSON.stringify(value, null, 2)}\n`, { flag: "wx" });
+    await renameWithRetry(temp, file);
+  } finally {
+    await rm(temp, { force: true });
+  }
 }
 
 async function backupOnce(file) {
@@ -40,7 +46,8 @@ async function migrateDataDirectoryInsideLease(dataDir, { backup = true } = {}) 
   const preflight = await inspectArchiveCatalogs(dataDir);
   if (!preflight.valid) {
     reportSkippedArchiveStartup("catalog migration", preflight);
-    return { changed: false, skipped: true, reason: "archive_catalog_invalid", invalidCatalogs: preflight.invalidCatalogs };
+    const busy = preflight.busyCatalogs?.length > 0 && preflight.invalidCatalogs.length === 0;
+    return { changed: false, skipped: true, reason: busy ? "catalog_busy" : "archive_catalog_invalid", invalidCatalogs: preflight.invalidCatalogs, busyCatalogs: preflight.busyCatalogs || [] };
   }
   await mkdir(dataDir, { recursive: true });
   const libraryFile = path.join(dataDir, "library.json");

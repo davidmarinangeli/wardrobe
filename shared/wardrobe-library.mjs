@@ -3,13 +3,14 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { catalogForDisk } from "./portable-assets.mjs";
 import { withArchiveWriteLease } from "../scripts/archive-coordinator.mjs";
+import { readFileWithRetry, renameWithRetry } from "../scripts/fs-durability.mjs";
 
 const queues = new Map();
 const LOCK_STALE_AFTER_MS = 3 * 60_000;
 
 async function readLibrary(file) {
   try {
-    const value = JSON.parse(await readFile(file, "utf8"));
+    const value = JSON.parse(await readFileWithRetry(file, "utf8"));
     if (!Array.isArray(value)) throw new Error("Wardrobe library must be a JSON array");
     return { records: value, exists: true };
   } catch (error) {
@@ -23,7 +24,7 @@ async function atomicWrite(file, value, text = `${JSON.stringify(catalogForDisk(
   const temporary = `${file}.${process.pid}.${randomUUID()}.tmp`;
   try {
     await writeFile(temporary, text, { flag: "wx" });
-    await rename(temporary, file);
+    await renameWithRetry(temporary, file);
   } finally {
     await rm(temporary, { force: true });
   }

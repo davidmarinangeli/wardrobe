@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { chmod, lstat, link, mkdir, open, readFile, readdir, rename, rm, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { fsyncDirectory } from "./fs-durability.mjs";
+import { fsyncDirectory, isSharingViolation } from "./fs-durability.mjs";
 
 const CONTROLS = "archive-coordination";
 const leasesContext = new AsyncLocalStorage();
@@ -116,7 +116,10 @@ async function acquireGate(paths, timeoutMs = 10_000) {
         catch (cause) {
           // The prior holder can release between our lstat and readFile. That
           // is ordinary gate contention, not malformed private control data.
+          // On Windows a gate that is being deleted cannot be opened yet
+          // (EPERM, delete pending) instead of being already gone.
           if (cause.code === "ENOENT") continue;
+          if (isSharingViolation(cause)) { await new Promise((resolve) => setTimeout(resolve, 10)); continue; }
           throw new ArchiveMaintenanceError("archive_control_invalid", { cause });
         }
         if (!bytes.length || bytes.length > 16 * 1024) throw new ArchiveMaintenanceError("archive_control_invalid");

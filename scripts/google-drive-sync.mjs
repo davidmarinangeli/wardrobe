@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createWriteStream } from "node:fs";
-import { chmod, lstat, mkdir, open, readFile, readdir, rename, rm, stat, unlink } from "node:fs/promises";
+import { chmod, lstat, mkdir, open, readFile, readdir, rm, stat, unlink } from "node:fs/promises";
 import path from "node:path";
 import { once } from "node:events";
 import { finished } from "node:stream/promises";
@@ -16,7 +16,7 @@ import {
 } from "./archive-store.mjs";
 import { hasGoogleDrivePrivatePathComponent } from "./google-drive-private-path.mjs";
 import { safeArchivePath } from "../shared/portable-assets.mjs";
-import { fsyncDirectory } from "./fs-durability.mjs";
+import { fsyncDirectory, readFileWithRetry, renameWithRetry } from "./fs-durability.mjs";
 
 export const GOOGLE_DRIVE_OUTAGE_NOTICE = "Le modifiche vengono salvate sul computer. Quando il collegamento sarà ripristinato, l’archivio locale sovrascriverà quello su Google Drive.";
 
@@ -355,7 +355,10 @@ async function atomicJson(filePath, value) {
     await handle.chmod(0o600);
   } finally { await handle.close(); }
   try {
-    await rename(temp, filePath);
+    // readState may hold the file open at this moment; on Windows that makes
+    // the rename fail until it lets go (it used to surface as an intermittent
+    // sync_state_invalid).
+    await renameWithRetry(temp, filePath);
     await fsyncDirectory(directory);
   }
   catch (error) { await unlink(temp).catch(() => {}); throw error; }
@@ -578,7 +581,7 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
     if (stateInfo.isSymbolicLink() || !stateInfo.isFile()) throw new GoogleDriveSyncError("sync_state_invalid");
     await chmod(stateFile, 0o600);
     try {
-      const bytes = await readFile(stateFile);
+      const bytes = await readFileWithRetry(stateFile);
       if (bytes.length > 64 * 1024 * 1024) throw new GoogleDriveSyncError("sync_state_invalid");
       const parsed = JSON.parse(bytes.toString("utf8"));
       const state = {

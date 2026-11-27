@@ -1,12 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
-import { lstat, mkdir, readFile, readdir, rename, rm, stat, utimes, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, readdir, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { pipeline } from "node:stream/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { archivePathFromAsset, catalogForDisk, isArchiveAssetField, safeArchivePath } from "../shared/portable-assets.mjs";
 import { OUTFIT_MAX_PIECES } from "../shared/outfit-rules.mjs";
 import { ensureArchiveRecovered, withArchiveWriteLease } from "./archive-coordinator.mjs";
+import { CatalogBusyError, isCatalogBusy, readFileWithRetry, renameWithRetry } from "./fs-durability.mjs";
 
 export const ARCHIVE_SCHEMA_VERSION = 1;
 export const ARCHIVE_CATALOGS = Object.freeze([
@@ -271,9 +272,15 @@ export async function validateArchive(dataDir, inventory) {
  * This deliberately checks catalog shape only: missing media and other
  * repairable archive damage must still be handled by the restore controller.
  */
-export async function inspectArchiveCatalogs(dataDir) {
+// A catalog another program holds open without read sharing is "in use", not
+// damaged: it is retried only briefly here, because several startup hooks
+// inspect the catalogs in turn and each would otherwise wait the full retry.
+const PREFLIGHT_READ_RETRY_MS = [10, 40, 100];
+
+export async function inspectArchiveCatalogs(dataDir, readOptions = {}) {
   await assertArchiveRoot(dataDir);
   const invalidCatalogs = [];
+  const busyCatalogs = [];
   for (const name of ARCHIVE_CATALOGS) {
     const file = path.join(dataDir, name);
     let info;
@@ -285,20 +292,37 @@ export async function inspectArchiveCatalogs(dataDir) {
       continue;
     }
     let value;
-    try { value = JSON.parse(await readFile(file, "utf8")); }
+    try { value = JSON.parse(await readFileWithRetry(file, "utf8", { delays: PREFLIGHT_READ_RETRY_MS, ...readOptions })); }
     catch (error) {
-      if (error.code !== "ENOENT") invalidCatalogs.push(name);
+      if (isCatalogBusy(error)) busyCatalogs.push(name);
+      else if (error.code !== "ENOENT") invalidCatalogs.push(name);
       continue;
     }
     if (validateCatalogShape(name, value, { allowLegacyMedia: true })) invalidCatalogs.push(name);
   }
-  return { valid: invalidCatalogs.length === 0, invalidCatalogs: [...new Set(invalidCatalogs)].sort() };
+  return {
+    valid: invalidCatalogs.length === 0 && busyCatalogs.length === 0,
+    invalidCatalogs: [...new Set(invalidCatalogs)].sort(),
+    busyCatalogs: [...new Set(busyCatalogs)].sort(),
+  };
 }
 
 export function reportSkippedArchiveStartup(operation, preflight) {
   if (preflight?.valid) return;
-  const catalogs = Array.isArray(preflight?.invalidCatalogs) ? preflight.invalidCatalogs.join(", ") : "unknown";
-  console.warn(`[wardrobe] Skipping ${operation}; archive catalogs need repair (${catalogs}).`);
+  const busy = Array.isArray(preflight?.busyCatalogs) ? preflight.busyCatalogs : [];
+  const invalid = Array.isArray(preflight?.invalidCatalogs) ? preflight.invalidCatalogs : (busy.length ? [] : null);
+  if (invalid === null || invalid.length) {
+    console.warn(`[wardrobe] Skipping ${operation}; archive catalogs need repair (${invalid ? invalid.join(", ") : "unknown"}).`);
+  }
+  if (busy.length) {
+    console.warn(`[wardrobe] Skipping ${operation} for now; ${busy.join(", ")} ${busy.length === 1 ? "is" : "are"} in use. It runs again on the next start.`);
+  }
+}
+
+/** Throws when a startup migration cannot run yet: a damaged catalog (409) or one in use (503). */
+function assertCatalogsReady(dataDir, preflight) {
+  if (preflight.invalidCatalogs.length) throw new ArchiveCatalogPreflightError(preflight);
+  if (preflight.busyCatalogs.length) throw new CatalogBusyError(path.join(dataDir, preflight.busyCatalogs[0]));
 }
 
 export class ArchiveCatalogPreflightError extends Error {
@@ -573,7 +597,7 @@ async function preserveOriginalUnlocked({ dataDir, bytes, filePath, mime, filena
     const temp = `${target}.${process.pid}.${randomUUID()}.tmp`;
     await assertNoSymlink(temp);
     await writeFile(temp, sourceBytes, { flag: "wx" });
-    await rename(temp, target);
+    await renameWithRetry(temp, target);
   }
   return { path: relative, size: sourceBytes.length, sha256: digest, mime: mimeForExtension(extension), extension, filename: path.basename(filename || filePath || "original") };
 }
@@ -707,8 +731,7 @@ export async function prepareArchiveDirectory({ root, dataDir, setting }) {
 }
 
 async function prepareArchiveDirectoryUnlocked({ root, dataDir, setting }) {
-  const preflight = await inspectArchiveCatalogs(dataDir);
-  if (!preflight.valid) throw new ArchiveCatalogPreflightError(preflight);
+  assertCatalogsReady(dataDir, await inspectArchiveCatalogs(dataDir));
   await mkdir(dataDir, { recursive: true });
   await assertArchiveRoot(dataDir);
   const metadataFile = path.join(dataDir, "archive-metadata.json");
@@ -718,7 +741,7 @@ async function prepareArchiveDirectoryUnlocked({ root, dataDir, setting }) {
     const temp = `${metadataFile}.${process.pid}.tmp`;
     try {
       await writeFile(temp, `${JSON.stringify({ schemaVersion: ARCHIVE_SCHEMA_VERSION, archiveGeneration: 1, referenceSources: {} }, null, 2)}\n`, { flag: "wx" });
-      await rename(temp, metadataFile);
+      await renameWithRetry(temp, metadataFile);
     } catch (writeError) {
       if (writeError.code !== "EEXIST") throw writeError;
     }
@@ -751,7 +774,7 @@ async function prepareArchiveDirectoryUnlocked({ root, dataDir, setting }) {
     catch { continue; }
     const temp = `${canonical}.${process.pid}.${randomUUID()}.tmp`;
     await writeFile(temp, normalized, { flag: "wx" });
-    await rename(temp, canonical);
+    await renameWithRetry(temp, canonical);
     // Capturing the external reference's bytes makes the provenance durable if
     // the user later removes the old configured path.
     await preserveOriginal({ dataDir, bytes: sourceBytes, mime: mimeForExtension(ext), filename: path.basename(paths.configured) });
@@ -763,8 +786,7 @@ export async function migrateCatalogAssetPaths(dataDir, atomicJson, mutateLibrar
 }
 
 async function migrateCatalogAssetPathsUnlocked(dataDir, atomicJson, mutateLibrary) {
-  const preflight = await inspectArchiveCatalogs(dataDir);
-  if (!preflight.valid) throw new ArchiveCatalogPreflightError(preflight);
+  assertCatalogsReady(dataDir, await inspectArchiveCatalogs(dataDir));
   for (const name of ARCHIVE_CATALOGS) {
     const file = path.join(dataDir, name);
     if (name === "library.json") {
@@ -772,7 +794,7 @@ async function migrateCatalogAssetPathsUnlocked(dataDir, atomicJson, mutateLibra
       continue;
     }
     let value;
-    try { value = JSON.parse(await readFile(file, "utf8")); }
+    try { value = JSON.parse(await readFileWithRetry(file, "utf8")); }
     catch (error) { if (error.code === "ENOENT") continue; throw error; }
     const converted = catalogForDisk(value);
     if (JSON.stringify(converted) !== JSON.stringify(value)) await atomicJson(file, converted);

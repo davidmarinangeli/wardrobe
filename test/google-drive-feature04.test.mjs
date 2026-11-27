@@ -502,7 +502,7 @@ describe("Google Drive feature 04 archive replacement", { concurrency: false }, 
     await seedArchive(dataDir);
     const invalidLibrary = Buffer.from('[{"id":"legacy-item","variants":17}]\n');
     await writeFile(path.join(dataDir, "library.json"), invalidLibrary);
-    assert.deepEqual(await inspectArchiveCatalogs(dataDir), { valid: false, invalidCatalogs: ["library.json"] });
+    assert.deepEqual(await inspectArchiveCatalogs(dataDir), { valid: false, invalidCatalogs: ["library.json"], busyCatalogs: [] });
 
     const migration = await migrateDataDirectory(dataDir);
     assert.equal(migration.skipped, true);
@@ -708,7 +708,19 @@ describe("Google Drive feature 04 archive replacement", { concurrency: false }, 
     });
     const preview = await manager.preview("restore");
     await manager.choose({ actionToken: preview.actionToken, choice: "use-drive", operation: "restore" });
-    await journalWaiting;
+    // A restore that fails before it saves its journal must fail this test,
+    // not leave it waiting on a gate that is never reached.
+    let journalReached = false;
+    const failedBeforeJournal = (async () => {
+      while (!journalReached) {
+        const state = await manager.status();
+        if (state.restore?.stage === "failed" || state.restore?.stage === "recovery_required") throw new Error(`Restore ended ${state.restore.stage} before its journal: ${state.restore.error}`);
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+    })();
+    await Promise.race([journalWaiting, failedBeforeJournal]);
+    journalReached = true;
+    await failedBeforeJournal;
     clock += 700_001;
     releaseJournal();
     await finishOperation(manager);

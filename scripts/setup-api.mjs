@@ -5,6 +5,7 @@ import { parseEnv } from "node:util";
 import sharp from "sharp";
 import { AI_PROVIDERS, atomicJson, isSameOriginRequest, resolveApiKey, resolveProvider } from "./import-job-api.mjs";
 import { ArchiveCatalogPreflightError, prepareArchiveDirectory, preserveOriginal, reportSkippedArchiveStartup } from "./archive-store.mjs";
+import { isCatalogBusy } from "./fs-durability.mjs";
 import { isManagedConfig, MANAGED_CONFIG_MESSAGE } from "./runtime-config.mjs";
 
 const WRITABLE_KEYS = new Set(["AI_PROVIDER", "OPENAI_API_KEY", "OPENROUTER_API_KEY", "GEMINI_API_KEY_TEST", "GEMINI_API_KEY_PROD", "MINIMAX_API_KEY"]);
@@ -184,6 +185,10 @@ export function wardrobeSetupApi(options = {}) {
       dataDir = path.resolve(root, setting("WARDROBE_DATA_DIR", "data"));
       try { await prepareArchiveDirectory({ root, dataDir, setting }); }
       catch (error) {
+        if (isCatalogBusy(error)) {
+          console.warn(`[wardrobe] Skipping setup reference/default preparation for now: ${error.message} It runs again on the next start.`);
+          return;
+        }
         if (!(error instanceof ArchiveCatalogPreflightError)) throw error;
         reportSkippedArchiveStartup("setup reference/default preparation", { valid: false, invalidCatalogs: error.catalogs });
       }

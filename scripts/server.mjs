@@ -25,6 +25,7 @@ import { drainArchiveWriters } from "./archive-coordinator.mjs";
 import { ALLOWED_HOSTS_ENV, createHostAllowlist, parseAllowedHosts } from "./host-allowlist.mjs";
 import { runImportDataCli } from "./data-import.mjs";
 import { CACHE_DIR_ENV, isManagedConfigValue, MANAGED_CONFIG_ENV } from "./runtime-config.mjs";
+import { isCatalogBusy } from "./fs-durability.mjs";
 import { parseEnvContent } from "./setup-api.mjs";
 
 export const DEFAULT_PORT = 5173;
@@ -229,6 +230,8 @@ export async function startServer(options = {}) {
   app.use((error, req, res, next) => {
     log(`wardrobe-server error on ${req.method} ${req.url}: ${error?.stack || error}`);
     if (res.headersSent) { res.destroy(); return; }
+    // A catalog in use is worth telling the client: it only has to retry.
+    if (isCatalogBusy(error)) return json(res, 503, { error: { code: "catalog_busy", message: error.message, retryable: true } });
     json(res, Number.isInteger(error?.status) && error.status >= 400 && error.status <= 599 ? error.status : 500, { error: { code: "internal_error", message: "Internal server error" } });
   });
 

@@ -42,6 +42,7 @@ import { migrateDataDirectory } from "./wardrobe-data.mjs";
 import { mutateLibrary } from "../shared/wardrobe-library.mjs";
 import { catalogForHttp } from "../shared/portable-assets.mjs";
 import { inspectArchiveCatalogs, mimeForExtension, preserveOriginal, pruneUnreferencedOriginals, reportSkippedArchiveStartup, resolveArchiveFile } from "./archive-store.mjs";
+import { isCatalogBusy, readFileWithRetry } from "./fs-durability.mjs";
 import { readReferenceBytes } from "./archive-store.mjs";
 import { migrateCatalogAssetPaths } from "./archive-store.mjs";
 import { markBrowserStateFields } from "./browser-state-api.mjs";
@@ -161,7 +162,7 @@ export function variantApi(options = {}) {
   const providerBase = (provider) => resolveOpenAICompatibleBaseUrl(setting, provider);
 
   async function loadItems() {
-    const value = JSON.parse(await readFile(libraryFile, "utf8").catch((error) => error.code === "ENOENT" ? "[]" : Promise.reject(error)));
+    const value = JSON.parse(await readFileWithRetry(libraryFile, "utf8").catch((error) => error.code === "ENOENT" ? "[]" : Promise.reject(error)));
     return value.map((item) => normalizeItemV2(item)).filter(Boolean);
   }
 
@@ -734,9 +735,17 @@ export function variantApi(options = {}) {
           return;
         }
         await mkdir(libraryAssetDir, { recursive: true });
-        const migration = await migrateDataDirectory(dataDir);
-        if (migration.skipped) return;
-        await migrateCatalogAssetPaths(dataDir, atomicJson, mutateLibrary);
+        // A catalog another handle keeps open must not stop the server from
+        // starting. Readers normalize on load, so the migration only waits
+        // for the next start.
+        try {
+          const migration = await migrateDataDirectory(dataDir);
+          if (migration.skipped) return;
+          await migrateCatalogAssetPaths(dataDir, atomicJson, mutateLibrary);
+        } catch (error) {
+          if (!isCatalogBusy(error)) throw error;
+          console.warn(`[wardrobe] Skipping variant startup migrations for now: ${error.message} They run again on the next start.`);
+        }
       });
     },
     configureServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },

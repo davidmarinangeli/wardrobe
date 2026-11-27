@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { atomicJson } from "./import-job-api.mjs";
+import { isCatalogBusy, readFileWithRetry } from "./fs-durability.mjs";
 import { normalizeItemV2, variantApprovedImage } from "../shared/wardrobe-model.mjs";
 import { catalogForHttp } from "../shared/portable-assets.mjs";
 import { buildCheatSheetLayout, CHEAT_SHEET_LAYOUT_VERSION, CHEAT_SHEET_MAX_HEIGHT, CHEAT_SHEET_EXPORT_WIDTH, CHEAT_SHEET_MIN_LOGICAL_HEIGHT, normalizeCheatSheetScale } from "../shared/cheat-sheet-layout.mjs";
@@ -101,7 +102,7 @@ export function cheatSheetsApi(options = {}) {
 
   async function loadLibrary() {
     try {
-      const value = JSON.parse(await readFile(path.join(dataDir, "library.json"), "utf8"));
+      const value = JSON.parse(await readFileWithRetry(path.join(dataDir, "library.json"), "utf8"));
       return (Array.isArray(value) ? value : []).map((item) => normalizeItemV2(item)).filter(Boolean);
     } catch (error) {
       if (error.code === "ENOENT") return [];
@@ -409,7 +410,8 @@ export function cheatSheetsApi(options = {}) {
       return json(res, 405, { error: "Method not allowed" });
     } catch (error) {
       const status = error.status || (error.code === "ENOENT" ? 404 : 500);
-      return json(res, status, { error: status >= 500 ? "Internal server error" : error.message });
+      // A busy catalog is the one 5xx whose message helps: it says to retry.
+      return json(res, status, { error: status >= 500 && !isCatalogBusy(error) ? "Internal server error" : error.message });
     }
   }
 
@@ -437,6 +439,9 @@ export function cheatSheetsApi(options = {}) {
             ? { ...sheet, beautifyStatus: "error", beautifyError: "Generation was interrupted when the server restarted. Try again." }
             : sheet));
         }
+      }).catch((error) => {
+        if (!isCatalogBusy(error)) throw error;
+        console.warn(`[wardrobe] Skipping cheat-sheet restart recovery for now: ${error.message} It runs again on the next start.`);
       });
     },
     configureServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },

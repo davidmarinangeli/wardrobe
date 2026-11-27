@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { createArchiveRequestHandler } from "./archive-coordinator.mjs";
 import { readFile, writeFile } from "node:fs/promises";
+import { readFileWithRetry } from "./fs-durability.mjs";
 import path from "node:path";
 import { atomicJson, readAiMode, resolveApiKey, resolveOpenAICompatibleBaseUrl, resolveProvider } from "./import-job-api.mjs";
 import { PART_TO_REGION, classifyColor, describeColorHarmonyRules, evaluateColorHarmony } from "./style-rules.mjs";
@@ -526,7 +527,7 @@ export function suggestionsApi(options = {}) {
         // Load wardrobe
         const libraryFile = path.join(dataDir, "library.json");
         let items;
-        try { items = JSON.parse(await readFile(libraryFile, "utf8")); }
+        try { items = JSON.parse(await readFileWithRetry(libraryFile, "utf8")); }
         catch (error) { if (error.code === "ENOENT") items = []; else throw error; }
 
         // Only what they can actually wear. A piece in the sell or give-away pile

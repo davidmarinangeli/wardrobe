@@ -414,8 +414,10 @@ export function App() {
     const generation = currentArchiveGeneration.current;
     try {
       const response = await fetch(`/api/wardrobe/items/${encodeURIComponent(updatedItem.id)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: updatedItem.name, part: updatedItem.part, color: updatedItem.color, secondaryColor: updatedItem.secondaryColor, tags: updatedItem.tags }) });
-      if (!response.ok) throw new Error("Could not save wardrobe item.");
-      updatedItem = await response.json();
+      const value = await response.json().catch(() => ({}));
+      // The server's reason (for instance a catalog still in use) beats a generic one.
+      if (!response.ok) throw new Error((typeof value.error === "string" ? value.error : value.error?.message) || "Could not save wardrobe item.");
+      updatedItem = value;
     } catch (requestError) {
       if (generation === currentArchiveGeneration.current) setError(requestError.message);
       return;

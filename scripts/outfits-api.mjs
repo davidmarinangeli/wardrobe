@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFileWithRetry } from "./fs-durability.mjs";
 import path from "node:path";
 import { atomicJson, buildModeledPrompt, checkSetup, computeIdentityProfile, geminiAnalyzeOutfitStyle, geminiEdit, isLikelyBottom, isLikelyCroppedOrShortBottom, isLikelySocks, isPremiumAllowed, loadFaceReference, miniMaxEdit, openAIAnalyzeOutfitStyle, openAIImage, openAIImageOptions, openRouterEdit, readAiMode, resolveApiKey, resolveModeledModel, resolveOpenAICompatibleBaseUrl, resolveProvider } from "./import-job-api.mjs";
 import { mimeForExtension, readReferenceBytes, resolveArchiveFile } from "./archive-store.mjs";
@@ -80,7 +81,7 @@ export function outfitsApi(options = {}) {
   }
 
   async function loadLibrary() {
-    try { return (JSON.parse(await readFile(path.join(dataDir, "library.json"), "utf8")) || []).map((item) => normalizeItemV2(item)).filter(Boolean); }
+    try { return (JSON.parse(await readFileWithRetry(path.join(dataDir, "library.json"), "utf8")) || []).map((item) => normalizeItemV2(item)).filter(Boolean); }
     catch (error) { if (error.code === "ENOENT") return []; throw error; }
   }
 
