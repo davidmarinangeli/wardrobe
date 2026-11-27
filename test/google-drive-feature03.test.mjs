@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { access, mkdtemp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { createServer as createTcpServer } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, it } from "node:test";
+import { createServer as createViteServer } from "vite";
+import { googleDriveApi } from "../scripts/google-drive-api.mjs";
+import { createGoogleDriveService, GOOGLE_DRIVE_REQUIRED_SCOPES } from "../scripts/google-drive-auth.mjs";
 import { createGoogleDriveSyncWorker } from "../scripts/google-drive-sync.mjs";
 import { buildArchiveInventory } from "../scripts/archive-store.mjs";
 
@@ -619,7 +623,214 @@ describe("persistent Google Drive archive sync", () => {
     release();
     await assert.rejects(pending, { code: "target_changed" });
     assert.equal((await readSyncState(configured.worker)).lastCompleted.fingerprint, oldFingerprint);
+    assert.equal((await configured.worker.getSafeStatus()).syncError, null, "a same-destination reconnect is not reported as a changed target");
+
+    // The same account and folder under the new generation resumes on the next run.
+    const before = await readSyncState(configured.worker);
+    await configured.worker.runOnce();
+    const status = await waitForCompleted(configured.worker);
+    assert.equal(status.syncError, null);
+    const after = await readSyncState(configured.worker);
+    assert.equal(after.target.connectionGeneration, "abcdef12abcdef12abcdef12abcdef12");
+    assert.ok(after.epoch > before.epoch, "the old generation's work stays fenced by a new epoch");
+    assert.notEqual(after.lastCompleted.fingerprint, oldFingerprint);
+    assert.equal(after.orphanCandidates.length, 0, "the interrupted candidate is cleaned up");
+    assert.equal(drive.children().filter((item) => item.name.startsWith("wardrobe-snapshot-")).length, 1);
+  });
+
+  it("does not rebind a reconnect to a different account or folder", async () => {
+    const root = await temporaryRoot();
+    const dataDir = await prepareArchive(root);
+    const drive = makeDrive();
+    const configured = setup(dataDir, drive);
+    const first = await choose(configured.worker);
+    await waitForCompleted(configured.worker, first.local.fingerprint);
+    const before = await readSyncState(configured.worker);
+    await writeFile(path.join(dataDir, "library.json"), "[{\"id\":\"other-account\"}]\n");
+    const writes = { ...drive.counters };
+    configured.changeTarget({
+      targetFingerprint: digest(Buffer.from("target:other-account")),
+      connectionGeneration: "abcdef12abcdef12abcdef12abcdef12",
+      accountId: "account_99999",
+    });
+
+    await assert.rejects(configured.worker.runOnce(), { code: "target_changed" });
+    const after = await readSyncState(configured.worker);
+    assert.deepEqual(after.target, before.target);
+    assert.equal(after.epoch, before.epoch);
     assert.equal((await configured.worker.getSafeStatus()).syncError.code, "target_changed");
+    assert.deepEqual(drive.counters, writes, "nothing is written to the other destination");
+  });
+
+  it("rebinds a paused sync to a reconnect without resuming it", async () => {
+    const root = await temporaryRoot();
+    const dataDir = await prepareArchive(root);
+    const drive = makeDrive();
+    const configured = setup(dataDir, drive);
+    const first = await choose(configured.worker);
+    await waitForCompleted(configured.worker, first.local.fingerprint);
+    await configured.worker.pauseAndDrain();
+    configured.changeTarget({ connectionGeneration: "abcdef12abcdef12abcdef12abcdef12" });
+    assert.equal((await configured.worker.getSafeStatus()).syncError, null, "a same-destination reconnect is not reported as a changed target");
+
+    const paused = await configured.worker.runOnce();
+    assert.equal(paused.syncState, "paused");
+    assert.equal(paused.syncError, null);
+    assert.equal((await readSyncState(configured.worker)).target.connectionGeneration, "abcdef12abcdef12abcdef12abcdef12");
+    await writeFile(path.join(dataDir, "library.json"), "[{\"id\":\"after-resume\"}]\n");
+    await configured.worker.resume();
+    await waitForCompleted(configured.worker);
+    assert.notEqual((await readSyncState(configured.worker)).lastCompleted.fingerprint, first.local.fingerprint);
+  });
+
+  it("resumes a sync paused before a reconnect without waiting for a run", async () => {
+    const root = await temporaryRoot();
+    const dataDir = await prepareArchive(root);
+    const drive = makeDrive();
+    const configured = setup(dataDir, drive);
+    const first = await choose(configured.worker);
+    await waitForCompleted(configured.worker, first.local.fingerprint);
+    await configured.worker.pauseAndDrain();
+    configured.changeTarget({ connectionGeneration: "abcdef12abcdef12abcdef12abcdef12" });
+    await writeFile(path.join(dataDir, "library.json"), "[{\"id\":\"resume-rebind\"}]\n");
+
+    const resumed = await configured.worker.resume();
+    assert.equal(resumed.syncPaused, false);
+    assert.equal((await readSyncState(configured.worker)).target.connectionGeneration, "abcdef12abcdef12abcdef12abcdef12");
+    await waitForCompleted(configured.worker);
+    assert.notEqual((await readSyncState(configured.worker)).lastCompleted.fingerprint, first.local.fingerprint);
+  });
+
+  it("keeps a pending pause request across a reconnect rebind", async () => {
+    const root = await temporaryRoot();
+    const dataDir = await prepareArchive(root);
+    const drive = makeDrive();
+    const configured = setup(dataDir, drive);
+    const first = await choose(configured.worker);
+    await waitForCompleted(configured.worker, first.local.fingerprint);
+    await writeFile(path.join(dataDir, "library.json"), "[{\"id\":\"pause-pending\"}]\n");
+    const { epoch } = await readSyncState(configured.worker);
+    await writeFile(path.join(configured.worker.privateDir, "sync-control.json"), JSON.stringify({ version: 1, epoch, pauseRequested: true }));
+    configured.changeTarget({ connectionGeneration: "abcdef12abcdef12abcdef12abcdef12" });
+
+    await assert.rejects(configured.worker.runOnce(), { code: "sync_paused" });
+    const state = await readSyncState(configured.worker);
+    assert.equal(state.target.connectionGeneration, "abcdef12abcdef12abcdef12abcdef12");
+    const control = JSON.parse(await readFile(path.join(configured.worker.privateDir, "sync-control.json"), "utf8"));
+    assert.deepEqual(control, { version: 1, epoch: state.epoch, pauseRequested: true });
+    assert.equal(state.lastCompleted.fingerprint, first.local.fingerprint, "nothing was uploaded");
+  });
+
+  it("does not rebind while a restore authorization is active", async () => {
+    const root = await temporaryRoot();
+    const dataDir = await prepareRestoreFixture(root);
+    const drive = makeDrive();
+    const configured = setup(dataDir, drive);
+    const first = await choose(configured.worker);
+    await waitForCompleted(configured.worker, first.local.fingerprint);
+    const preview = await configured.worker.preview();
+    await configured.worker.authorizeRestore({ evidenceId: preview.evidenceId, source: "feature04", confirmed: true, choice: "use-drive" });
+    const before = await readSyncState(configured.worker);
+    configured.changeTarget({ connectionGeneration: "abcdef12abcdef12abcdef12abcdef12" });
+
+    await assert.rejects(configured.worker.runOnce(), { code: "target_changed" });
+    const after = await readSyncState(configured.worker);
+    assert.deepEqual(after.target, before.target);
+    assert.equal(after.epoch, before.epoch);
+  });
+
+  it("does not rebind after a restart while a durable restore authorization is active", async () => {
+    const root = await temporaryRoot();
+    const dataDir = await prepareRestoreFixture(root);
+    const drive = makeDrive();
+    const configured = setup(dataDir, drive);
+    const first = await choose(configured.worker);
+    await waitForCompleted(configured.worker, first.local.fingerprint);
+    const preview = await configured.worker.preview();
+    const authorization = await configured.worker.authorizeRestore({ evidenceId: preview.evidenceId, source: "feature04", confirmed: true, choice: "use-drive" });
+    await configured.worker.invalidateAfterRestore({ target: authorization.target, restoreAuthorizationId: authorization.restoreAuthorizationId });
+    const before = await readSyncState(configured.worker);
+    assert.equal(before.restoreAuthorization?.active, true);
+    // A restart loses the in-memory authorization; only the durable record remains.
+    const restarted = createGoogleDriveSyncWorker({ service: configured.service, dataDir, pollIntervalMs: 60_000 });
+    configured.changeTarget({ connectionGeneration: "abcdef12abcdef12abcdef12abcdef12" });
+    await restarted.runOnce();
+    const after = await readSyncState(restarted);
+    assert.deepEqual(after.target, before.target);
+    assert.equal(after.epoch, before.epoch);
+  });
+
+  for (const [label, patch] of [["drive", { driveId: "shared_drive_1" }], ["target fingerprint", { targetFingerprint: digest(Buffer.from("target:new-client")) }]]) {
+    it(`does not rebind when the ${label} changes`, async () => {
+      const root = await temporaryRoot();
+      const dataDir = await prepareArchive(root);
+      const drive = makeDrive();
+      const configured = setup(dataDir, drive);
+      const first = await choose(configured.worker);
+      await waitForCompleted(configured.worker, first.local.fingerprint);
+      const before = await readSyncState(configured.worker);
+      configured.changeTarget({ connectionGeneration: "abcdef12abcdef12abcdef12abcdef12", ...patch });
+      await assert.rejects(configured.worker.runOnce(), { code: "target_changed" });
+      const after = await readSyncState(configured.worker);
+      assert.deepEqual(after.target, before.target);
+      assert.equal(after.epoch, before.epoch);
+    });
+  }
+
+  it("re-verifies the remote copy through the new connection after a rebind", async () => {
+    const root = await temporaryRoot();
+    const dataDir = await prepareArchive(root);
+    const drive = makeDrive();
+    const configured = setup(dataDir, drive);
+    const first = await choose(configured.worker);
+    await waitForCompleted(configured.worker, first.local.fingerprint);
+    configured.changeTarget({ connectionGeneration: "abcdef12abcdef12abcdef12abcdef12" });
+    let reads = 0;
+    const originalRead = drive.client.readFile;
+    drive.client.readFile = async (...args) => { reads += 1; return originalRead.apply(drive.client, args); };
+    await configured.worker.runOnce();
+    const after = await readSyncState(configured.worker);
+    assert.equal(after.target.connectionGeneration, "abcdef12abcdef12abcdef12abcdef12");
+    assert.ok(reads > 0, "the remote pointer is read through the new connection");
+    assert.equal(after.lastCompleted.fingerprint, first.local.fingerprint, "no re-upload is needed");
+  });
+
+  it("clears a stale target_changed run error when a paused sync is rebound", async () => {
+    const root = await temporaryRoot();
+    const dataDir = await prepareArchive(root);
+    const drive = makeDrive();
+    const configured = setup(dataDir, drive);
+    const first = await choose(configured.worker);
+    await waitForCompleted(configured.worker, first.local.fingerprint);
+    await writeFile(path.join(dataDir, "library.json"), "[{\"id\":\"stale-error\"}]\n");
+    const originalUpload = drive.client.uploadResumableChunk;
+    let begin;
+    let release;
+    const started = new Promise((resolve) => { begin = resolve; });
+    const gate = new Promise((resolve) => { release = resolve; });
+    drive.client.uploadResumableChunk = async (...args) => { begin(); await gate; return originalUpload.apply(drive.client, args); };
+    const pending = configured.worker.runOnce();
+    await started;
+    configured.changeTarget({ connectionGeneration: "abcdef12abcdef12abcdef12abcdef12" });
+    release();
+    await assert.rejects(pending, { code: "target_changed" });
+    drive.client.uploadResumableChunk = originalUpload;
+    await configured.worker.pauseAndDrain();
+    const status = await configured.worker.runOnce();
+    // The orphaned partial upload waits for cleanup until the sync resumes.
+    assert.equal(status.syncError?.code, "cleanup_pending");
+  });
+
+  it("reports an expired session as a reconnect, not a changed destination", async () => {
+    const root = await temporaryRoot();
+    const dataDir = await prepareArchive(root);
+    const drive = makeDrive();
+    const configured = setup(dataDir, drive);
+    const first = await choose(configured.worker);
+    await waitForCompleted(configured.worker, first.local.fingerprint);
+    // The real auth service throws this from getTarget() once Google revokes the refresh token.
+    configured.service.getTarget = async () => { throw Object.assign(new Error("reconnect"), { code: "reconnect_required" }); };
+    assert.equal((await configured.worker.getSafeStatus()).syncError?.code, "reconnect_required");
   });
 
   it("serializes concurrent writers and pause/drain fences a delayed transfer", async () => {
@@ -1250,5 +1461,151 @@ describe("persistent Google Drive archive sync", () => {
     await copied.client.deleteFile(snapshot.id);
     const imported = setup(dataDir, copied, copyRootId);
     await authorizeAndCompleteRestore(imported.worker, dataDir, "Wardrobe archive");
+  });
+});
+
+async function unusedPort() {
+  const socketServer = createTcpServer();
+  await new Promise((resolve, reject) => { socketServer.once("error", reject); socketServer.listen(0, "127.0.0.1", resolve); });
+  const { port } = socketServer.address();
+  await new Promise((resolve) => socketServer.close(resolve));
+  return port;
+}
+
+function googleFetch({ accountId = () => "google-account-123", verifyFails = () => false } = {}) {
+  const json = (value, status = 200) => new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json" } });
+  return async (input, init = {}) => {
+    const url = new URL(input);
+    if (url.href === "https://oauth2.googleapis.com/token") {
+      return json({ access_token: "access-token-12345", refresh_token: "refresh-token-12345", expires_in: 3600, scope: GOOGLE_DRIVE_REQUIRED_SCOPES.join(" ") });
+    }
+    if (url.href === "https://www.googleapis.com/oauth2/v3/userinfo") return json({ sub: accountId(), email: "person@example.test", name: "Person" });
+    if (url.origin === "https://www.googleapis.com" && url.pathname === `/drive/v3/files/${ROOT_ID}`) {
+      if (verifyFails()) return json({ error: { errors: [{ reason: "insufficientFilePermissions" }] } }, 403);
+      return json({ id: ROOT_ID, name: "Wardrobe archive", mimeType: FOLDER_MIME, trashed: false, parents: [],
+        capabilities: { canListChildren: true, canAddChildren: true, canEdit: true } });
+    }
+    if (url.origin === "https://www.googleapis.com" && url.pathname === "/drive/v3/files") return json({ incompleteSearch: false, files: [] });
+    return json({ error: "unexpected" }, 404);
+  };
+}
+
+async function startApp({ pollIntervalMs = 3_600_000, fetchOptions } = {}) {
+  // Like feature02: a realpath root, since /var/folders is reached through a symlink.
+  const root = await mkdtemp(path.join(await realpath(os.tmpdir()), "wardrobe-rebind-e2e-"));
+  temporaryRoots.add(root);
+  const dataDir = await prepareArchive(root);
+  const port = await unusedPort();
+  const origin = `http://127.0.0.1:${port}`;
+  const env = {
+    GOOGLE_DRIVE_CLIENT_ID: "test-client.apps.googleusercontent.com",
+    GOOGLE_DRIVE_CLIENT_SECRET: "test-secret-not-real",
+    GOOGLE_DRIVE_REDIRECT_URI: `${origin}/api/google-drive/oauth/callback`,
+    GOOGLE_DRIVE_FOLDER_ID: ROOT_ID,
+    WARDROBE_DATA_DIR: "data",
+  };
+  const service = createGoogleDriveService({ root, env, fetchImpl: googleFetch(fetchOptions) });
+  const drive = makeDrive();
+  // The real auth service decides the target and its generation; only Drive I/O is faked.
+  const workerService = { privateDir: service.privateDir, getTarget: (...args) => service.getTarget(...args), async getClient() { return drive.client; } };
+  const realWorker = createGoogleDriveSyncWorker({ service: workerService, dataDir, pollIntervalMs });
+  const kicks = [];
+  // The worker is frozen, so wrap a copy rather than proxy it.
+  const syncWorker = { ...realWorker, runOnce() { const run = realWorker.runOnce(); kicks.push(run.catch(() => {})); return run; } };
+  const server = await createViteServer({
+    configFile: false, root, appType: "custom", logLevel: "silent", cacheDir: path.join(root, ".vite"),
+    plugins: [googleDriveApi({ env, service, syncWorker })],
+    server: { host: "127.0.0.1", port, strictPort: true },
+  });
+  await server.listen();
+  const post = (route) => fetch(`${origin}${route}`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: "{}" });
+  async function connect() {
+    const started = await post("/api/google-drive/oauth/start");
+    const { authorizationUrl } = await started.json();
+    const cookie = started.headers.get("set-cookie").split(";", 1)[0];
+    const callback = new URL("/api/google-drive/oauth/callback", origin);
+    callback.searchParams.set("state", new URL(authorizationUrl).searchParams.get("state"));
+    callback.searchParams.set("code", "one-time-code");
+    const done = await fetch(callback, { headers: { Cookie: cookie }, redirect: "manual" });
+    return done.headers.get("location");
+  }
+  const status = async () => (await fetch(`${origin}/api/google-drive/status`)).json();
+  return { root, dataDir, drive, service, worker: realWorker, server, kicks, post, connect, status };
+}
+
+describe("reconnect rebind end to end (real auth service, worker and routes)", () => {
+  it("an OAuth reconnect of the same account and folder resumes backups without reactivation", async () => {
+    const app = await startApp();
+    try {
+      assert.match(await app.connect(), /googleDrive=connected/);
+      await Promise.all(app.kicks);
+      const first = await choose(app.worker);
+      await waitForCompleted(app.worker, first.local.fingerprint);
+      const firstGeneration = (await readSyncState(app.worker)).target.connectionGeneration;
+
+      await writeFile(path.join(app.dataDir, "library.json"), "[{\"id\":\"after-reconnect\"}]\n");
+      const kicksBefore = app.kicks.length;
+      assert.match(await app.connect(), /googleDrive=connected/);
+      assert.ok(app.kicks.length > kicksBefore, "the OAuth callback kicks a sync run");
+      await Promise.all(app.kicks);
+      const state = await readSyncState(app.worker);
+      assert.notEqual(state.target.connectionGeneration, firstGeneration, "the real service issued a new generation");
+      assert.equal(state.target.connectionGeneration, (await app.service.getTarget()).connectionGeneration);
+      await waitForCompleted(app.worker);
+      assert.notEqual((await readSyncState(app.worker)).lastCompleted.fingerprint, first.local.fingerprint);
+      const merged = await app.status();
+      assert.equal(merged.state, "connected");
+      assert.equal(merged.syncError, null, JSON.stringify(merged.syncError));
+    } finally { await app.server.close(); }
+  });
+
+  it("an OAuth reconnect with a different Google account stays stopped", async () => {
+    let account = "google-account-123";
+    const app = await startApp({ fetchOptions: { accountId: () => account } });
+    try {
+      await app.connect();
+      await Promise.all(app.kicks);
+      const first = await choose(app.worker);
+      await waitForCompleted(app.worker, first.local.fingerprint);
+      const before = await readSyncState(app.worker);
+      account = "google-account-999";
+      await app.connect();
+      await Promise.all(app.kicks);
+      const after = await readSyncState(app.worker);
+      assert.deepEqual(after.target, before.target);
+      assert.equal((await app.status()).syncError?.code, "target_changed");
+    } finally { await app.server.close(); }
+  });
+
+  it("verify kicks a run only when verification succeeds, and the route survives a failing run", async () => {
+    let failVerify = false;
+    const app = await startApp({ fetchOptions: { verifyFails: () => failVerify } });
+    try {
+      await app.connect();
+      await Promise.all(app.kicks);
+      let count = app.kicks.length;
+      const ok = await app.post("/api/google-drive/verify");
+      assert.equal(ok.status, 200);
+      assert.equal(app.kicks.length, count + 1);
+      count = app.kicks.length;
+      failVerify = true;
+      const failed = await app.post("/api/google-drive/verify");
+      assert.ok(failed.status >= 400);
+      assert.equal(app.kicks.length, count, "a failed verification does not kick a run");
+      await Promise.all(app.kicks);
+    } finally { await app.server.close(); }
+  });
+
+  it("verify and callback are harmless when backup is disabled", async () => {
+    const app = await startApp();
+    try {
+      await app.connect();
+      await app.connect();
+      const ok = await app.post("/api/google-drive/verify");
+      assert.equal(ok.status, 200);
+      await Promise.all(app.kicks);
+      assert.equal((await app.status()).backupEnabled, false);
+      assert.deepEqual(app.drive.counters, { createFolder: 0, createFile: 0, updateFile: 0, copyFile: 0, deleteFile: 0, chunks: 0, starts: 0, maxChunkBytes: 0 });
+    } finally { await app.server.close(); }
   });
 });

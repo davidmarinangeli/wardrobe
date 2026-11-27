@@ -313,7 +313,7 @@ const RESTORE_DRAIN_MS = 60_000;
 
 export function createGoogleDriveArchiveManager({ dataDir, service, worker, now = Date.now, onJournalSave, onRename, onDurability, activationDrainMs = ACTIVATION_DRAIN_MS, restoreDrainMs = RESTORE_DRAIN_MS } = {}) {
   const root = path.resolve(dataDir), actions = new Map(); let operation = null, activeActionToken = null, busy = false, activating = false;
-  const resume = async (a) => { if (a.previousMode.enabled && !a.previousMode.paused) { const t = await service.getTarget(); if (["targetFingerprint", "connectionGeneration", "accountId", "folderId", "driveId"].every((k) => (t[k] ?? null) === (a.target[k] ?? null))) await worker.resume(); } };
+  const resume = async (a) => { if (a.previousMode.enabled && !a.previousMode.paused) { const t = await service.getTarget(); if (["targetFingerprint", "accountId", "folderId", "driveId"].every((k) => (t[k] ?? null) === (a.target[k] ?? null))) await worker.resume(); } };
   async function prune() {
     const expired = [];
     for (const [token, action] of actions) if (action.expiresAt <= now()) { actions.delete(token); expired.push([token, action]); }
