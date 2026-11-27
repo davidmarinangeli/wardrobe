@@ -57,7 +57,7 @@
       "endpoints": [
         "https://github.com/davidmarinangeli/wardrobe/releases/latest/download/latest.json"
       ],
-      "pubkey": "",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDNBQkNEMTJBQTYwMzRCN0QKUldSOVN3T21LdEc4T21PZWxCZ2M1WDVrT2dIZ1lRUDB4VzdUZDFWMDFHRTFTTHlxQlI3aStCd04K",
       "requireSignedVersion": true,
       "windows": {
         "installMode": "passive"
