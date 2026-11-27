@@ -11,18 +11,18 @@ async function readLibrary(file) {
   try {
     const value = JSON.parse(await readFile(file, "utf8"));
     if (!Array.isArray(value)) throw new Error("Wardrobe library must be a JSON array");
-    return value;
+    return { records: value, exists: true };
   } catch (error) {
-    if (error.code === "ENOENT") return [];
+    if (error.code === "ENOENT") return { records: [], exists: false };
     throw error;
   }
 }
 
-async function atomicWrite(file, value) {
+async function atomicWrite(file, value, text = `${JSON.stringify(catalogForDisk(value), null, 2)}\n`) {
   await mkdir(path.dirname(file), { recursive: true });
   const temporary = `${file}.${process.pid}.${randomUUID()}.tmp`;
   try {
-    await writeFile(temporary, `${JSON.stringify(catalogForDisk(value), null, 2)}\n`, { flag: "wx" });
+    await writeFile(temporary, text, { flag: "wx" });
     await rename(temporary, file);
   } finally {
     await rm(temporary, { force: true });
@@ -207,10 +207,19 @@ export function mutateLibrary(dataDir, mutation) {
   return withArchiveWriteLease(dataDir, () => serializeInProcess(file, async () => {
     const release = await acquireFileLock(`${file}.lock`);
     try {
-      const current = await readLibrary(file);
+      const { records: current, exists } = await readLibrary(file);
+      // Taken before the mutation runs, so a callback that edits the array in
+      // place cannot make a real change look like a no-op.
+      const before = exists ? JSON.stringify(current) : null;
       const next = await mutation(current);
       if (!Array.isArray(next)) throw new TypeError("Library mutation must return an array");
-      await atomicWrite(file, next);
+      const portable = catalogForDisk(next);
+      // Rewriting identical content is not free: on Windows the rename fails
+      // while any reader holds library.json open, so an unchanged catalog
+      // (every startup migration on stable data) is left as it is. Only the
+      // content is compared, not the formatting; a missing file is created.
+      if (before !== null && JSON.stringify(portable) === before) return next;
+      await atomicWrite(file, next, `${JSON.stringify(portable, null, 2)}\n`);
       return next;
     } finally {
       await release();

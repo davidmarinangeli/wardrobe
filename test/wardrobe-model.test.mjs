@@ -37,6 +37,20 @@ test("library migration is idempotent", () => {
   assert.deepEqual(second, first);
 });
 
+test("library migration reaches its fixed point in one pass on an empty legacy thumbnail", () => {
+  const now = "2026-01-01T00:00:00.000Z";
+  const legacy = [{ id: "i", part: "upperbody", image: "imported/i.png", thumbnail: "", createdAt: now, updatedAt: now }];
+  const first = migrateLibrary(legacy, now);
+  assert.equal(first.changed, true);
+  assert.equal(first.items[0].variants[0].thumbnail, "imported/i.png");
+  const second = migrateLibrary(first.items, now);
+  assert.equal(second.changed, false, "a second pass must find nothing left to migrate");
+  assert.deepEqual(second.items, first.items);
+  // A variant already migrated with an explicit thumbnail keeps it.
+  const explicit = migrateLibrary([{ ...first.items[0], variants: [{ ...first.items[0].variants[0], thumbnail: "imported/i-thumb.png" }] }], now);
+  assert.equal(explicit.items[0].variants[0].thumbnail, "imported/i-thumb.png");
+});
+
 test("outfits migrate itemIds to explicit pieces and preserve itemIds projection", () => {
   const item = normalizeItemV2({ id: "i", part: "upperbody", image: "/i.png" });
   const outfit = migrateOutfit({ id: "o", name: "Look", itemIds: ["i"] }, [item]);

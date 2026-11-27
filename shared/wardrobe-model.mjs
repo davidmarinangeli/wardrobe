@@ -88,7 +88,9 @@ export function normalizeVariant(value, itemId, index = 0, fallback = {}) {
     // These aliases make the transition safe for existing components and
     // third-party scripts while all new code can use the nested assets.
     image: image || cutout?.image || null,
-    thumbnail: asText(source.thumbnail, image || cutout?.thumbnail || "") || null,
+    // An empty thumbnail falls back like a missing one, so one migration pass
+    // reaches the final value ("" used to become null, then the image).
+    thumbnail: asText(source.thumbnail, "") || image || cutout?.thumbnail || null,
     modeledImage,
     modeledStatus: modeledPhoto.status,
     modeledError: modeledPhoto.error,

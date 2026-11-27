@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -118,6 +118,96 @@ test("a dead owner can be recovered without waiting for the orphan-marker grace"
     await writeFile(path.join(lockDir, "owner.json"), JSON.stringify({ pid: 2_147_483_647 }));
     const result = await mutateLibrary(dataDir, (current) => [...current, { id: "recovered" }]);
     assert.deepEqual(result, [{ id: "recovered" }]);
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+async function fileIdentity(file) {
+  const info = await stat(file, { bigint: true });
+  return `${info.dev}:${info.ino}`;
+}
+
+async function leftoverTemporaries(dataDir) {
+  return (await readdir(dataDir)).filter((name) => name.endsWith(".tmp"));
+}
+
+test("a mutation that changes nothing leaves library.json untouched", async () => {
+  const dataDir = await makeDataDir();
+  const file = path.join(dataDir, "library.json");
+  try {
+    await mutateLibrary(dataDir, () => [{ id: "kept", image: "imported/kept.png" }]);
+    const identity = await fileIdentity(file);
+    const bytes = await readFile(file, "utf8");
+    const result = await mutateLibrary(dataDir, (records) => records.map((record) => ({ ...record })));
+    assert.deepEqual(result, [{ id: "kept", image: "imported/kept.png" }]);
+    assert.equal(await fileIdentity(file), identity, "an unchanged catalog must not be replaced");
+    assert.equal(await readFile(file, "utf8"), bytes);
+    assert.deepEqual(await leftoverTemporaries(dataDir), []);
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("a missing library.json is still created by an empty mutation", async () => {
+  const dataDir = await makeDataDir();
+  try {
+    const result = await mutateLibrary(dataDir, (records) => records);
+    assert.deepEqual(result, []);
+    assert.equal(await readFile(path.join(dataDir, "library.json"), "utf8"), "[]\n");
+    assert.deepEqual(await leftoverTemporaries(dataDir), []);
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("compact and CRLF files with the same content are not rewritten", async (t) => {
+  const records = [{ id: "a", image: "imported/a.png", tags: ["x"] }];
+  const variants = {
+    compact: JSON.stringify(records),
+    crlf: `${JSON.stringify(records, null, 2).replace(/\n/g, "\r\n")}\r\n`,
+  };
+  for (const [name, text] of Object.entries(variants)) {
+    await t.test(name, async () => {
+      const dataDir = await makeDataDir();
+      const file = path.join(dataDir, "library.json");
+      try {
+        await writeFile(file, text);
+        const identity = await fileIdentity(file);
+        await mutateLibrary(dataDir, (current) => current);
+        assert.equal(await fileIdentity(file), identity);
+        assert.equal(await readFile(file, "utf8"), text, "the original formatting is kept");
+      } finally {
+        await rm(dataDir, { recursive: true, force: true });
+      }
+    });
+  }
+});
+
+test("a mutation that changes the content is written", async () => {
+  const dataDir = await makeDataDir();
+  const file = path.join(dataDir, "library.json");
+  try {
+    await writeFile(file, JSON.stringify([{ id: "a" }]));
+    await mutateLibrary(dataDir, (records) => records.map((record) => ({ ...record, name: "Renamed" })));
+    assert.equal(await readFile(file, "utf8"), `${JSON.stringify([{ id: "a", name: "Renamed" }], null, 2)}\n`);
+    // Legacy asset URLs differ from their portable form, so they are rewritten too.
+    await writeFile(file, JSON.stringify([{ id: "a", image: "/api/import/library/a.png" }]));
+    await mutateLibrary(dataDir, (records) => records);
+    assert.deepEqual(JSON.parse(await readFile(file, "utf8")), [{ id: "a", image: "imported/a.png" }]);
+    assert.deepEqual(await leftoverTemporaries(dataDir), []);
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("an in-place edit by the mutation is still written", async () => {
+  const dataDir = await makeDataDir();
+  const file = path.join(dataDir, "library.json");
+  try {
+    await writeFile(file, JSON.stringify([{ id: "a" }]));
+    await mutateLibrary(dataDir, (records) => { records[0].name = "Edited"; return records; });
+    assert.deepEqual(JSON.parse(await readFile(file, "utf8")), [{ id: "a", name: "Edited" }]);
   } finally {
     await rm(dataDir, { recursive: true, force: true });
   }
