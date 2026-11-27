@@ -73,7 +73,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14
+          - os: macos-latest
             target: aarch64-apple-darwin
             tauri_args: --target aarch64-apple-darwin
             app: desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Wardrobe.app

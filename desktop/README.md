@@ -214,7 +214,7 @@ cd src-tauri && cargo test       # config, secrets (keyring mock store), sidecar
 
 CI (`.github/workflows/desktop.yml`) runs `desktop-smoke` (prepare, then the
 packaged sidecar's `/api/health`) and `desktop-rust` (`cargo test`) on
-`macos-14` and `windows-latest` for pull requests touching `desktop/`,
+`macos-latest` and `windows-latest` for pull requests touching `desktop/`,
 `scripts/`, `shared/` or `package.json`.
 
 ## Releases
@@ -247,7 +247,7 @@ Then, in the Actions tab, wait for the **Release** run to be green:
    ad-hoc signing, updater public key present, release overlay present), then
    `npm ci` and `npm run check`.
 2. `draft`: finds or creates the draft release `Wardrobe <tag>` (`release.mjs draft`).
-3. `build` on `macos-14` (`aarch64-apple-darwin`) and `windows-latest`
+3. `build` on `macos-latest` (`aarch64-apple-darwin`) and `windows-latest`
    (`x86_64-pc-windows-msvc`): `npm ci` at the root and here,
    `node desktop/scripts/prepare.mjs --target <triple>`, then
    `tauri-apps/tauri-action@v0` builds with
