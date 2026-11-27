@@ -2,7 +2,7 @@ import { Fragment } from "react";
 
 /**
  * Standard page layout shell shared by every top-level view
- * (Wardrobe, Outfits, Inspo, Wishlist).
+ * (Wardrobe, Inspo, Wishlist).
  *
  * Renders:
  *   <main.gallery-pane>

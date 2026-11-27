@@ -16,6 +16,7 @@ Your clothes, extracted and organized with AI.
 This is a fork of [tandpfun/wardrobe](https://github.com/tandpfun/wardrobe), a local-first app with a simple idea: drop in a photo of a clothing item, let AI cut it out into a clean product shot, and generate an editorial photo of you wearing it. Everything — originals, cutouts, and the wardrobe database — stays on your machine.
 
 ![Wardrobe gallery](docs/screenshots/gallery.png)
+<!-- RETAKE: recorded with the old Wardrobe/Outfits/Inspo tab bar -->
 
 The original does three things well:
 
@@ -29,11 +30,14 @@ Full credit to [@cdngdev](https://x.com/cdngdev) for the original idea and imple
 
 The core import pipeline above is still here, but this fork turns it into a full styling app.
 
+The app has three tabs: **Wardrobe**, **Overview** and **Inspo**. Overview holds everything that groups pieces, in three sections: **Outfits** (where it opens), **Cheat sheets** and **Pieces**.
+
 **Style tools**
 
-- **Cheat sheets** — build a collection overview from selected wardrobe pieces. Equivalent garments partially overlap while staying recognizable. Add a title and optional description, then use **AI finish** to create a matching background, style the title and harmonize light and shadow. Choose the image model and quality from the same remembered menu used for model photos, and customize the art direction before generating; compare and download the original or AI version separately.
-- **Outfits** — combine wardrobe pieces (top, bottom, jacket, shoes, socks, accessory) into saved looks, previewed as a flat lay that reveals a scattered editorial layout on hover. Generate a modeled photo of the full outfit, in Standard or Premium quality, and refine it with a free-text note ("jacket should be darker") to regenerate.
-- **Suggest outfits** — pick an occasion (casual, work, date, sport, event) and get 3–5 AI-generated combinations pulled from your own wardrobe, each with reasoning about color harmony, weather, and occasion fit. It factors in live local weather and your style profile from Inspo. One click saves a suggestion as a real outfit.
+- **Outfits** — in Overview › Outfits, **+ Outfit** opens a full-screen piece picker: search by name, color, fabric or tag, narrow with category and tag chips, choose a variant, and watch a live flat-lay preview build up as you pick (a dress or jumpsuit greys out tops and bottoms). Name the look and save it; **Edit** reopens the picker with its pieces already selected. Generate a modeled photo of the full outfit, in Standard or Premium quality, and refine it with a free-text note ("jacket should be darker") to regenerate.
+- **Suggest outfits** — **Suggest outfit**, next to **+ Outfit**, asks for an occasion (casual, work, date, sport, event) and returns 3–5 AI-generated combinations pulled from your own wardrobe, each with reasoning about color harmony, weather, and occasion fit. It factors in live local weather and your style profile from Inspo. One click saves a suggestion as a real outfit.
+- **Cheat sheets** — build a collection overview: in Overview › Cheat sheets, **+ Cheat sheet** opens the same picker; **Next** takes the selection into the editor, where **Edit pieces** reopens it. Equivalent garments partially overlap while staying recognizable. Add a title and optional description, then use **AI finish** to create a matching background, style the title and harmonize light and shadow. Choose the image model and quality from the same remembered menu used for model photos, and customize the art direction before generating; compare and download the original or AI version separately.
+- **Bulk tags** — in Overview › Pieces, select pieces and add or remove a tag on all of them at once.
 - **Inspo** — one board for style inspiration and the wishlist pieces detected from it. Paste image URLs or drag in photos from anywhere to save a full look; a "Detect items" action analyzes it and breaks it down into individual garment cutouts. Browse by category — Full Look for the saved photos, or any garment type for the pieces detected out of them.
 - **How do I look?** — an AI mirror: upload a photo of yourself actually wearing an outfit and get a fit and color critique, plus swap suggestions pulled from pieces you already own.
 - **My Colors** — a quick seasonal color-analysis quiz (undertone + contrast) that assigns you a season palette, refinable by extracting colors from your own photos. Matching wardrobe items get a badge, and it feeds into outfit suggestions.
@@ -56,25 +60,32 @@ Select a saved cheat-sheet card to view it fullscreen, or use its pencil button 
 
 Each clip plays on loop below. The full-quality MP4 is linked under each one.
 
+<sub>The screenshots and clips were recorded before Outfits moved into Overview; the tabs are now Wardrobe · Overview · Inspo.</sub>
+
 ### The wardrobe
 
 ![Browsing the wardrobe grid](docs/screenshots/wardrobe.webp)
+<!-- RETAKE: recorded with the old Wardrobe/Outfits/Inspo tab bar -->
 
 <sub>[Full quality MP4 →](docs/screenshots/wardrobe.mp4)</sub>
 
-Every piece you import lands here as a clean cutout on its own card, labeled with its category and how many saved looks it appears in. Filter down to tops, jackets, bottoms, accessories, shoes or socks — or to just the pieces that match your season palette — and open any item to see the original photo it came from, its modeled preview, and the outfits built around it.
+Every piece you import lands here as a clean cutout on its own card, labeled with its category and how many saved looks it appears in. Filter down to tops, jackets, bottoms, accessories, shoes or socks — or to just the pieces that match your season palette — and open any item to see the original photo it came from, its modeled preview, and the outfits built around it; opening one of those looks takes you to Overview › Outfits.
 
-### Outfits
+### Overview › Outfits
 
-![The outfits board](docs/screenshots/outfits.webp)
+![Saved outfits in Overview](docs/screenshots/outfits.webp)
+<!-- RETAKE: recorded with the old Wardrobe/Outfits/Inspo tab bar -->
 
 <sub>[Full quality MP4 →](docs/screenshots/outfits.mp4)</sub>
 
-Saved looks, each previewed as a flat lay that scatters into an editorial layout on hover. Build one by hand from your own pieces, or hit **Suggest outfit**, pick an occasion, and get AI-generated combinations drawn from your wardrobe with reasoning about color harmony, weather and occasion fit. Any outfit can be rendered as a modeled photo of you wearing the whole look, and refined with a free-text note ("jacket should be darker") to regenerate.
+<sub>Recorded before Outfits moved into Overview.</sub>
+
+Saved looks, each previewed as a flat lay that scatters into an editorial layout on hover. Overview opens on this section. Build one by hand with **+ Outfit**, which opens a full-screen picker of your pieces with search, category and tag filters, and a live preview of the look; or hit **Suggest outfit** in the same header, pick an occasion, and get AI-generated combinations drawn from your wardrobe with reasoning about color harmony, weather and occasion fit. Any outfit can be rendered as a modeled photo of you wearing the whole look, and refined with a free-text note ("jacket should be darker") to regenerate.
 
 ### Inspo and the AI Mirror
 
 ![Importing inspo images and asking How do I look](docs/screenshots/inspo-howdoilook.webp)
+<!-- RETAKE: recorded with the old Wardrobe/Outfits/Inspo tab bar -->
 
 <sub>[Full quality MP4 →](docs/screenshots/inspo-howdoilook.mp4)</sub>
 
@@ -85,6 +96,7 @@ Saved looks, each previewed as a flat lay that scatters into an editorial layout
 ### My Colors
 
 ![The seasonal color analysis flow](docs/screenshots/armocromia.webp)
+<!-- RETAKE: likely recorded in the same session as the others, with the old tab bar -->
 
 <sub>[Full quality MP4 →](docs/screenshots/armocromia.mp4)</sub>
 
@@ -148,9 +160,11 @@ Open [localhost:5173](http://localhost:5173). On first run, a setup wizard opens
 2. **Add your key** — pasted into the wizard, saved straight into `.env` on your machine, dev server restarts itself.
 3. **Drop in a reference photo** — a clear, full-body photo of yourself (a face close-up is optional but recommended).
 
-That's it — the importer unlocks and you can drag, paste, or choose a photo to bring in your first piece. Reopen the wizard any time from the gear icon in the header, to switch providers, add a face reference, or check your setup.
+That's it — the importer unlocks and you can drag, paste, or choose a photo to bring in your first piece. These steps are for AI imports and generated photos; open the **Archive / Google Drive** shortcut at any wizard step to configure storage without an AI key. Afterwards, the gear icon opens **Settings**: the **AI** tab switches providers, adds keys, flips the Gemini TEST/PROD mode and replaces the reference photos.
 
 Prefer to do it by hand? Copy `.env.example` to `.env`, add `OPENAI_API_KEY` (or your provider's key), and place a PNG reference photo at `data/model-reference.png` — the wizard is just a friendlier way to do the same thing.
+
+Google Drive archive settings live in the **Archive** tab of **Settings** (gear icon), or the shortcut in the wizard. The tab stays greyed out until the four `GOOGLE_DRIVE_*` values are set in `.env`. Drive connection and backup are opt-in; connecting does not turn synchronization on. See [Google Drive archive setup and recovery](docs/google-drive-operations.md) for OAuth configuration, what is copied, and restore behavior. No AI key is needed to configure or use storage.
 
 ## More setup options
 

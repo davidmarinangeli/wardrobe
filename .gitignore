@@ -6,6 +6,9 @@ dist/
 !.env.example
 *.log
 data/
+# Private Google OAuth connection and future sync-control state. This rule also
+# covers custom WARDROBE_DATA_DIR values inside the repository.
+.google-drive/
 
 # Derived from data/model-reference-face.png at runtime (see prepareSubject in
 # scripts/draping-service.mjs). It is a crop of a personal reference photo and

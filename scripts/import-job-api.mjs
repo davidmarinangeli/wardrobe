@@ -8,6 +8,10 @@ import { MIRROR_MATERIALS, OUTFIT_REGISTERS } from "../shared/style-catalogue.mj
 import { NO_JUDGMENT_PROMPT } from "../shared/prompt-guardrails.mjs";
 import { normalizeItemV2 } from "../shared/wardrobe-model.mjs";
 import { mutateLibrary } from "../shared/wardrobe-library.mjs";
+import { catalogForDisk, catalogForHttp } from "../shared/portable-assets.mjs";
+import { inspectArchiveCatalogs, migrateCatalogAssetPaths, prepareArchiveDirectory, preserveOriginal, pruneUnreferencedOriginals, readReferenceBytes, reportSkippedArchiveStartup, resolveArchiveFile, mimeForExtension } from "./archive-store.mjs";
+import { markBrowserStateFields } from "./browser-state-api.mjs";
+import { createArchiveRequestHandler, trackArchivePromise, withArchiveWriteLease } from "./archive-coordinator.mjs";
 
 const API_ROOT = "/api/import/jobs";
 const ASSET_ROOT = "/api/import/assets";
@@ -31,7 +35,7 @@ function json(res, status, value) {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
-  res.end(JSON.stringify(value));
+  res.end(JSON.stringify(catalogForHttp(value)));
 }
 
 async function body(req, limit = 25 * 1024 * 1024) {
@@ -47,14 +51,29 @@ async function body(req, limit = 25 * 1024 * 1024) {
   catch { throw Object.assign(new Error("Expected a JSON request body"), { status: 400 }); }
 }
 
+/**
+ * Whether a state-changing request came from a page served by this same server.
+ * The dev server listens on every interface and these endpoints carry no
+ * credentials, so without this any website open in the same browser could
+ * POST to localhost and swap the AI keys, the provider or the reference photo.
+ * Browsers always send Origin on POST; a request without one is refused.
+ */
+export function isSameOriginRequest(req) {
+  const origin = req.headers?.origin;
+  const host = req.headers?.host;
+  if (typeof origin !== "string" || typeof host !== "string") return false;
+  try { return new URL(origin).host === host; }
+  catch { return false; }
+}
+
 function publicJob(job) {
   const copy = structuredClone(job);
   delete copy.internal;
   return copy;
 }
 
-function extension(mime = "image/png") {
-  return ({ "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" })[mime] || "png";
+function mimeForArchivePath(file) {
+  return mimeForExtension(path.extname(file).toLowerCase());
 }
 
 function decodeImage(input) {
@@ -249,20 +268,10 @@ export async function checkSetup(root, setting, mode = "prod") {
   const hasTestKey = provider === "gemini" ? Boolean(setting("GEMINI_API_KEY_TEST").trim()) : null;
   const hasProdKey = provider === "gemini" ? Boolean((setting("GEMINI_API_KEY_PROD") || setting("GEMINI_API_KEY")).trim()) : null;
   const referenceSetting = setting("WARDROBE_MODEL_REFERENCE", "data/model-reference.png");
-  const referencePath = path.resolve(root, referenceSetting);
-  let hasModelReference = false;
-  try {
-    hasModelReference = (await stat(referencePath)).isFile();
-  } catch (error) {
-    if (error.code !== "ENOENT") throw error;
-  }
+  const dataDir = path.resolve(root, setting("WARDROBE_DATA_DIR", "data"));
+  const hasModelReference = Boolean(await readReferenceBytes({ root, dataDir, setting, kind: "full" }));
   const faceReferenceSetting = setting("WARDROBE_FACE_REFERENCE", "data/model-reference-face.png");
-  let hasFaceReference = false;
-  try {
-    hasFaceReference = (await stat(path.resolve(root, faceReferenceSetting))).isFile();
-  } catch (error) {
-    if (error.code !== "ENOENT") throw error;
-  }
+  const hasFaceReference = Boolean(await readReferenceBytes({ root, dataDir, setting, kind: "face" }));
   return { ready: hasApiKey && hasModelReference, hasApiKey, hasModelReference, modelReference: referenceSetting, hasFaceReference, faceReference: faceReferenceSetting, provider, keyName, mode, hasTestKey, hasProdKey };
 }
 
@@ -272,18 +281,9 @@ export async function checkSetup(root, setting, mode = "prod") {
 // to. Silently absent when the file doesn't exist; callers fall back to the full-body photo alone.
 // Values that turn the face closeup off without deleting the file. Composing from the full-body
 // reference alone is how this worked before the closeup existed, and it stays a supported setup.
-const FACE_REFERENCE_OFF = new Set(["off", "none", "false", "0"]);
-
 export async function loadFaceReference(root, setting) {
-  const configured = setting("WARDROBE_FACE_REFERENCE", "data/model-reference-face.png").trim();
-  if (!configured || FACE_REFERENCE_OFF.has(configured.toLowerCase())) return null;
-  const facePath = path.resolve(root, configured);
-  try {
-    return { data: await readFile(facePath), mime: "image/png", name: "model-face.png" };
-  } catch (error) {
-    if (error.code === "ENOENT") return null;
-    throw error;
-  }
+  const dataDir = path.resolve(root, setting("WARDROBE_DATA_DIR", "data"));
+  return readReferenceBytes({ root, dataDir, setting, kind: "face" });
 }
 
 const IDENTITY_PROFILE_PROMPT = "Describe this person's visible physical identity in 2-4 factual, neutral sentences, to be used as a text-based redundancy alongside their photo when an AI image generator depicts them: apparent build/body type, apparent height impression, visible skin tone, hair color/length/style, face shape, apparent ethnicity, and any distinguishing features. Do not describe clothing, mood, or attractiveness — be direct and descriptive, not flattering.";
@@ -291,7 +291,7 @@ const IDENTITY_PROFILE_PROMPT = "Describe this person's visible physical identit
 async function geminiDescribeIdentity({ key, model, images }) {
   const parts = [
     { text: IDENTITY_PROFILE_PROMPT },
-    ...images.map((image) => ({ inlineData: { mimeType: "image/png", data: image.toString("base64") } })),
+    ...images.map((image) => ({ inlineData: { mimeType: image.mime || "image/png", data: image.data.toString("base64") } })),
   ];
   const schema = { type: "object", properties: { profile: { type: "string" } }, required: ["profile"] };
   const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
@@ -314,7 +314,7 @@ async function geminiDescribeIdentity({ key, model, images }) {
 async function openAIDescribeIdentity({ key, baseUrl, model, images }) {
   const content = [
     { type: "input_text", text: IDENTITY_PROFILE_PROMPT },
-    ...images.map((image) => ({ type: "input_image", image_url: `data:image/png;base64,${image.toString("base64")}` })),
+    ...images.map((image) => ({ type: "input_image", image_url: `data:${image.mime || "image/png"};base64,${image.data.toString("base64")}` })),
   ];
   const response = await fetch(`${baseUrl}/responses`, {
     method: "POST",
@@ -340,12 +340,10 @@ async function openAIDescribeIdentity({ key, baseUrl, model, images }) {
 // survives even when that happens. Re-derived only when the reference photos change (same
 // hash-then-cache pattern as suggestions-api.mjs's computeStyleDNA).
 export async function computeIdentityProfile({ root, dataDir, setting, provider, mode }) {
-  const modelPath = path.resolve(root, setting("WARDROBE_MODEL_REFERENCE", "data/model-reference.png"));
-  let modelData;
-  try { modelData = await readFile(modelPath); }
-  catch { return null; }
+  const modelReference = await readReferenceBytes({ root, dataDir, setting, kind: "full" });
+  if (!modelReference) return null;
   const face = await loadFaceReference(root, setting);
-  const hash = createHash("md5").update(modelData);
+  const hash = createHash("md5").update(modelReference.data);
   if (face) hash.update(face.data);
   const digest = hash.digest("hex");
   const cacheFile = path.join(dataDir, "identity-profile.json");
@@ -360,7 +358,7 @@ export async function computeIdentityProfile({ root, dataDir, setting, provider,
   const identityProvider = provider === "gemini" || provider === "openrouter" ? provider : "openai";
   const identityKey = resolveApiKey(setting, identityProvider, mode).key;
   if (!identityKey) return null;
-  const images = face ? [modelData, face.data] : [modelData];
+  const images = face ? [modelReference, face] : [modelReference];
   let profile;
   try {
     profile = identityProvider === "gemini"
@@ -765,7 +763,7 @@ async function verifyNoChromaSpill(bytes, key) {
 
 export async function atomicJson(file, value) {
   const tmp = `${file}.${randomUUID()}.tmp`;
-  await writeFile(tmp, `${JSON.stringify(value, null, 2)}\n`);
+  await writeFile(tmp, `${JSON.stringify(catalogForDisk(value), null, 2)}\n`);
   try {
     await rename(tmp, file);
   } catch (error) {
@@ -1365,7 +1363,42 @@ export function wardrobeImportApi(options = {}) {
     catch (error) { if (error.code === "ENOENT") return []; throw error; }
   }
 
+  async function archiveGeneration() {
+    let generation = 0;
+    for (const name of ["archive-metadata.json", "browser-state.json"]) {
+      try {
+        const value = JSON.parse(await readFile(path.join(dataDir, name), "utf8"));
+        if (Number.isSafeInteger(value.archiveGeneration) && value.archiveGeneration > generation) generation = value.archiveGeneration;
+      } catch (error) { if (error.code !== "ENOENT" && !(error instanceof SyntaxError)) throw error; }
+    }
+    return generation;
+  }
+
+  async function assertJobGeneration(job) {
+    const current = await archiveGeneration();
+    if (Number.isSafeInteger(job?.provenanceGeneration)) {
+      if (job.provenanceGeneration !== current) throw Object.assign(new Error("This import belongs to an older archive. Start it again from the current wardrobe."), { code: "archive_generation_changed", status: 409 });
+    } else if (current > 1) {
+      throw Object.assign(new Error("This import has no archive-generation provenance and cannot be approved after an archive restore."), { code: "archive_generation_changed", status: 409 });
+    }
+    return current;
+  }
+
+  async function quarantineStaleJob(job) {
+    job.status = "stale";
+    job.staleReason = "archive_generation_changed";
+    for (const stage of Object.values(job.stages || {})) {
+      if (["processing", "queued", "pending", "review"].includes(stage.status)) {
+        stage.status = "failed";
+        stage.decision = null;
+        stage.error = "This import belongs to an older archive. Start it again from the current wardrobe.";
+      }
+    }
+    await saveJob(job);
+  }
+
   async function persistImported(job) {
+    await assertJobGeneration(job);
     const id = `import-${job.id}`;
     await mkdir(libraryAssetDir, { recursive: true });
     const garmentName = `${id}-garment.png`;
@@ -1394,6 +1427,14 @@ export function wardrobeImportApi(options = {}) {
         modeledError: existing?.modeledError || null,
         modeledTier: existing?.modeledTier || null,
         importJobId: job.id,
+        sourceOriginal: job.internal?.sourceOriginal || null,
+        references: [
+          ...(existing?.references || []).filter((reference) => reference.id !== `${id}-source`),
+          ...(job.internal?.sourceOriginal ? [{
+          id: `${id}-source`, original: job.internal.sourceOriginal, asset: job.internal.sourceOriginal,
+          role: "view", scope: "item", label: job.internal.sourceFilename || "Original source photo", distinctive: false, revision: 1,
+          }] : []),
+        ],
         createdAt: existing?.createdAt || new Date().toISOString(),
       };
       savedRecord = normalizeItemV2(record);
@@ -1404,7 +1445,7 @@ export function wardrobeImportApi(options = {}) {
 
   async function generateModeledForItem(id, { tier, prompt }) {
     if (runningModeled.has(id)) return runningModeled.get(id);
-    const task = (async () => {
+    const task = trackArchivePromise(dataDir, async () => {
       try {
         const provider = activeProvider();
         const mode = await currentMode();
@@ -1415,15 +1456,8 @@ export function wardrobeImportApi(options = {}) {
         }
         const garment = { data: await readFile(path.join(libraryAssetDir, `${id}-garment.png`)), mime: "image/png", name: "garment.png" };
         const itemRecord = (await loadImported()).find((record) => record.id === id);
-        const modelPath = path.resolve(root, setting("WARDROBE_MODEL_REFERENCE", "data/model-reference.png"));
-        let modelData;
-        try {
-          modelData = await readFile(modelPath);
-        } catch (error) {
-          if (error.code === "ENOENT") throw new Error(`Model reference not found at ${modelPath}. Set WARDROBE_MODEL_REFERENCE or add data/model-reference.png.`);
-          throw error;
-        }
-        const model = { data: modelData, mime: "image/png", name: "model.png" };
+        const model = await readReferenceBytes({ root, dataDir, setting, kind: "full" });
+        if (!model) throw new Error(`Model reference not found at ${setting("WARDROBE_MODEL_REFERENCE", "data/model-reference.png")}. Set WARDROBE_MODEL_REFERENCE or add data/model-reference.png.`);
         const face = await loadFaceReference(root, setting);
         const referenceImages = face ? [model, face] : [model];
         // Tried dropping the face closeup on standard tier on the theory that two "person" images
@@ -1464,7 +1498,7 @@ export function wardrobeImportApi(options = {}) {
           ? { ...record, modeledStatus: "error", modeledError: error.message }
           : record));
       }
-    })().finally(() => runningModeled.delete(id));
+    }).finally(() => runningModeled.delete(id));
     runningModeled.set(id, task);
     return task;
   }
@@ -1472,8 +1506,11 @@ export function wardrobeImportApi(options = {}) {
   async function generate(job, stageName) {
     const lock = `${job.id}:${stageName}`;
     if (running.has(lock)) return running.get(lock);
-    const task = (async () => {
+    const task = trackArchivePromise(dataDir, async () => {
       const current = await loadJob(job.id);
+      if (!current) return;
+      try { await assertJobGeneration(current); }
+      catch (error) { await quarantineStaleJob(current); return; }
       const stage = current.stages[stageName];
       stage.status = "processing"; stage.decision = null; stage.error = null; stage.attempts += 1; stage.updatedAt = new Date().toISOString();
       await saveJob(current);
@@ -1526,6 +1563,7 @@ export function wardrobeImportApi(options = {}) {
         }
         await writeFile(output, bytes);
         const fresh = await loadJob(current.id);
+        await assertJobGeneration(fresh);
         fresh.stages[stageName].status = "review";
         fresh.stages[stageName].assetUrl = `${ASSET_ROOT}/${fresh.id}/${path.basename(output)}`;
         fresh.stages[stageName].failedAssetUrl = null;
@@ -1537,18 +1575,22 @@ export function wardrobeImportApi(options = {}) {
       } catch (error) {
         const fresh = await loadJob(current.id);
         fresh.stages[stageName].status = "failed"; fresh.stages[stageName].error = error.message; fresh.stages[stageName].updatedAt = new Date().toISOString();
+        if (error.code === "archive_generation_changed") {
+          fresh.status = "stale";
+          fresh.staleReason = error.code;
+        }
         if (typeof failedAssetUrl === "string") fresh.stages[stageName].failedAssetUrl = failedAssetUrl;
         if (chromaKeyUsed) fresh.stages[stageName].chromaKey = chromaKeyUsed;
         await saveJob(fresh);
       }
-    })().finally(() => running.delete(lock));
+    }).finally(() => running.delete(lock));
     running.set(lock, task);
     return task;
   }
 
   async function handler(req, res, next) {
     const url = new URL(req.url, "http://localhost");
-    if (!url.pathname.startsWith("/api/import/")) return next();
+    if (!url.pathname.startsWith("/api/import/") && !url.pathname.startsWith("/api/archive/assets/")) return next();
     try {
       if (url.pathname === "/api/import/wardrobe" && req.method === "GET") {
         return json(res, 200, await loadImported());
@@ -1560,6 +1602,7 @@ export function wardrobeImportApi(options = {}) {
         return json(res, 200, { mode: await currentMode() });
       }
       if (url.pathname === "/api/import/mode" && req.method === "POST") {
+        if (!isSameOriginRequest(req)) return json(res, 403, { error: "Cross-origin request rejected" });
         const input = await body(req);
         const mode = await writeAiMode(dataDir, input.mode);
         return json(res, 200, { mode });
@@ -1592,13 +1635,17 @@ export function wardrobeImportApi(options = {}) {
       const wardrobeDeleteMatch = url.pathname.match(/^\/api\/import\/wardrobe\/(import-[a-f0-9-]{36})$/i);
       if (wardrobeDeleteMatch && req.method === "DELETE") {
         const id = wardrobeDeleteMatch[1];
+        await markBrowserStateFields(dataDir, ["deletedIds"]);
+        let removed;
         await mutateLibrary(dataDir, (records) => {
-          if (!records.some((record) => record.id === id)) throw Object.assign(new Error("Imported wardrobe item not found"), { status: 404 });
+          removed = records.find((record) => record.id === id);
+          if (!removed) throw Object.assign(new Error("Imported wardrobe item not found"), { status: 404 });
           return records.filter((record) => record.id !== id);
         });
         await Promise.all([
           rm(path.join(libraryAssetDir, `${id}-garment.png`), { force: true }),
           rm(path.join(libraryAssetDir, `${id}-modeled.png`), { force: true }),
+          pruneUnreferencedOriginals(dataDir, removed),
         ]);
         return json(res, 200, { deleted: true, id });
       }
@@ -1634,11 +1681,18 @@ export function wardrobeImportApi(options = {}) {
         void generateModeledForItem(id, { tier, prompt });
         return json(res, 202, updated);
       }
-      const libraryAssetMatch = url.pathname.match(/^\/api\/import\/library\/([\w.-]+)$/i);
+      const libraryAssetMatch = url.pathname.match(/^\/api\/import\/library\/(.+)$/i);
       if (libraryAssetMatch && req.method === "GET") {
-        const file = path.join(libraryAssetDir, path.basename(libraryAssetMatch[1]));
-        await stat(file);
-        res.setHeader("Content-Type", "image/png");
+        const file = await resolveArchiveFile(dataDir, url.pathname);
+        res.setHeader("Content-Type", mimeForArchivePath(file));
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        return res.end(await readFile(file));
+      }
+      const archiveAssetMatch = url.pathname.match(/^\/api\/archive\/assets\/(.+)$/);
+      if (archiveAssetMatch && req.method === "GET") {
+        const relative = decodeURIComponent(archiveAssetMatch[1]);
+        const file = await resolveArchiveFile(dataDir, relative);
+        res.setHeader("Content-Type", mimeForArchivePath(file));
         res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
         return res.end(await readFile(file));
       }
@@ -1662,6 +1716,8 @@ export function wardrobeImportApi(options = {}) {
         }
         const input = await body(req);
         const image = decodeImage(input);
+        const provenanceGeneration = await archiveGeneration();
+        const preserved = await preserveOriginal({ dataDir, bytes: image.data, mime: image.mime, filename: typeof input.filename === "string" ? input.filename : typeof input.sourceName === "string" ? input.sourceName : "upload" });
         const normalizedImage = await normalizeImage(image.data);
         const { key } = resolveApiKey(setting, provider, setup.mode);
         const detected = (provider === "gemini"
@@ -1685,8 +1741,8 @@ export function wardrobeImportApi(options = {}) {
           await writeFile(path.join(dir, cropFile), croppedImage);
           const now = new Date().toISOString();
           const cropStage = { ...stageState(), status: "review", assetUrl: `${ASSET_ROOT}/${id}/${cropFile}`, updatedAt: now };
-          const job = { id, status: "active", metadata, stages: { crop: cropStage, garment: stageState() }, createdAt: now, updatedAt: now, internal: { originalFile, cropFile, originalMime: "image/png" } };
-          job.originalAssetUrl = `${ASSET_ROOT}/${id}/${originalFile}`;
+          const job = { id, status: "active", provenanceGeneration, metadata, stages: { crop: cropStage, garment: stageState() }, createdAt: now, updatedAt: now, internal: { originalFile, cropFile, originalMime: "image/png", sourceOriginal: preserved.path, sourceFilename: preserved.filename } };
+          job.originalAssetUrl = `/api/archive/assets/${preserved.path}`;
           await saveJob(job); jobs.push(publicJob(job));
         }
         return json(res, 202, { jobs, noClothingDetected: jobs.length === 0 });
@@ -1747,6 +1803,7 @@ export function wardrobeImportApi(options = {}) {
       const stageMatch = action.match(/^stages\/(crop|garment)\/(approve|reject|regenerate)$/);
       if (stageMatch && req.method === "POST") {
         const [, stageName, decision] = stageMatch;
+        await assertJobGeneration(job);
         if (!STAGES.has(stageName)) throw Object.assign(new Error("Invalid stage"), { status: 400 });
         if (decision === "regenerate") {
           if (stageName === "crop") throw Object.assign(new Error("Upload the image again to create new crops"), { status: 400 });
@@ -1802,38 +1859,54 @@ export function wardrobeImportApi(options = {}) {
       jobsDir = path.join(dataDir, "jobs");
       importedFile = path.join(dataDir, "library.json");
       libraryAssetDir = path.join(dataDir, "imported");
-      await mkdir(jobsDir, { recursive: true });
-      await mkdir(libraryAssetDir, { recursive: true });
-      const ids = await readdir(jobsDir).catch(() => []);
-      for (const id of ids) {
-        const job = await loadJob(id);
-        if (!job) continue;
-        if (job.status === "complete") {
-          try {
-            await persistImported(job);
-            await rm(path.join(jobsDir, job.id), { recursive: true, force: true });
-          } catch (error) {
-            job.status = "active";
-            job.stages.garment.status = "review";
-            job.stages.garment.decision = null;
-            job.stages.garment.error = null;
-            await saveJob(job);
+      const resume = [];
+      await withArchiveWriteLease(dataDir, async () => {
+        const preflight = await inspectArchiveCatalogs(dataDir);
+        if (!preflight.valid) {
+          reportSkippedArchiveStartup("import-job startup replay", preflight);
+          return;
+        }
+        await prepareArchiveDirectory({ root, dataDir, setting });
+        await mkdir(jobsDir, { recursive: true });
+        await mkdir(libraryAssetDir, { recursive: true });
+        const ids = await readdir(jobsDir).catch(() => []);
+        for (const id of ids) {
+          const job = await loadJob(id);
+          if (!job) continue;
+          try { await assertJobGeneration(job); }
+          catch (error) {
+            if (error.code !== "archive_generation_changed") throw error;
+            await quarantineStaleJob(job);
+            continue;
           }
-          continue;
+          if (job.status === "complete") {
+            try {
+              await persistImported(job);
+              await rm(path.join(jobsDir, job.id), { recursive: true, force: true });
+            } catch (error) {
+              job.status = "active";
+              job.stages.garment.status = "review";
+              job.stages.garment.decision = null;
+              job.stages.garment.error = null;
+              await saveJob(job);
+            }
+            continue;
+          }
+          if (job.stages.crop?.status === "rejected" || job.stages.garment.status === "rejected") {
+            await rm(path.join(jobsDir, job.id), { recursive: true, force: true });
+            continue;
+          }
+          if (job.stages.crop && job.stages.crop.status !== "approved") continue;
+          if (["processing", "queued"].includes(job.stages.garment.status)) {
+            job.stages.garment.status = "pending";
+            await saveJob(job);
+            resume.push(job);
+          }
         }
-        if (job.stages.crop?.status === "rejected" || job.stages.garment.status === "rejected") {
-          await rm(path.join(jobsDir, job.id), { recursive: true, force: true });
-          continue;
-        }
-        if (job.stages.crop && job.stages.crop.status !== "approved") continue;
-        if (["processing", "queued"].includes(job.stages.garment.status)) {
-          job.stages.garment.status = "pending";
-          await saveJob(job);
-          void generate(job, "garment");
-        }
-      }
+      });
+      for (const job of resume) void generate(job, "garment").catch(() => {});
     },
-    configureServer(server) { server.middlewares.use(handler); },
-    configurePreviewServer(server) { server.middlewares.use(handler); },
+    configureServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },
+    configurePreviewServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },
   };
 }

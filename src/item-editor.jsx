@@ -13,7 +13,7 @@ import { WARDROBE_TYPES as TYPES, TYPE_MAP } from "./categories.js";
 import { itemVariant, variantImage, variantModeledImage, variantOwnImage } from "../shared/wardrobe-model.mjs";
 import { galleryVariantIndex, galleryVariantPhotos, isPeekGesture } from "./gallery-variants.js";
 import { DEFAULT_ITEM_COLOR, changedDraftFields, itemMenuActions, itemMetaLine, unsavedLabel } from "./item-sheet.js";
-import { GenerateButton, RefineComposer, StageStatus, useRememberedTier } from "./components/ModelPhotoControls.jsx";
+import { GenerateButton, RefineComposer, StageError, StageStatus, useRememberedTier } from "./components/ModelPhotoControls.jsx";
 import { moveMenuFocus, useDismissOnOutsidePointer } from "./hooks/usePopover.js";
 
 function rgbToHex(red, green, blue) {
@@ -401,7 +401,7 @@ function OutfitsWithItem({ outfits, onOpen }) {
                 // this size, and they are already loaded for the grid behind.
                 <span className="item-outfits__pieces">
                   {outfit.pieces.slice(0, 3).map((piece) => (
-                    <img key={piece.id} src={piece.thumbnail || piece.image} alt="" loading="lazy" />
+                    <OptimizedImage key={piece.id} src={piece.thumbnail || piece.image} alt="" loading="lazy" />
                   ))}
                 </span>
               )}
@@ -664,7 +664,7 @@ function ItemDetails({ draft, setDraft, palette, sampling, setSampling, sampleSt
  * inside it. The method is the first question because it decides which of two
  * pipelines runs; every field below it follows from that answer.
  */
-function AddVariantSheet({ item, sourceVariantId, tier, tiers, onTierChange, premiumAllowed, onCreated, onClose }) {
+function AddVariantSheet({ item, sourceVariantId, tier, tiers, onTierChange, tierReady, premiumAllowed, onCreated, onClose }) {
   const [method, setMethod] = useState("describe");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -675,7 +675,7 @@ function AddVariantSheet({ item, sourceVariantId, tier, tiers, onTierChange, pre
   const dialogRef = useRef(null);
   // A described variant is nothing without the words that generate it, and a
   // photo variant is nothing without the photo.
-  const canSubmit = method === "photo" ? Boolean(photo) : Boolean(name.trim() || description.trim());
+  const canSubmit = tierReady && (method === "photo" ? Boolean(photo) : Boolean(name.trim() || description.trim()));
 
   // Focus the sheet, not its first field: on a phone a focused input raises the
   // keyboard over the very sheet that just opened.
@@ -869,7 +869,7 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState("");
   const [modeledNote, setModeledNote] = useState("");
-  const { tier, tiers, chooseTier } = useRememberedTier(provider, premiumAllowed);
+  const { tier, tiers, chooseTier, tierReady, tierStateError } = useRememberedTier(provider, premiumAllowed);
   // From the draft, so the meta line follows a category change before it is saved.
   const type = TYPE_MAP[draft.part]?.singular || "Wardrobe item";
   const variants = item.variants || [];
@@ -1192,6 +1192,7 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
             tiers={tiers}
             onTierChange={chooseTier}
             premiumAllowed={premiumAllowed}
+            disabled={!tierReady}
           />
         </ModeledHero>
       ) : (
@@ -1209,6 +1210,8 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
                 tiers={tiers}
                 onTierChange={chooseTier}
                 premiumAllowed={premiumAllowed}
+                disabled={!tierReady}
+                tierStateError={tierStateError}
               />
             </div>
           ))}
@@ -1217,7 +1220,7 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
 
       <div className="viewer-details editing">
         {(generateError || modeledStatus === "error") && (
-          <p className="stage-error" role="alert">{generateError || modeledError || "That model photo could not be made."}</p>
+          <StageError message={generateError || modeledError} />
         )}
 
         {/* The name straight after the photo. It used to be the fourth thing on
@@ -1293,6 +1296,7 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
       tier={tier}
       tiers={tiers}
       onTierChange={chooseTier}
+      tierReady={tierReady}
       premiumAllowed={premiumAllowed}
       onCreated={(updatedItem, createdId) => {
         onSave(updatedItem);

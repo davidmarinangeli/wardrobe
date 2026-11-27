@@ -1,21 +1,14 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import { ArrowCounterClockwise, CaretDown, CaretUp, Check, SpinnerGap, X } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, CaretDown, CaretUp, Check, SpinnerGap, WarningCircle, X } from "@phosphor-icons/react";
 import { modelTiers } from "../model-tiers.js";
-import { MODEL_TIER_STORAGE_KEY, resolveModelTier } from "../item-sheet.js";
+import { resolveModelTier } from "../item-sheet.js";
+import { updateBrowserState, useBrowserState } from "../browser-state.js";
 import { moveMenuFocus, useDismissOnOutsidePointer } from "../hooks/usePopover.js";
 
 // The controls every panel uses to make an image — the item sheet's model
 // photo, an outfit's model photo, detecting the pieces in an inspo pin. One
 // visual rule across all three: making something for the first time is the
 // accent pill; doing it again is a quieter glass chip.
-
-function readStoredTier() {
-  try {
-    return window.localStorage.getItem(MODEL_TIER_STORAGE_KEY);
-  } catch {
-    return null;
-  }
-}
 
 /**
  * One quality choice, remembered between sheets and shared by every panel that
@@ -24,17 +17,20 @@ function readStoredTier() {
  */
 export function useRememberedTier(provider, premiumAllowed) {
   const tiers = modelTiers(provider);
-  const [stored, setStored] = useState(readStoredTier);
+  const [stateError, setStateError] = useState("");
+  const browserState = useBrowserState();
+  const stored = browserState.state?.modelTier ?? null;
   const tier = resolveModelTier(stored, tiers, premiumAllowed);
-  const chooseTier = useCallback((next) => {
-    setStored(next);
+  const chooseTier = useCallback(async (next) => {
+    if (!browserState.ready) return;
+    setStateError("");
     try {
-      window.localStorage.setItem(MODEL_TIER_STORAGE_KEY, next);
-    } catch {
-      // Storage refused (private browsing): the choice still holds for this panel.
+      await updateBrowserState("modelTier", next);
+    } catch (error) {
+      setStateError(error.message);
     }
-  }, []);
-  return { tier, tiers, chooseTier };
+  }, [browserState.ready]);
+  return { tier, tiers, chooseTier, tierReady: browserState.ready, tierStateError: stateError || browserState.error?.message || "" };
 }
 
 /**
@@ -42,7 +38,7 @@ export function useRememberedTier(provider, premiumAllowed) {
  * "Merge ▾". Without `tiers` it is the same pill with no caret, for actions
  * that have no quality to choose (detecting the pieces in a pin).
  */
-export function GenerateButton({ icon, label, busy = false, busyLabel = "Starting…", disabled = false, onGenerate, tier, tiers = null, onTierChange, premiumAllowed = true, block = false }) {
+export function GenerateButton({ icon, label, busy = false, busyLabel = "Starting…", disabled = false, title, onGenerate, tier, tiers = null, onTierChange, premiumAllowed = true, block = false, tierStateError = "" }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   const menuRef = useRef(null);
@@ -65,7 +61,7 @@ export function GenerateButton({ icon, label, busy = false, busyLabel = "Startin
   return (
     <div ref={rootRef} className={`generate-button${block ? " generate-button--block" : ""}`}>
       <div className="generate-button__pill">
-        <button type="button" className="generate-button__main" disabled={disabled || busy} onClick={() => onGenerate(tier)}>
+        <button type="button" className="generate-button__main" disabled={disabled || busy} title={title} onClick={() => onGenerate(tier)}>
           {busy ? <SpinnerGap size={16} className="modeled-photo-spinner" aria-hidden="true" /> : icon}
           {busy ? busyLabel : label}
         </button>
@@ -79,7 +75,7 @@ export function GenerateButton({ icon, label, busy = false, busyLabel = "Startin
               aria-haspopup="menu"
               aria-expanded={open}
               aria-label={`Quality: ${current?.label}. Change quality`}
-              disabled={busy}
+              disabled={busy || disabled}
               onClick={() => setOpen((value) => !value)}
             >
               {current?.label}
@@ -88,6 +84,7 @@ export function GenerateButton({ icon, label, busy = false, busyLabel = "Startin
           </>
         )}
       </div>
+      {tierStateError && <p className="status error" role="alert">{tierStateError}</p>}
       {hasTiers && open && (
         <div
           ref={menuRef}
@@ -115,7 +112,7 @@ export function GenerateButton({ icon, label, busy = false, busyLabel = "Startin
                 type="button"
                 role="menuitemradio"
                 aria-checked={checked}
-                disabled={locked}
+                disabled={locked || disabled}
                 className="tier-menu__option"
                 onClick={() => choose(option.id)}
               >
@@ -147,12 +144,43 @@ export function StageStatus({ children }) {
   );
 }
 
+const megabytes = (bytes) => `${(Number(bytes) / 1024 / 1024).toFixed(1).replace(/\.0$/, "")} MB`;
+
+/**
+ * An API's own wording, made readable: a size limit in raw bytes becomes a
+ * sentence in megabytes. Anything else passes through unchanged.
+ */
+export function readableGenerationError(message) {
+  const tooLarge = /Request body of (\d+) bytes exceeds the maximum allowed size of (\d+) bytes/i.exec(message || "");
+  if (tooLarge) {
+    return {
+      title: "The reference photos are too large",
+      detail: `Together they come to ${megabytes(tooLarge[1])}, over the ${megabytes(tooLarge[2])} the image service accepts. Try fewer pieces or smaller photos.`,
+    };
+  }
+  return { title: "That model photo could not be made.", detail: message || "" };
+}
+
+/** Why the last generation failed, as a banner where the photo would be. */
+export function StageError({ message }) {
+  const { title, detail } = readableGenerationError(message);
+  return (
+    <div className="stage-error" role="alert">
+      <WarningCircle size={18} weight="fill" aria-hidden="true" />
+      <div>
+        <strong>{title}</strong>
+        {detail && <p>{detail}</p>}
+      </div>
+    </div>
+  );
+}
+
 /**
  * Doing it again: a glass chip, quieter than the accent pill that did it first.
  * `concealed` hides it without unmounting — while the composer it opened is
  * showing, it is still the shape that composer grows from and shrinks back to.
  */
-export function StageChip({ ref, icon, label, onClick, disabled = false, concealed = false }) {
+export function StageChip({ ref, icon, label, onClick, disabled = false, title, concealed = false }) {
   return (
     <button
       ref={ref}
@@ -160,6 +188,7 @@ export function StageChip({ ref, icon, label, onClick, disabled = false, conceal
       className={`stage-chip${concealed ? " is-concealed" : ""}`}
       onClick={onClick}
       disabled={disabled}
+      title={title}
       aria-hidden={concealed || undefined}
       inert={concealed}
     >
@@ -179,7 +208,7 @@ export function StageChip({ ref, icon, label, onClick, disabled = false, conceal
  * Without an origin it grows from a chip-sized slot at the bottom centre.
  * Always mounted so the close can animate — `inert` and hidden while closed.
  */
-export function RefineComposer({ open, onClose, originRef, note, onNoteChange, busy, onGenerate, tier, tiers, onTierChange, premiumAllowed }) {
+export function RefineComposer({ open, onClose, originRef, note, onNoteChange, busy, onGenerate, tier, tiers, onTierChange, premiumAllowed, disabled = false }) {
   const rootRef = useRef(null);
   const surfaceRef = useRef(null);
   const inputRef = useRef(null);
@@ -255,20 +284,21 @@ export function RefineComposer({ open, onClose, originRef, note, onNoteChange, b
           value={note}
           onChange={(event) => onNoteChange(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === "Enter" && !busy) {
+            if (event.key === "Enter" && !busy && !disabled) {
               event.preventDefault();
               onGenerate(tier);
             }
           }}
           placeholder="e.g. jacket should be darker"
           enterKeyHint="go"
-          disabled={busy}
+          disabled={busy || disabled}
         />
         <GenerateButton
           block
           icon={<RegenerateIcon />}
           label="Regenerate"
           busy={busy}
+          disabled={disabled}
           onGenerate={onGenerate}
           tier={tier}
           tiers={tiers}

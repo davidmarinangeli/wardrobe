@@ -55,7 +55,7 @@ export function MobileHeadRow({ title, subtitle, onSettings, badge, largeRef }) 
         type="button"
         className="mobile-settings"
         onClick={onSettings}
-        aria-label="Open setup guide"
+        aria-label="Open settings"
       >
         <Gear size={19} aria-hidden="true" />
         {badge}

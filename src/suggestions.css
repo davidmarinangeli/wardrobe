@@ -255,7 +255,7 @@
 
 .deck-card-note dd { margin: 0; }
 
-/* The shared stack left-aligns its zones, which suits the builder's narrow
+/* The shared stack left-aligns its zones, which suits the picker's narrow
    preview but leaves a card this wide looking lopsided. */
 .deck-card-scroll .outfit-stack { width: 100%; }
 .deck-card-scroll .outfit-stack-zone { justify-content: center; }

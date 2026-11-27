@@ -20,9 +20,22 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { GARMENT_PART_ID_SET } from "../shared/garments.mjs";
+import { withArchiveWriteLease } from "./archive-coordinator.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const REVIEW_FILE = path.join(ROOT, "data", "backfill-garment-parts.review.json");
+export const DATA_DIR = path.resolve(ROOT, process.env.WARDROBE_DATA_DIR || "data");
+const REVIEW_FILE = path.join(DATA_DIR, "backfill-garment-parts.review.json");
+
+async function archiveGeneration(dataDir) {
+  let generation = 0;
+  for (const name of ["archive-metadata.json", "browser-state.json"]) {
+    try {
+      const value = JSON.parse(await readFile(path.join(dataDir, name), "utf8"));
+      if (Number.isSafeInteger(value?.archiveGeneration) && value.archiveGeneration > generation) generation = value.archiveGeneration;
+    } catch (error) { if (error.code !== "ENOENT") throw error; }
+  }
+  return generation;
+}
 
 // Only records sitting in one of these are candidates — anything already filed
 // as shoes/socks/accessories/jacket was not a victim of the missing categories.
@@ -113,8 +126,6 @@ async function readJsonArray(dataDir, file) {
   }
 }
 
-export const DATA_DIR = path.join(ROOT, "data");
-
 export async function scan(dataDir = DATA_DIR) {
   const results = [];
   for (const source of SOURCES) {
@@ -145,7 +156,8 @@ export async function scan(dataDir = DATA_DIR) {
 }
 
 async function report() {
-  const results = await scan();
+  const provenanceGeneration = await archiveGeneration(DATA_DIR);
+  const results = await scan(DATA_DIR);
   const total = results.reduce((sum, result) => sum + result.candidates.length, 0);
 
   for (const result of results) {
@@ -161,12 +173,13 @@ async function report() {
 
   console.log(`\n${total} item${total === 1 ? "" : "s"} would change part. Nothing has been modified.`);
 
-  await writeFile(REVIEW_FILE, `${JSON.stringify({ generatedAt: new Date().toISOString(), total, results }, null, 2)}\n`, "utf8");
+  await writeFile(REVIEW_FILE, `${JSON.stringify({ generatedAt: new Date().toISOString(), provenanceGeneration, total, results }, null, 2)}\n`, "utf8");
   console.log(`Review file: ${path.relative(ROOT, REVIEW_FILE)}`);
   if (total) console.log("Check it, delete any row you disagree with, then re-run with --apply.");
 }
 
 async function apply() {
+  const currentGeneration = await archiveGeneration(DATA_DIR);
   let review;
   try {
     review = JSON.parse(await readFile(REVIEW_FILE, "utf8"));
@@ -176,10 +189,18 @@ async function apply() {
     return;
   }
 
+  if (Number.isSafeInteger(review.provenanceGeneration)
+      ? review.provenanceGeneration !== currentGeneration
+      : currentGeneration > 1) {
+    console.error("Review is stale or has no archive-generation provenance. Run the report again for the current archive.");
+    process.exitCode = 1;
+    return;
+  }
+
   let changed = 0;
   for (const result of review.results || []) {
     if (!result.candidates?.length) continue;
-    const filePath = path.join(ROOT, "data", result.file);
+    const filePath = path.join(DATA_DIR, result.file);
     const records = JSON.parse(await readFile(filePath, "utf8"));
     const byId = new Map(result.candidates.map((candidate) => [candidate.id, candidate]));
 
@@ -203,7 +224,7 @@ async function apply() {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const run = process.argv.includes("--apply") ? apply : report;
-  run().catch((error) => {
+  withArchiveWriteLease(DATA_DIR, () => run()).catch((error) => {
     console.error(error.message);
     process.exitCode = 1;
   });

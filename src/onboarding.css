@@ -24,7 +24,21 @@
   padding: 40px 38px 32px;
   background: var(--paper);
   box-shadow: var(--shadow-lg);
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--wash-3) transparent;
 }
+
+/* Same slim, trackless thumb as the item sheet, inset from the rounded corners. */
+.viewer.onboarding::-webkit-scrollbar { width: 8px; }
+.viewer.onboarding::-webkit-scrollbar-track { background: transparent; margin-block: 16px; }
+.viewer.onboarding::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: var(--r-full);
+  background: var(--wash-3);
+  background-clip: padding-box;
+}
+.viewer.onboarding::-webkit-scrollbar-corner { background: transparent; }
 
 .onboarding-dots {
   display: flex;
@@ -33,6 +47,38 @@
   padding: 0;
   list-style: none;
 }
+
+.onboarding-storage-shortcut {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: -10px 0 20px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--paper-raised);
+}
+
+.onboarding-storage-shortcut > span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.onboarding-storage-shortcut button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  padding: 4px 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.onboarding-storage-shortcut button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
 .onboarding-dots li {
   width: 22px;

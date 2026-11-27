@@ -12,6 +12,8 @@ import { preferencesApi } from "./scripts/preferences-api.mjs";
 import { colorProfileApi } from "./scripts/color-profile-api.mjs";
 import { variantApi } from "./scripts/variant-api.mjs";
 import { cheatSheetsApi } from "./scripts/cheat-sheets-api.mjs";
+import { browserStateApi } from "./scripts/browser-state-api.mjs";
+import { googleDriveApi } from "./scripts/google-drive-api.mjs";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
@@ -22,6 +24,11 @@ export default defineConfig(({ mode }) => {
     server: {
       host: "0.0.0.0",
       allowedHosts: ["terminal.local", "localhost"],
+      fs: {
+        // Keep Vite's built-in sensitive-file patterns and also deny the
+        // private OAuth control directory, including custom nested data roots.
+        deny: [".env", ".env.*", "*.{crt,pem}", "**/.git/**", "**/.google-drive/**"],
+      },
       warmup: {
         clientFiles: ["./src/main.jsx"],
       },
@@ -32,6 +39,7 @@ export default defineConfig(({ mode }) => {
       allowedHosts: ["localhost"],
     },
     plugins: [
+      googleDriveApi({ env }),
       react(),
       responsiveImageApi(),
       wardrobeImportApi({ env }),
@@ -45,6 +53,7 @@ export default defineConfig(({ mode }) => {
       colorProfileApi({ env }),
       variantApi({ env }),
       cheatSheetsApi({ env }),
+      browserStateApi({ env }),
     ],
   };
 });

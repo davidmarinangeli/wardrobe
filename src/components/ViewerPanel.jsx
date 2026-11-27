@@ -67,9 +67,18 @@ export function ViewerPanel({
   // the chrome breakpoint: at desktop widths this is a right-edge drawer, where
   // a downward drag means nothing and the pointer handlers are pure overhead.
   const isPhone = useIsPhone();
+  const requestClosePermission = () => {
+    if (closeDisabled) return Promise.resolve(false);
+    try {
+      return Promise.resolve(onRequestClose?.()).then((allowed) => allowed !== false).catch(() => false);
+    } catch {
+      return Promise.resolve(false);
+    }
+  };
   const requestDismiss = (options) => {
-    if (closeDisabled || onRequestClose?.() === false) return;
-    dismiss(options);
+    void requestClosePermission().then((allowed) => {
+      if (allowed) dismiss(options);
+    });
   };
   const { dragHandlers } = useSheetGesture({
     sheetRef,
@@ -81,7 +90,9 @@ export function ViewerPanel({
     // thumb, so playing the 160ms exit on top of it would animate it a second
     // time from a place it has already left.
     onDismiss: () => {
-      if (onRequestClose?.() !== false) onClose();
+      void requestClosePermission().then((allowed) => {
+        if (allowed) onClose();
+      });
     },
   });
 

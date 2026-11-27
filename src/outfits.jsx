@@ -1,25 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { ArrowCounterClockwise, Check, Palette, PencilSimple, Sparkle, SpinnerGap, X } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, Lightbulb, Palette, PencilSimple, Plus, Sparkle, SpinnerGap, X } from "@phosphor-icons/react";
 import { CheckCircle } from "@phosphor-icons/react";
 import { OptimizedImage } from "./OptimizedImage.jsx";
 import { api } from "./api.js";
-import { OUTFIT_CATEGORIES as CATEGORIES } from "./categories.js";
 import { GARMENT_PART_MAP } from "../shared/garments.mjs";
-import { initialVariantForPiece, resolveOutfitPieces, variantImage, variantOwnImage } from "../shared/wardrobe-model.mjs";
-import { GenerateButton, RefineComposer, StageChip, StageStatus, useRememberedTier } from "./components/ModelPhotoControls.jsx";
+import { OUTFIT_MAX_PIECES } from "../shared/outfit-rules.mjs";
+import { migrateOutfit, resolveOutfitPieces } from "../shared/wardrobe-model.mjs";
+import { GenerateButton, RefineComposer, StageChip, StageError, StageStatus, useRememberedTier } from "./components/ModelPhotoControls.jsx";
 import { SuggestionPanel } from "./suggestions.jsx";
-import { useSheetGesture } from "./hooks/useSheetGesture.js";
-import { useIsPhone } from "./hooks/useIsPhone.js";
 import { OutfitStack } from "./components/OutfitStack.jsx";
+import { PiecePicker } from "./components/PiecePicker.jsx";
 import { ViewerPanel } from "./components/ViewerPanel.jsx";
 import { ModeledHero } from "./components/ModeledHero.jsx";
 import { PanelActions } from "./components/PanelActions.jsx";
 import { EditableTitle } from "./components/EditableTitle.jsx";
-import { PageShell } from "./components/PageShell.jsx";
 import { PageStatus } from "./components/PageStatus.jsx";
 import { useViewerKeyboard } from "./hooks/useViewerKeyboard.js";
 import { useWornToday } from "./hooks/useWornToday.js";
+import { updateBrowserSet, useBrowserState } from "./browser-state.js";
 import "./outfits.css";
 import "./suggestions.css";
 
@@ -120,7 +118,7 @@ function scatteredPieces(outfitId, pieces) {
       maxHeight: isFull ? "82%" : "68%",
       maxWidth: "68%",
     };
-    return <img key={item.id} className="outfit-card-hover-piece outfit-card-solo-piece" src={item.image || item.thumbnail} alt="" style={style} />;
+    return <OptimizedImage key={item.id} className="outfit-card-hover-piece outfit-card-solo-piece" src={item.image || item.thumbnail} alt="" style={style} />;
   }
   const seenByPart = {};
   return pieces.map((item) => {
@@ -132,7 +130,7 @@ function scatteredPieces(outfitId, pieces) {
     if (slot.bottom != null) style.bottom = slot.bottom;
     if (slot.left != null) style.left = slot.left;
     if (slot.right != null) style.right = slot.right;
-    return <img key={item.id} className="outfit-card-hover-piece" src={item.image || item.thumbnail} alt="" style={style} />;
+    return <OptimizedImage key={item.id} className="outfit-card-hover-piece" src={item.image || item.thumbnail} alt="" style={style} />;
   });
 }
 
@@ -151,198 +149,80 @@ function OutfitFlatLay({ outfitId, pieces }) {
   return <div className="outfit-card-flatlay">{scatteredPieces(outfitId, pieces)}</div>;
 }
 
-function OutfitBuilder({ items, initialOutfit, onCancel, onSave }) {
-  const [name, setName] = useState(initialOutfit?.name || "");
-  const [selected, setSelected] = useState(() => new Map(
-    (initialOutfit?.pieces || (initialOutfit?.itemIds || []).map((itemId) => ({ itemId, variantId: null }))).map((piece) => [piece.itemId, piece.variantId]),
-  ));
+// What a lineup change wipes (scripts/outfits-api.mjs normalizeOutfit), naming
+// only what this outfit has. Null when there's nothing to lose.
+function clearedOnSave(outfit) {
+  const parts = [
+    outfit?.modeledImage && "the model photo",
+    outfit?.description && "the style notes",
+    outfit?.tags?.length && "the tags",
+  ].filter(Boolean);
+  if (!parts.length) return null;
+  return parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`;
+}
+
+// Create and edit both go through the shared picker; the name and its error
+// live here, in the picker's footer.
+function OutfitPicker({ items, outfit, onCancel, onSave }) {
+  const [name, setName] = useState(outfit?.name || "");
   const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const sheetRef = useRef(null);
-  const overlayRef = useRef(null);
-  const closeButtonRef = useRef(null);
-  const isPhone = useIsPhone();
-  const { dragHandlers } = useSheetGesture({
-    sheetRef,
-    overlayRef,
-    enabled: isPhone,
-    onDismiss: onCancel,
+  // Snapshot at mount. `items` holds active pieces only (App.jsx): retired or
+  // deleted pieces can't be shown, so they are dropped on save, and the notice
+  // says so. The lineup then changes, so the server also clears the modeled
+  // photo, description and tags (scripts/outfits-api.mjs normalizeOutfit).
+  const [{ initialSelection, missing }] = useState(() => {
+    const all = outfit ? migrateOutfit(outfit, items).pieces : [];
+    const ids = new Set(items.map((item) => item.id));
+    const initialSelection = all.filter((piece) => ids.has(piece.itemId));
+    return { initialSelection, missing: all.length - initialSelection.length };
   });
 
-  useViewerKeyboard(onCancel, closeButtonRef);
-
-  const itemsByCategory = useMemo(() => {
-    const groups = Object.fromEntries(CATEGORIES.map((category) => [category.id, []]));
-    for (const item of items) if (groups[item.part]) groups[item.part].push(item);
-    return groups;
-  }, [items]);
-
-  const toggleItem = (itemId) => {
-    setSelected((current) => {
-      const next = new Map(current);
-      if (next.has(itemId)) next.delete(itemId);
-      else {
-        const item = items.find((candidate) => candidate.id === itemId);
-        // Every piece lands on its default way of being worn, whatever its
-        // variant count. The previous null forced a second tap on every
-        // multi-variant piece and failed the save if it was missed — an invalid
-        // intermediate state in place of a sensible starting one.
-        next.set(itemId, initialVariantForPiece(item));
-      }
-      return next;
-    });
-  };
-
-  const selectVariant = (itemId, variantId) => setSelected((current) => new Map(current).set(itemId, variantId));
-  const selectedItems = items.filter((item) => selected.has(item.id)).map((item) => {
-    const variantId = selected.get(item.id);
-    const image = variantImage(item, variantId);
-    return { ...item, variantId, image, thumbnail: image };
-  });
-
-  // A dress or jumpsuit already dresses both halves, so the halves it covers
-  // stop being available — and once a top or bottom is picked, a full garment
-  // no longer fits the outfit either. Blocking the combination here is kinder
-  // than letting someone build dress-plus-trousers and discover it in the
-  // rendered photo.
-  // Layering pieces are exempt in both directions: a jacket goes over a shirt or
-  // over a dress equally well, so it never blocks and is never blocked.
-  const blockedCoverages = useMemo(() => {
-    const coverages = new Set(
-      selectedItems
-        .filter((item) => !GARMENT_PART_MAP[item.part]?.layer)
-        .map((item) => GARMENT_PART_MAP[item.part]?.coverage),
-    );
-    if (coverages.has("full")) return new Set(["upper", "lower"]);
-    if (coverages.has("upper") || coverages.has("lower")) return new Set(["full"]);
-    return new Set();
-  }, [selectedItems]);
-
-  const isBlocked = (item) => {
-    const part = GARMENT_PART_MAP[item.part];
-    if (!part || part.layer) return false;
-    return blockedCoverages.has(part.coverage);
-  };
-
-  const save = async () => {
+  // Rejecting (not returning quietly) keeps the picker open and opens its
+  // phone tray, where this error is shown.
+  const save = async (pieces) => {
     setError("");
-    if (!name.trim()) return setError("Give this outfit a name.");
-    if (!selectedItems.length) return setError("Pick at least one piece.");
-    setSaving(true);
+    const fail = (message) => { setError(message); throw new Error(message); };
+    if (!name.trim()) fail("Give this outfit a name.");
+    if (!pieces.length) fail("Pick at least one piece.");
     try {
-      await onSave({ name: name.trim(), pieces: [...selected.entries()].map(([itemId, variantId]) => ({ itemId, variantId })) });
+      await onSave({ name: name.trim(), pieces });
     } catch (saveError) {
-      setError(saveError.message);
-      setSaving(false);
+      fail(saveError.message || "Could not save this outfit.");
     }
   };
 
-  const content = (
-    <div
-      ref={overlayRef}
-      className="viewer-overlay"
-      role="presentation"
-      onPointerDown={(event) => event.target === event.currentTarget && onCancel()}
-    >
-      <div className="viewer-entry outfit-builder-entry">
-        <aside
-          ref={sheetRef}
-          className="viewer outfit-builder"
-          role="dialog"
-          aria-modal="true"
-          aria-label={initialOutfit ? "Edit outfit" : "New outfit"}
-          {...(isPhone ? dragHandlers : null)}
-        >
-          <button className="icon-button viewer-icon-close" type="button" onClick={onCancel} aria-label="Close" ref={closeButtonRef}>
-            <X size={24} weight="light" aria-hidden="true" />
-          </button>
-          <div className="viewer-heading">
-            <h2>{initialOutfit ? "Edit Outfit" : "New Outfit"}</h2>
-          </div>
-
-          <div className="outfit-builder-body">
-            <label className="field">
-              <span>Name</span>
-              <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Saturday errands" />
-            </label>
-
-            <OutfitStack items={selectedItems} />
-
-            {CATEGORIES.map((category) => (
-              itemsByCategory[category.id].length > 0 && (
-                <div className="outfit-category" key={category.id}>
-                  <p className="outfit-category-label">{category.label}</p>
-                  <div className="outfit-category-row">
-                    {itemsByCategory[category.id].map((item) => {
-                      const blocked = !selected.has(item.id) && isBlocked(item);
-                      return (
-                        <span className="builder-piece-option" key={item.id}>
-                          <button
-                            type="button"
-                            className={`outfit-piece${selected.has(item.id) ? " active" : ""}${blocked ? " blocked" : ""}`}
-                            onClick={() => !blocked && toggleItem(item.id)}
-                            aria-pressed={selected.has(item.id)}
-                            aria-disabled={blocked}
-                            title={blocked
-                              ? `${item.name} — a full-length piece already covers this`
-                              : item.name}
-                          >
-                            <OptimizedImage src={item.thumbnail || item.image} alt="" sizes="72px" breakpoints={[72, 108]} />
-                          </button>
-                          {selected.has(item.id) && item.variants?.length > 1 && (
-                            /* Thumbnails, not names. The difference between
-                               rolled sleeves and tucked is visual, and the 10px
-                               text pills this replaced were both unreadable and
-                               under half the 44px a finger needs. */
-                            <div className="builder-variant-picker" role="group" aria-label={`How to wear ${item.name}`}>
-                              {item.variants.map((variant) => {
-                                const thumbnail = variantOwnImage(item, variant.id);
-                                return (
-                                  <button
-                                    key={variant.id}
-                                    type="button"
-                                    className={selected.get(item.id) === variant.id ? "active" : ""}
-                                    aria-pressed={selected.get(item.id) === variant.id}
-                                    title={variant.name}
-                                    aria-label={variant.name}
-                                    onClick={() => selectVariant(item.id, variant.id)}
-                                  >
-                                    {thumbnail
-                                      ? <OptimizedImage src={thumbnail} alt="" sizes="40px" breakpoints={[40, 60, 80]} />
-                                      : <span className="builder-variant-picker__pending" aria-hidden="true">{variant.name.slice(0, 1)}</span>}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-              )
-            ))}
-
-            {error && <p className="status error outfit-error">{error}</p>}
-
-            <div className="viewer-actions">
-              <button className="secondary-button" type="button" onClick={onCancel}>Cancel</button>
-              <span className="action-spacer" />
-              <button className="primary-button" type="button" onClick={save} disabled={saving}>
-                <Check size={15} weight="bold" aria-hidden="true" /> Save
-              </button>
-            </div>
-          </div>
-        </aside>
-      </div>
-    </div>
+  return (
+    <PiecePicker
+      title={outfit ? "Edit outfit" : "New outfit"}
+      items={items}
+      initialSelection={initialSelection}
+      rules="outfit"
+      confirmLabel="Save"
+      minPieces={0}
+      maxPieces={OUTFIT_MAX_PIECES}
+      notice={missing > 0 && (
+        <p className="piece-picker__notice">
+          {missing === 1 ? "1 piece is" : `${missing} pieces are`} no longer in your wardrobe and will be removed when you save.
+          {clearedOnSave(outfit) && ` Saving also clears ${clearedOnSave(outfit)}, made for the old lineup.`}
+        </p>
+      )}
+      renderPreview={(selectedPieces) => <OutfitStack items={selectedPieces} emptyMessage="Pick pieces to build the look." />}
+      footer={(
+        <>
+          <label className="field">
+            <span>Name</span>
+            <input value={name} maxLength={120} onChange={(event) => setName(event.target.value)} placeholder="Saturday errands" />
+          </label>
+          {error && <p className="status error outfit-error" role="alert">{error}</p>}
+        </>
+      )}
+      onConfirm={save}
+      onClose={onCancel}
+    />
   );
-
-  return typeof document !== "undefined" ? createPortal(content, document.body) : content;
 }
 
-function OutfitCard({ outfit, itemMap, onOpen, wornToday, onWear }) {
+function OutfitCard({ outfit, itemMap, onOpen, wornToday, wearReady, onWear }) {
   const pieces = resolveOutfitPieces(outfit, itemMap);
   const hasModeledImage = Boolean(outfit.modeledImage);
   const processing = outfit.modeledStatus === "processing";
@@ -380,7 +260,8 @@ function OutfitCard({ outfit, itemMap, onOpen, wornToday, onWear }) {
     <button
       type="button"
       className={`outfit-worn-btn${wornToday ? " is-worn" : ""}`}
-      onClick={() => !wornToday && onWear(outfit)}
+      onClick={() => wearReady && !wornToday && onWear(outfit)}
+      disabled={!wearReady || wornToday}
       aria-pressed={wornToday}
       aria-label={wornToday ? `${outfit.name}: logged as worn today` : `Log ${outfit.name} as worn today`}
       title={wornToday ? "Worn today" : "I wore this today"}
@@ -392,18 +273,22 @@ function OutfitCard({ outfit, itemMap, onOpen, wornToday, onWear }) {
   );
 }
 
-function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateModeled, onRename, premiumAllowed, provider, openedFrom, wornToday, onWear }) {
+function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateModeled, onRename, premiumAllowed, provider, openedFrom, wornToday, wearReady, onWear }) {
   const closeButtonRef = useRef(null);
   const pieces = resolveOutfitPieces(outfit, itemMap);
+  // Retired or deleted pieces: itemMap holds active pieces only.
+  const missing = migrateOutfit(outfit).pieces.filter((piece) => !itemMap[piece.itemId]).length;
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [refining, setRefining] = useState(false);
   const [generateError, setGenerateError] = useState("");
   // The chip the refine composer grows out of and shrinks back into.
   const refineChipRef = useRef(null);
-  const { tier, tiers, chooseTier } = useRememberedTier(provider, premiumAllowed);
+  const { tier, tiers, chooseTier, tierReady, tierStateError } = useRememberedTier(provider, premiumAllowed);
   const hasModeledImage = Boolean(outfit.modeledImage);
   const processing = outfit.modeledStatus === "processing";
+  // The server refuses a photo of pieces that left the wardrobe.
+  const photoHint = missing > 0 ? "Edit the outfit first" : undefined;
 
   useViewerKeyboard(onClose, closeButtonRef);
 
@@ -433,6 +318,8 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
       icon={<ArrowCounterClockwise size={15} weight="bold" aria-hidden="true" />}
       label="Refine photo"
       onClick={() => setRefining(true)}
+      disabled={missing > 0}
+      title={photoHint}
       concealed={refining}
     />
   ) : (
@@ -440,11 +327,14 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
       icon={<Sparkle size={16} weight="bold" aria-hidden="true" />}
       label="Generate model photo"
       busy={busy}
+      disabled={!tierReady || missing > 0}
+      title={photoHint}
       onGenerate={generate}
       tier={tier}
       tiers={tiers}
       onTierChange={chooseTier}
       premiumAllowed={premiumAllowed}
+      tierStateError={tierStateError}
     />
   );
 
@@ -471,6 +361,7 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
             tiers={tiers}
             onTierChange={chooseTier}
             premiumAllowed={premiumAllowed}
+            disabled={!tierReady}
           />
         </ModeledHero>
       ) : (
@@ -491,7 +382,7 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
 
       <div className="viewer-details editing">
         {(generateError || outfit.modeledStatus === "error") && (
-          <p className="stage-error" role="alert">{generateError || outfit.modeledError || "That model photo could not be made."}</p>
+          <StageError message={generateError || outfit.modeledError} />
         )}
 
         <EditableTitle
@@ -510,6 +401,14 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
             )}
           </div>
         )}
+        {missing > 0 && (
+          <p className="outfit-outdated">
+            {pieces.length
+              ? `Out of date: ${missing === 1 ? "1 piece is" : `${missing} pieces are`} no longer in your wardrobe. Edit the outfit first to remove ${missing === 1 ? "it" : "them"}, then make a new photo.`
+              : "Out of date: none of this outfit’s pieces are in your wardrobe any more. Delete it, or Edit to pick new pieces."}
+            {hasModeledImage && " The photo shows the old pieces."}
+          </p>
+        )}
         <p className="details-label">{pieces.length} {pieces.length === 1 ? "piece" : "pieces"}</p>
         <div className="outfit-viewer-pieces-grid">
           {pieces.map((item) => (
@@ -523,25 +422,14 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
           onDelete={() => onDelete(outfit.id)}
           onCancel={() => onEdit(outfit)}
           cancelLabel={<><PencilSimple size={15} weight="regular" aria-hidden="true" /> Edit</>}
-          onConfirm={() => !wornToday && onWear(outfit)}
-          confirmDisabled={wornToday}
+          onConfirm={() => wearReady && !wornToday && onWear(outfit)}
+          confirmDisabled={!wearReady || wornToday}
           confirmIcon={<CheckCircle size={15} weight={wornToday ? "fill" : "regular"} aria-hidden="true" />}
           confirmLabel={wornToday ? "Worn today" : "Wore it today"}
         />
       </div>
     </ViewerPanel>
   );
-}
-
-const NUDGE_DISMISS_KEY = "open-wardrobe-nudges-dismissed-v1";
-
-function readDismissedNudges() {
-  try {
-    const value = JSON.parse(localStorage.getItem(NUDGE_DISMISS_KEY) || "[]");
-    return new Set(Array.isArray(value) ? value : []);
-  } catch {
-    return new Set();
-  }
 }
 
 // One nudge at a time, on the page gutter, with the action it is asking for
@@ -551,17 +439,23 @@ function readDismissedNudges() {
 // is the primary in the top bar, and a button pointing at another button is the
 // same problem wearing a different hat.
 function SuggestionNudges({ items, colorProfile, onOpenColorQuiz }) {
-  const [dismissed, setDismissed] = useState(readDismissedNudges);
+  const [dismissError, setDismissError] = useState("");
+  const browserState = useBrowserState();
+  const dismissed = useMemo(() => new Set(browserState.state?.dismissedNudges || []), [browserState.state?.dismissedNudges]);
 
-  const dismiss = (id) => setDismissed((current) => {
-    const next = new Set(current).add(id);
-    // Persisted, so a dismissal survives a reload. A banner that comes back
-    // every time the page mounts is how a nudge turns into nagging.
-    try { localStorage.setItem(NUDGE_DISMISS_KEY, JSON.stringify([...next])); } catch { /* private mode */ }
-    return next;
-  });
+  const dismiss = async (id) => {
+    if (!browserState.ready) return;
+    setDismissError("");
+    try {
+      await updateBrowserSet("dismissedNudges", id, true);
+    } catch (error) {
+      setDismissError(error.message);
+    }
+  };
 
-  if (!items) return null;
+  if (!items || !browserState.ready) return (dismissError || browserState.error?.message)
+    ? <p className="status error" role="alert">{dismissError || browserState.error.message}</p>
+    : null;
 
   // Coverage, not category: a wardrobe of dresses can already make complete
   // outfits, so telling it that it "has no bottoms" would be both wrong and a
@@ -588,12 +482,13 @@ function SuggestionNudges({ items, colorProfile, onOpenColorQuiz }) {
     });
   }
 
-  if (!nudges.length) return null;
+  if (!nudges.length) return dismissError ? <p className="status error" role="alert">{dismissError}</p> : null;
 
   const nudge = nudges[0];
 
   return (
     <aside className="nudge-banner" key={nudge.id}>
+      {dismissError && <p className="status error" role="alert">{dismissError}</p>}
       <span className="nudge-banner__icon" aria-hidden="true">
         {nudge.icon === 'palette' ? <Palette size={16} weight="regular" /> : <Sparkle size={16} weight="regular" />}
       </span>
@@ -603,24 +498,26 @@ function SuggestionNudges({ items, colorProfile, onOpenColorQuiz }) {
           {nudge.actionLabel}
         </button>
       )}
-      <button type="button" className="nudge-banner__dismiss" onClick={() => dismiss(nudge.id)} aria-label="Dismiss">
+      <button type="button" className="nudge-banner__dismiss" onClick={() => dismiss(nudge.id)} disabled={!browserState.ready} aria-label="Dismiss">
         <X size={16} />
       </button>
     </aside>
   );
 }
 
-// Add outfit / Suggest outfit trigger from the topbar (see App.jsx's
-// .top-actions) — showBuilder/showSuggestions are controlled from there so
-// there's exactly one "add" and one "AI action" button per view, not a
-// second pair duplicated on the page itself. builderOutfit (which outfit,
-// if any, is being edited) stays local — the topbar doesn't need to know.
-export function Outfits({ items, premiumAllowed = true, provider = null, colorProfile, onOpenColorQuiz, showBuilder, onOpenBuilder, onCloseBuilder, showSuggestions, onCloseSuggestions, openOutfitId, onOutfitOpened }) {
+// The Outfits section of Overview (see overview.jsx). Its header row owns
+// + Outfit and Suggest outfit; the top bar keeps the shared import + Mirror.
+// showBuilder opens the shared PiecePicker (through OutfitPicker), and
+// builderOutfit is the outfit being edited, or null for a new one. All of it
+// is local: an archive change remounts the whole app shell, which resets it.
+export function OutfitsSection({ items, premiumAllowed = true, provider = null, colorProfile, onOpenColorQuiz, openOutfitId, onOutfitOpened, archiveGeneration }) {
   const [outfits, setOutfits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showBuilder, setShowBuilder] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [builderOutfit, setBuilderOutfit] = useState(null);
-  const { isWornToday, logWear } = useWornToday();
+  const { isWornToday, logWear, error: wearError, ready: wearReady } = useWornToday();
   const [viewingOutfitId, setViewingOutfitId] = useState(null);
   const [openedFrom, setOpenedFrom] = useState(null);
 
@@ -629,11 +526,11 @@ export function Outfits({ items, premiumAllowed = true, provider = null, colorPr
       .then(setOutfits)
       .catch((requestError) => setError(requestError.message))
       .finally(() => setLoading(false));
-  }, []);
+  }, [archiveGeneration]);
 
   // Arriving from a wardrobe piece ("in 3 looks" -> this outfit). The id is set
-  // before this tab has finished loading its outfits, which is fine: the viewer
-  // renders off a lookup that simply finds nothing until the list arrives.
+  // before this section has finished loading its outfits, which is fine: the
+  // viewer renders off a lookup that simply finds nothing until the list arrives.
   useEffect(() => {
     if (!openOutfitId) return;
     setViewingOutfitId(openOutfitId);
@@ -663,6 +560,8 @@ export function Outfits({ items, premiumAllowed = true, provider = null, colorPr
   }, [hasProcessingOutfit]);
 
   const itemMap = useMemo(() => Object.fromEntries(items.map((item) => [item.id, item])), [items]);
+  // The wear signal is per piece; pieces no longer in the wardrobe weren't worn.
+  const wearOutfit = (outfit) => logWear({ ...outfit, itemIds: (outfit.itemIds || []).filter((id) => itemMap[id]) });
 
   const generateOutfitModeled = async (outfit, tier, prompt) => {
     const response = await fetch(`/api/outfits/${outfit.id}/modeled`, {
@@ -677,11 +576,24 @@ export function Outfits({ items, premiumAllowed = true, provider = null, colorPr
       : item));
   };
 
-  const openEditOutfit = (outfit) => { setViewingOutfitId(null); setBuilderOutfit(outfit); onOpenBuilder(); };
-  // The topbar's "Add outfit" opens the same builder directly (see App.jsx),
-  // bypassing openEditOutfit entirely — so builderOutfit must reset to null
-  // on every close, or a stale edit target would linger into the next "new".
-  const closeBuilder = () => { setBuilderOutfit(null); onCloseBuilder(); };
+  // The picker's ViewerPanel captures the focused trigger (Chrome focuses a
+  // button on click) and hands focus back to it on close.
+  const openNewOutfit = () => {
+    if (!items.length) return;
+    setBuilderOutfit(null);
+    setShowBuilder(true);
+  };
+  const openEditOutfit = (outfit) => { setViewingOutfitId(null); setBuilderOutfit(outfit); setShowBuilder(true); };
+  const openSuggestions = () => setShowSuggestions(true);
+  // builderOutfit resets on every close so a stale edit target never lingers
+  // into the next "new". Edit is only reachable from the viewer, so closing
+  // an edit (saved or not) goes back to that viewer, like "back".
+  const closeBuilder = () => {
+    const returnId = builderOutfit?.id;
+    setBuilderOutfit(null);
+    setShowBuilder(false);
+    if (returnId) { setOpenedFrom(null); setViewingOutfitId(returnId); }
+  };
 
   const saveOutfit = async (draft) => {
     const saved = builderOutfit
@@ -716,21 +628,48 @@ export function Outfits({ items, premiumAllowed = true, provider = null, colorPr
   const viewingOutfit = outfits.find((outfit) => outfit.id === viewingOutfitId) || null;
 
   return (
-    <PageShell
-      count={outfits.length}
-      noun="outfit"
-    >
+    <section className="outfits-section" aria-labelledby="outfits-section-title">
+      <header className="overview-panel-head">
+        <h2 id="outfits-section-title">Outfits{!loading && <> <span>{outfits.length}</span></>}</h2>
+        <div className="overview-panel-head__actions">
+          {/* Explicit aria-label: the label span is display:none at phone width. */}
+          <button
+            type="button"
+            className="top-action top-action--secondary ai-action"
+            onClick={openSuggestions}
+            disabled={items.length < 5}
+            aria-haspopup="dialog"
+            aria-label="Suggest outfit"
+          >
+            <Lightbulb size={17} weight="bold" aria-hidden="true" />
+            <span className="top-action__label">Suggest outfit</span>
+            <span className="ai-action-beam-mask" aria-hidden="true">
+              <span className="ai-action-beam" />
+            </span>
+          </button>
+          <button
+            type="button"
+            className="overview-panel-head__add"
+            onClick={openNewOutfit}
+            disabled={!items.length}
+            aria-haspopup="dialog"
+            title={items.length ? undefined : "Add pieces to your wardrobe first"}
+            aria-label={items.length ? "New outfit" : "New outfit, Add pieces to your wardrobe first"}
+          ><Plus size={16} weight="bold" aria-hidden="true" /> Outfit</button>
+        </div>
+      </header>
+
+      <SuggestionNudges items={items} colorProfile={colorProfile} onOpenColorQuiz={onOpenColorQuiz} />
+
       <PageStatus
         loading={loading}
-        error={error}
+        error={error || wearError}
         empty={!items.length}
         emptyMessage="Import some wardrobe pieces first, then come back to build outfits."
         filterEmpty={!!items.length && !outfits.length}
         filterEmptyMessage="No outfits yet — combine pieces from your wardrobe into a look."
         noun="outfits"
       />
-
-      <SuggestionNudges items={items} colorProfile={colorProfile} onOpenColorQuiz={onOpenColorQuiz} />
 
       {!!outfits.length && (
         <section className="outfits-grid">
@@ -741,7 +680,8 @@ export function Outfits({ items, premiumAllowed = true, provider = null, colorPr
               itemMap={itemMap}
               onOpen={(id, element) => { setOpenedFrom(element); setViewingOutfitId(id); }}
               wornToday={isWornToday(outfit.id)}
-              onWear={logWear}
+              wearReady={wearReady}
+              onWear={wearOutfit}
             />
           ))}
         </section>
@@ -760,11 +700,15 @@ export function Outfits({ items, premiumAllowed = true, provider = null, colorPr
           premiumAllowed={premiumAllowed}
           provider={provider}
           wornToday={isWornToday(viewingOutfit.id)}
-          onWear={logWear}
+          wearReady={wearReady}
+          onWear={wearOutfit}
         />
       )}
 
-      {showBuilder && <OutfitBuilder items={items} initialOutfit={builderOutfit} onCancel={closeBuilder} onSave={saveOutfit} />}
+      {/* + Outfit is disabled with no pieces; an edit still renders so it can be closed. */}
+      {showBuilder && (items.length > 0 || builderOutfit) && (
+        <OutfitPicker key={builderOutfit?.id || "new"} items={items} outfit={builderOutfit} onCancel={closeBuilder} onSave={saveOutfit} />
+      )}
 
       {showSuggestions && (
         <SuggestionPanel
@@ -774,9 +718,9 @@ export function Outfits({ items, premiumAllowed = true, provider = null, colorPr
             setOutfits((current) => [...current, saved]);
             return saved;
           }}
-          onClose={onCloseSuggestions}
+          onClose={() => setShowSuggestions(false)}
         />
       )}
-    </PageShell>
+    </section>
   );
 }

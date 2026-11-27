@@ -1,5 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useViewerKeyboard } from "./hooks/useViewerKeyboard.js";
+import { ensureBrowserStateReady, useBrowserState } from "./browser-state.js";
+import { colorProfileSaveDisabled } from "./color-profile-actions.js";
 import {
   ArrowLeft,
   ArrowRight,
@@ -24,8 +26,6 @@ import {
 } from "../shared/color-seasons.mjs";
 
 export { SEASONS, getSeasonAsset, getSeasonDisplayNames, itemMatchesPalette };
-
-const PROFILE_STORAGE_KEY = "open-wardrobe-color-profile-v1";
 
 const QUESTIONS = [
   {
@@ -101,30 +101,6 @@ function resolveSeason(answers) {
   const undertone = undertoneVotes >= 2 ? "warm" : "cool";
   const clarity = clarityVotes >= 2 ? "clear" : "muted";
   return SEASON_BY_AXES[`${undertone}-${clarity}`] || "winter-cool";
-}
-
-export function readColorProfile() {
-  try {
-    const profile = JSON.parse(localStorage.getItem(PROFILE_STORAGE_KEY) || "null");
-    if (!profile) return null;
-    const resolvedSeason =
-      SEASONS[profile.season] || SEASONS[profile.parentSeason] || SEASONS["winter-cool"];
-    return {
-      ...profile,
-      season: resolvedSeason.id,
-      palette: Array.isArray(profile.palette) ? profile.palette : resolvedSeason.palette || [],
-    };
-  } catch {
-    return null;
-  }
-}
-
-function persistColorProfile(profile) {
-  localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
-}
-
-export function clearColorProfile() {
-  localStorage.removeItem(PROFILE_STORAGE_KEY);
 }
 
 const fileToDataUrl = (file) =>
@@ -672,10 +648,12 @@ function PaletteSection({ palette, onRemove, onAdd }) {
 export function ColorProfileModal({ onClose, onSave, initialProfile }) {
   const closeButtonRef = useRef(null);
   const faceUploadRef = useRef(null);
+  const browserState = useBrowserState();
   useViewerKeyboard(onClose, closeButtonRef);
 
   const [mode, setMode] = useState(() => (initialProfile?.season ? "result" : "checking"));
   const [analyzing, setAnalyzing] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [analysisError, setAnalysisError] = useState("");
   const [answers, setAnswers] = useState(initialProfile?.answers || {});
   const [resultSeason, setResultSeason] = useState(initialProfile?.season || null);
@@ -713,6 +691,8 @@ export function ColorProfileModal({ onClose, onSave, initialProfile }) {
       setMode("checking");
       setAnalysisError("");
       try {
+        await ensureBrowserStateReady();
+        if (!active) return;
         const statusRes = await fetch("/api/color-profile/status");
         if (!statusRes.ok) throw new Error("Could not check status");
         const status = await statusRes.json();
@@ -772,6 +752,7 @@ export function ColorProfileModal({ onClose, onSave, initialProfile }) {
     setAnalyzing(true);
     setAnalysisError("");
     try {
+      await ensureBrowserStateReady();
       const imageDataUrl = await fileToDataUrl(file);
       const saveRes = await fetch("/api/setup/reference", {
         method: "POST",
@@ -836,6 +817,7 @@ export function ColorProfileModal({ onClose, onSave, initialProfile }) {
   };
 
   const applyResult = async () => {
+    if (saving || !resultSeason) return;
     const resolved = SEASONS[resultSeason] || SEASONS["winter-cool"];
     const profile = {
       ...profileData,
@@ -845,15 +827,25 @@ export function ColorProfileModal({ onClose, onSave, initialProfile }) {
       answers,
       palette,
     };
-    persistColorProfile(profile);
+    setSaving(true);
+    setAnalysisError("");
     try {
-      await fetch("/api/color-profile/save", {
+      await ensureBrowserStateReady();
+      const response = await fetch("/api/color-profile/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(profile),
       });
-    } catch {}
-    onSave(profile);
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || "Could not save your colours.");
+      }
+      onSave(profile);
+    } catch (error) {
+      setAnalysisError(error.message || "Could not save your colours.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const currentSeason =
@@ -882,6 +874,16 @@ export function ColorProfileModal({ onClose, onSave, initialProfile }) {
         mode === "result" ? "has-modeled-image color-viewer-panel" : "color-viewer-panel"
       }
     >
+      {!browserState.ready && (
+        <p
+          className={browserState.error ? "status error color-sync-status" : "status color-sync-status"}
+          role={browserState.error ? "alert" : "status"}
+        >
+          {browserState.error
+            ? `Saved preferences could not sync: ${browserState.error.message}`
+            : "Syncing saved preferences…"}
+        </p>
+      )}
       {mode === "certified" ? (
         <CertifiedSeasonPicker
           onSelect={(seasonId) => applySeasonId(seasonId)}
@@ -926,8 +928,8 @@ export function ColorProfileModal({ onClose, onSave, initialProfile }) {
             onCancel={onClose}
             cancelLabel="Cancel"
             onConfirm={applyResult}
-            confirmDisabled={!resultSeason}
-            confirmLabel="Save"
+            confirmDisabled={colorProfileSaveDisabled({ browserStateReady: browserState.ready, saving, resultSeason })}
+            confirmLabel={saving ? "Saving…" : "Save"}
           />
         </div>
       ) : (
@@ -1037,7 +1039,7 @@ export function ColorProfileModal({ onClose, onSave, initialProfile }) {
                   <Sparkle size={13} weight="fill" aria-hidden="true" /> Drape test
                 </button>
               )}
-              <button type="button" onClick={() => faceUploadRef.current?.click()} disabled={analyzing}>
+              <button type="button" onClick={() => faceUploadRef.current?.click()} disabled={analyzing || !browserState.ready}>
                 <Camera size={13} aria-hidden="true" /> Change photo
               </button>
               <input
@@ -1060,7 +1062,8 @@ export function ColorProfileModal({ onClose, onSave, initialProfile }) {
               cancelLabel="Cancel"
               onConfirm={applyResult}
               confirmIcon={<Check size={15} weight="bold" aria-hidden="true" />}
-              confirmLabel="Save"
+              confirmDisabled={colorProfileSaveDisabled({ browserStateReady: browserState.ready, saving, resultSeason })}
+              confirmLabel={saving ? "Saving…" : "Save"}
             />
           </div>
         </>

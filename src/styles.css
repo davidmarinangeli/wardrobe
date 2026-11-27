@@ -2438,7 +2438,22 @@ button { font: inherit; }
   .stage-chip:hover { background: var(--paper-raised); }
 }
 
-.stage-error { margin: 12px 0 0; color: var(--error); font-size: 12px; line-height: 1.4; }
+.stage-error {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--error) 28%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--error) 8%, transparent);
+  color: var(--error);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.stage-error svg { flex: none; margin-top: 1px; }
+.stage-error strong { display: block; font-size: 13px; font-weight: 600; }
+.stage-error p { margin: 2px 0 0; }
 
 /* ─── Generate: one action, its quality behind a caret ─── */
 .generate-button { position: relative; display: inline-flex; }

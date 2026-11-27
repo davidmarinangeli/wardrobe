@@ -16,14 +16,15 @@ const STACK_ZONES = [
 /**
  * The flat-lay of an outfit's pieces, laid out in worn order.
  *
- * Lives here rather than in outfits.jsx because both the outfit builder and the
- * suggestion deck draw it, and suggestions.jsx is imported *by* outfits.jsx —
- * keeping it there would make the two files import each other.
+ * Lives here rather than in outfits.jsx because outfit cards, the viewer, the
+ * piece picker's preview and the suggestion deck draw it, and suggestions.jsx
+ * is imported *by* outfits.jsx — keeping it there would make the two files
+ * import each other.
  *
  * Props
  * ─────
  * items    array – Garments, each with { id, part, thumbnail|image }.
- * compact  bool  – Smaller cells, for dense contexts like the builder preview.
+ * compact  bool  – Smaller cells, for dense contexts.
  * emptyMessage string|null – Shown when there is nothing to lay out. Pass null
  *                           for callers that guarantee a non-empty outfit.
  */

@@ -24,6 +24,9 @@ import {
 } from "./import-job-api.mjs";
 import { GARMENT_PART_ID_SET } from "../shared/garments.mjs";
 import { recordSignal } from "./preferences-api.mjs";
+import { catalogForHttp } from "../shared/portable-assets.mjs";
+import { createArchiveRequestHandler, ensureArchiveRecovered, trackArchivePromise, withArchiveWriteLease } from "./archive-coordinator.mjs";
+import { mimeForExtension, preserveOriginal, resolveArchiveFile } from "./archive-store.mjs";
 
 const ASSET_ROOT = "/api/wishlist/assets";
 const PARTS = GARMENT_PART_ID_SET;
@@ -33,7 +36,7 @@ function json(res, status, value) {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
-  res.end(JSON.stringify(value));
+  res.end(JSON.stringify(catalogForHttp(value)));
 }
 
 async function body(req, limit = 1024 * 1024) {
@@ -65,7 +68,7 @@ function normalizeEdit(input, fallback) {
  * its own crop and (best-effort) AI-generated clean cutout. Shared by the Inspo "Detect items"
  * endpoint — the pin's own summary fields are derived from the returned `aggregate`.
  */
-export async function detectAndCreateWishlistItems({ imageBytes, sourcePinId = null, sourceUrl = null, setting, dataDir, wishlistFile, wishlistAssetDir }) {
+export async function detectAndCreateWishlistItems({ imageBytes, sourcePinId = null, sourceUrl = null, sourceOriginal = null, setting, dataDir, wishlistFile, wishlistAssetDir }) {
   const { provider } = resolveProvider(setting);
   const mode = await readAiMode(dataDir);
   const { key, keyName } = resolveApiKey(setting, provider, mode);
@@ -123,7 +126,7 @@ export async function detectAndCreateWishlistItems({ imageBytes, sourcePinId = n
       palette: [color, secondaryColor].filter(Boolean), tags,
       image, thumbnail: image, cropImage,
       generateStatus, generateError,
-      sourcePinId, sourceUrl,
+      sourcePinId, sourceUrl, sourceOriginal,
       createdAt: now, updatedAt: now,
     };
   }));
@@ -176,7 +179,7 @@ export function wishlistApi(options = {}) {
 
   async function retryItem(id) {
     if (retrying.has(id)) return retrying.get(id);
-    const task = (async () => {
+    const task = trackArchivePromise(dataDir, async () => {
       try {
         const items = await loadItems();
         const item = items.find((entry) => entry.id === id);
@@ -185,8 +188,7 @@ export function wishlistApi(options = {}) {
         const mode = await readAiMode(dataDir);
         const { key, keyName } = resolveApiKey(setting, provider, mode);
         if (!key) throw new Error(`${keyName} is not configured for ${mode.toUpperCase()} mode`);
-        const cropName = path.basename(item.cropImage);
-        const cropBytes = await readFile(path.join(wishlistAssetDir, cropName));
+        const cropBytes = await readFile(await resolveArchiveFile(dataDir, item.cropImage));
         const cutoutBytes = await generateCutout({ cropBytes, metadata: item, provider, key, apiBaseUrl: apiBaseUrl(provider), setting });
         const cutoutName = `${id}-cutout.png`;
         await writeFile(path.join(wishlistAssetDir, cutoutName), cutoutBytes);
@@ -201,7 +203,7 @@ export function wishlistApi(options = {}) {
           ? { ...entry, generateStatus: "error", generateError: error.message, updatedAt: new Date().toISOString() }
           : entry));
       }
-    })().finally(() => retrying.delete(id));
+    }).finally(() => retrying.delete(id));
     retrying.set(id, task);
     return task;
   }
@@ -246,20 +248,22 @@ export function wishlistApi(options = {}) {
         const item = items.find((entry) => entry.id === id);
         if (!item) return json(res, 404, { error: "Wishlist item not found" });
         const remaining = items.filter((entry) => entry.id !== id);
+        const assets = [item.cropImage, item.image].filter((asset, index, all) => asset && all.indexOf(asset) === index);
+        const assetFiles = [];
+        for (const asset of assets) {
+          try { assetFiles.push(await resolveArchiveFile(dataDir, asset)); }
+          catch (error) { if (error.code !== "ENOENT") throw error; }
+        }
         await atomicJson(wishlistFile, remaining);
         // The reversal of buy intent — an explicit negative the user produced.
         await recordSignal(dataDir, { type: "wishlist_removed", itemId: id, part: item.part, color: item.color, name: item.name });
-        await Promise.all([
-          rm(path.join(wishlistAssetDir, path.basename(item.cropImage)), { force: true }),
-          rm(path.join(wishlistAssetDir, `${id}-cutout.png`), { force: true }),
-        ]);
+        await Promise.all(assetFiles.map((file) => rm(file, { force: true })));
         return json(res, 200, { deleted: true, id });
       }
 
-      const assetMatch = url.pathname.match(/^\/api\/wishlist\/assets\/([\w.-]+)$/i);
-      if (assetMatch && req.method === "GET") {
-        const file = path.join(wishlistAssetDir, path.basename(assetMatch[1]));
-        res.setHeader("Content-Type", "image/png");
+      if (url.pathname.startsWith(`${ASSET_ROOT}/`) && req.method === "GET") {
+        const file = await resolveArchiveFile(dataDir, url.pathname);
+        res.setHeader("Content-Type", mimeForExtension(path.extname(file).toLowerCase()));
         res.setHeader("Cache-Control", "no-store");
         return res.end(await readFile(file));
       }
@@ -279,11 +283,14 @@ export function wishlistApi(options = {}) {
       dataDir = path.resolve(root, setting("WARDROBE_DATA_DIR", "data"));
       wishlistFile = path.join(dataDir, "wishlist.json");
       wishlistAssetDir = path.join(dataDir, "wishlist-assets");
-      await mkdir(dataDir, { recursive: true });
-      await mkdir(wishlistAssetDir, { recursive: true });
+      await withArchiveWriteLease(dataDir, async () => {
+        await ensureArchiveRecovered(dataDir);
+        await mkdir(dataDir, { recursive: true });
+        await mkdir(wishlistAssetDir, { recursive: true });
+      });
     },
-    configureServer(server) { server.middlewares.use(handler); },
-    configurePreviewServer(server) { server.middlewares.use(handler); },
+    configureServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },
+    configurePreviewServer(server) { server.middlewares.use(createArchiveRequestHandler(dataDir, handler)); },
   };
 }
 

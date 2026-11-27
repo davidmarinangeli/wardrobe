@@ -28,9 +28,6 @@ export const INSPO_CATEGORIES = [
   ...BASE_GARMENT_CATEGORIES,
 ];
 
-// Outfit builder: no "All" or "Unclassified", no singular needed.
-export const OUTFIT_CATEGORIES = BASE_GARMENT_CATEGORIES.map(({ id, label }) => ({ id, label }));
-
 // Pins already on disk keep "full_look" / "unclassified" as their stored
 // category even though neither is a pill now, and PinCard/PinViewer still have
 // to print a human label for one. Kept out of INSPO_CATEGORIES so they label

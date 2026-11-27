@@ -166,5 +166,6 @@ test("the face closeup can be switched off without deleting the file", async () 
   const settingWith = (value) => (name, fallback = "") => (name === "WARDROBE_FACE_REFERENCE" ? value : fallback);
   assert.equal(await loadFaceReference(process.cwd(), settingWith("off")), null);
   assert.equal(await loadFaceReference(process.cwd(), settingWith("NONE")), null);
-  assert.equal(await loadFaceReference(process.cwd(), settingWith("")), null);
+  assert.equal(await loadFaceReference(process.cwd(), settingWith("false")), null);
+  assert.equal(await loadFaceReference(process.cwd(), settingWith("0")), null);
 });
