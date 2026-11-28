@@ -49,6 +49,8 @@ export function ViewerFooter({ children }) {
  * headerBelow    node     – A second, full-width header row under the title (e.g. tabs).
  * compactTitle   string   – For panels without a title: the name shown in the top bar once
  *                           the element matching compactTitleSelector scrolls under it.
+ * headerActions  node     – Controls placed just before the close button in the top bar
+ *                           (compactTitle panels), e.g. a ⋯ menu, as on the item sheet.
  * The action row goes in the fixed footer through <ViewerFooter>, rendered anywhere
  * inside the panel's children (there is deliberately no `footer` prop: one way in).
  * ariaLabel      string   – `aria-label` on the <aside>. Defaults to `title`.
@@ -84,6 +86,7 @@ export function ViewerPanel({
   focusTrap = false,
   headerContent,
   headerBelow,
+  headerActions,
   compactTitle,
   compactTitleSelector = ".viewer-title, .viewer-title-input",
   bodyClassName,
@@ -236,6 +239,7 @@ export function ViewerPanel({
                 <h2>{compactTitle}</h2>
               </div>
             ) : null}
+            {!hasHeaderRow && headerActions}
             {!hasHeaderRow && closeButton}
             {headerBelow && <div className="viewer-header__below">{headerBelow}</div>}
           </header>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowCounterClockwise, Lightbulb, Palette, PencilSimple, Plus, Sparkle, SpinnerGap, X } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, DotsThree, Lightbulb, Palette, PencilSimple, Plus, Sparkle, SpinnerGap, Trash, X } from "@phosphor-icons/react";
 import { CheckCircle } from "@phosphor-icons/react";
 import { OptimizedImage } from "./OptimizedImage.jsx";
 import { api } from "./api.js";
@@ -14,6 +14,8 @@ import { ViewerFooter, ViewerPanel } from "./components/ViewerPanel.jsx";
 import { ModeledHero } from "./components/ModeledHero.jsx";
 import { PanelActions } from "./components/PanelActions.jsx";
 import { EditableTitle } from "./components/EditableTitle.jsx";
+import { MoreMenu } from "./item-editor.jsx";
+import { useDismissOnOutsidePointer } from "./hooks/usePopover.js";
 import { PageStatus } from "./components/PageStatus.jsx";
 import { useViewerKeyboard } from "./hooks/useViewerKeyboard.js";
 import { useWornToday } from "./hooks/useWornToday.js";
@@ -285,6 +287,11 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
   const [generateError, setGenerateError] = useState("");
   // The chip the refine composer grows out of and shrinks back into.
   const refineChipRef = useRef(null);
+  // ⋯ in the top bar, as on the item sheet: the rare and destructive action.
+  const moreRef = useRef(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const closeMenu = () => setMenuOpen(false);
+  useDismissOnOutsidePointer(menuOpen, moreRef, closeMenu);
   const { tier, tiers, chooseTier, tierReady, tierStateError } = useRememberedTier(provider, premiumAllowed);
   const hasModeledImage = Boolean(outfit.modeledImage);
   const processing = outfit.modeledStatus === "processing";
@@ -340,6 +347,29 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
     />
   );
 
+  const moreMenu = (
+    <div className="viewer-more" ref={moreRef}>
+      <button
+        type="button"
+        className="icon-button button--on-media viewer-icon-more"
+        aria-label="More actions"
+        title="More actions"
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        onClick={() => setMenuOpen((open) => !open)}
+      >
+        <DotsThree size={20} weight="bold" aria-hidden="true" />
+      </button>
+      {menuOpen && (
+        <MoreMenu
+          sections={[{ id: "outfit", entries: [{ id: "delete", label: "Delete outfit", confirmLabel: "Tap again to delete", danger: true, icon: <Trash size={18} aria-hidden="true" /> }] }]}
+          onSelect={() => { closeMenu(); onDelete(outfit.id); }}
+          onClose={closeMenu}
+        />
+      )}
+    </div>
+  );
+
   return (
     <ViewerPanel
       onClose={onClose}
@@ -348,6 +378,7 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
       ariaLabel={`Outfit: ${outfit.name}`}
       panelClassName={hasModeledImage ? "has-modeled-image" : undefined}
       compactTitle={outfit.name || "Outfit"}
+      headerActions={moreMenu}
     >
       {hasModeledImage ? (
         <ModeledHero src={outfit.modeledImage} alt={`${outfit.name} worn by a model`} showHeading={false}>
@@ -389,21 +420,29 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
           <StageError message={generateError || outfit.modeledError} />
         )}
 
-        <EditableTitle
-          value={outfit.name}
-          placeholder="Outfit"
-          onChange={(name) => onRename(outfit, name)}
-          ariaLabel="Outfit name"
-        />
-        {outfit.description && (
-          <div className="outfit-style-summary">
-            <p className="outfit-style-description">{outfit.description}</p>
-            {!!outfit.tags?.length && (
-              <div className="outfit-style-tags">
+        {/* Same heading block as the item sheet: the name, then the one line
+            that says what this is. */}
+        <header className="item-heading outfit-heading">
+          <EditableTitle
+            value={outfit.name}
+            placeholder="Outfit"
+            onChange={(name) => onRename(outfit, name)}
+            ariaLabel="Outfit name"
+          />
+          {outfit.description && <p className="outfit-style-description">{outfit.description}</p>}
+        </header>
+        {/* Style is a property of the outfit, so it is a row in a group like
+            the item's Category, Colors and Tags. It opens nothing, so it has
+            no chevron. */}
+        {outfit.description && !!outfit.tags?.length && (
+          <dl className="detail-rows viewer-group viewer-section">
+            <div className="detail-row detail-row--static">
+              <dt className="detail-row__label">Style</dt>
+              <dd className="detail-row__value detail-row__tags outfit-style-tags">
                 {outfit.tags.map((tag) => <span key={tag} className="outfit-style-tag">{tag}</span>)}
-              </div>
-            )}
-          </div>
+              </dd>
+            </div>
+          </dl>
         )}
         {missing > 0 && (
           <p className="outfit-outdated">
@@ -413,20 +452,26 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
             {hasModeledImage && " The photo shows the old pieces."}
           </p>
         )}
-        <p className="details-label">{pieces.length} {pieces.length === 1 ? "piece" : "pieces"}</p>
-        <div className="outfit-viewer-pieces-grid">
-          {pieces.map((item) => (
-            <div className="outfit-viewer-piece-tile" key={item.id} title={item.name}>
-              <OptimizedImage src={item.thumbnail || item.image} alt="" sizes="72px" breakpoints={[72, 108]} />
-            </div>
-          ))}
-        </div>
+        {/* Editing an outfit means changing its pieces, so Edit sits on the
+            section it changes, the way a grouped list puts its Edit. */}
+        <section className="viewer-section outfit-viewer-pieces" aria-labelledby="outfit-pieces-title">
+          <div className="viewer-section__head">
+            <h3 id="outfit-pieces-title" className="viewer-section__title">Pieces <span className="viewer-section__count">{pieces.length}</span></h3>
+            <button type="button" className="secondary-button button--sm viewer-section__action" onClick={() => onEdit(outfit)}>
+              <PencilSimple size={14} weight="regular" aria-hidden="true" /> Edit
+            </button>
+          </div>
+          <div className="outfit-viewer-pieces-grid">
+            {pieces.map((item) => (
+              <div className="outfit-viewer-piece-tile" key={item.id} title={item.name}>
+                <OptimizedImage src={item.thumbnail || item.image} alt="" sizes="72px" breakpoints={[72, 108]} />
+              </div>
+            ))}
+          </div>
+        </section>
 
         <ViewerFooter>
           <PanelActions
-            onDelete={() => onDelete(outfit.id)}
-            onCancel={() => onEdit(outfit)}
-            cancelLabel={<><PencilSimple size={15} weight="regular" aria-hidden="true" /> Edit</>}
             onConfirm={() => wearReady && !wornToday && onWear(outfit)}
             confirmDisabled={!wearReady || wornToday}
             confirmIcon={<CheckCircle size={15} weight={wornToday ? "fill" : "regular"} aria-hidden="true" />}

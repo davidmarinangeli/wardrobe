@@ -1512,7 +1512,9 @@ button { font: inherit; }
 }
 
 /* Over the photo, the close takes the frosted on-media treatment (the same
-   tokens as .button--on-media) like the item viewer's toolbar. */
+   tokens as .button--on-media) like the item viewer's toolbar; so does the
+   ⋯ that sits beside it in the outfit viewer. */
+.viewer-topbar:has(> .viewer-more) > .viewer-icon-close,
 .has-modeled-image .viewer-icon-close {
   --btn-bg: color-mix(in srgb, var(--paper-warm) 84%, transparent);
   --btn-border: var(--glass-border);
@@ -1639,15 +1641,58 @@ button { font: inherit; }
   text-transform: uppercase;
 }
 
-/* Outfits this piece is already in. Sits below the editor as part of the
-   piece's detail; renders nothing at all when there are none. */
-.item-outfits {
-  margin: var(--s-1) 0 22px;
-  padding-top: 20px;
-  border-top: 1px solid var(--line);
+/* == S4 modal content: sections (variant B, titled groups) ==
+   Every panel's body is a column of sections, kept apart by space alone:
+   no hairlines. A section has a sentence-case title at --text-section, and a
+   count always follows the title the same way, as a muted number: "Ways to
+   wear it 3", "Pieces 3", "Outfits 1". Rows (key/value) sit in an inner
+   glass group, a grouped list; thumbnails sit on the panel itself, so no
+   card is ever stacked in another. */
+.viewer { --viewer-section-gap: var(--s-6); }
+
+.viewer-section { margin-top: var(--viewer-section-gap); }
+
+.viewer-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-bottom: var(--s-3);
 }
 
-.item-outfits .details-label { margin-bottom: var(--s-3); }
+.viewer-section__title {
+  margin: 0 0 var(--s-3);
+  color: var(--ink);
+  font-size: var(--text-section);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--track-tight);
+  line-height: var(--leading-heading);
+}
+
+.viewer-section__head > .viewer-section__title { margin: 0; }
+
+.viewer-section__count {
+  margin-left: 2px;
+  color: var(--muted);
+  font-weight: var(--weight-regular);
+  font-variant-numeric: tabular-nums;
+}
+
+.viewer-section__action { flex: none; }
+
+/* The inner group: the card surface (glass fill, white edge, lit top, a
+   small warm shadow) holding a list of rows with hairlines between them. */
+.viewer-group {
+  padding: 0 var(--s-4);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  background: var(--glass-card);
+  box-shadow: var(--glass-edge), var(--shadow-sm);
+}
+
+/* Outfits this piece is already in. Sits below the editor as part of the
+   piece's detail; renders nothing at all when there are none. */
+.item-outfits { margin-bottom: 0; }
 
 .item-outfits__row {
   display: flex;
@@ -2357,6 +2402,7 @@ button:where(.edit-button, .primary-button, .secondary-button, .danger-button, .
   .viewer-art { flex-basis: min(30vh, 260px); height: min(30vh, 260px); min-height: 190px; padding-block: 10px var(--s-2); }
   .viewer-details { padding-top: 10px; }
   .details-label { margin-bottom: var(--s-4); }
+  .viewer { --viewer-section-gap: var(--s-5); }
   .detail-tags { padding-bottom: 20px; gap: var(--s-2) 22px; }
   .viewer-text-close { margin-top: 20px; }
   .viewer-actions { gap: 6px; margin-top: 18px; }
@@ -2439,6 +2485,7 @@ button:where(.edit-button, .primary-button, .secondary-button, .danger-button, .
     backdrop-filter: none;
   }
 
+  .viewer-topbar:has(> .viewer-more) > .viewer-icon-close,
   .has-modeled-image .viewer-icon-close {
     --btn-bg: var(--paper-warm);
     -webkit-backdrop-filter: none;
@@ -2966,18 +3013,7 @@ button:where(.edit-button, .primary-button, .secondary-button, .danger-button, .
   }
 }
 
-/* ─── Ways to wear it ─── */
-.variant-strip { margin-top: 22px; }
-
-.variant-strip__label {
-  margin: 0 0 10px;
-  color: var(--muted);
-  font-size: var(--text-eyebrow);
-  font-weight: var(--weight-medium);
-  letter-spacing: var(--track-caps);
-  text-transform: uppercase;
-}
-
+/* ─── Ways to wear it ─── (a .viewer-section with its title) */
 .variant-strip__row {
   display: flex;
   gap: 10px;
@@ -3048,8 +3084,18 @@ button.variant-strip__tile:active .variant-strip__art { transform: scale(.96); }
 .variant-strip__add .variant-strip__art { border: 1.5px dashed color-mix(in srgb, var(--line) 60%, var(--muted)); background: transparent; }
 .variant-strip__status { margin: 10px 0 0; }
 
-/* ─── Details, as rows you tap to edit ─── */
-.detail-rows { margin-top: 22px; border-top: 1px solid var(--line); }
+/* ─── Details, as rows you tap to edit ───
+   The same key/value row in the item sheet, the outfit viewer and Settings,
+   always inside a .viewer-group: hairlines between rows, none above the
+   first or under the last. */
+.detail-rows { margin-bottom: 0; }
+.detail-rows > :last-child { border-bottom: 0; }
+.detail-row > dt,
+.detail-row > dd { margin: 0; }
+
+/* A row that only shows a value (Style, Account, Status): no chevron column,
+   no pointer. */
+.detail-row--static { grid-template-columns: 92px minmax(0, 1fr); cursor: default; }
 
 .detail-row {
   /* One line of a row: every cell is centred on it, so a value that wraps
@@ -3076,7 +3122,9 @@ button.variant-strip__tile:active .variant-strip__art { transform: scale(.96); }
 .detail-row:focus-visible,
 .detail-row:has(.detail-row__select:focus-visible) { outline: 2px solid var(--accent-warm); outline-offset: 2px; border-radius: var(--r-xs); }
 
-.detail-row__label { display: flex; align-items: center; min-height: var(--row-line); color: var(--muted); font-size: var(--text-eyebrow); font-weight: var(--weight-medium); letter-spacing: var(--track-caps); text-transform: uppercase; }
+/* The key is a quiet label in sentence case, as in a grouped list; the
+   section titles carry the structure, so the keys need no caps. */
+.detail-row__label { display: flex; align-items: center; min-height: var(--row-line); color: var(--muted); font-size: var(--text-body); }
 .detail-row__value { display: flex; align-items: center; min-width: 0; min-height: var(--row-line); font-size: var(--text-body); }
 .detail-row__muted { color: var(--muted); font-size: var(--text-caption); }
 .detail-row__caret { margin-top: calc((var(--row-line) - 14px) / 2); color: var(--muted); transition: transform var(--dur-pop) var(--ease-out), color var(--dur-pop) var(--ease-out); }
@@ -3120,58 +3168,22 @@ button.variant-strip__tile:active .variant-strip__art { transform: scale(.96); }
 
 .detail-row__editor { padding: var(--s-4) 0 20px; border-bottom: 1px solid var(--wash-2); }
 
-/* ─── The save bar: only while there is something to save ─── */
-.save-bar {
-  position: sticky;
-  bottom: 12px;
-  z-index: 7;
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-  min-height: 60px;
-  margin-top: 20px;
-  padding: var(--s-2) var(--s-2) var(--s-2) 18px;
-  border: 1px solid var(--glass-dark-border);
-  border-radius: var(--r-lg);
-  background: var(--glass-dark-solid);
-  color: var(--glass-dark-ink);
-  box-shadow: var(--shadow-lg);
-  animation: save-bar-in var(--dur-panel) var(--ease-out);
-}
-
-.save-bar__label { flex: 1; min-width: 0; font-size: var(--text-body); font-weight: var(--weight-medium); }
-
-/* The dark register. The bar holds an ordinary .danger-button and
-   .primary-button; only their inks change here, so every state comes with
-   the variant. */
-.save-bar { --btn-h: 44px; --btn-focus-ring: 2px solid var(--glass-dark-ink); }
-
-.save-bar .primary-button {
-  --btn-bg: var(--paper);
-  --btn-fg: var(--ink);
-  --btn-border: var(--paper);
-  --btn-shadow: none;
-  --btn-bg-hover: var(--paper-raised);
-  --btn-border-hover: var(--paper-raised);
-  --btn-shadow-hover: none;
-}
-
-/* Discard is the same .danger-button as in the confirm dialogs, its error
-   ink lifted so it still reads on the dark bar. */
-.save-bar .danger-button {
-  --btn-fg: color-mix(in srgb, var(--danger) 35%, var(--glass-dark-ink));
-  --btn-border: color-mix(in srgb, var(--danger) 45%, var(--glass-dark-border));
-  --btn-bg-hover: color-mix(in srgb, var(--danger) 22%, transparent);
-  --btn-border-hover: color-mix(in srgb, var(--danger) 35%, var(--glass-dark-ink));
-}
-
+/* ─── Saving: the sheet's primary, in the fixed footer ───
+   The footer exists only while there is something to save: what is unsaved
+   on the left, Discard and the filled Save on the right. The same light
+   footer as every panel, not a dark bar floating over the content. */
+.save-bar { animation: save-bar-in var(--dur-pop) var(--ease-out); }
+.save-bar__label { flex: 1; min-width: 0; color: var(--ink-soft); font-size: var(--text-body); font-weight: var(--weight-medium); }
+.save-bar.is-blocked .save-bar__label { color: var(--error); }
 .save-bar__discard,
-.save-bar__save { font-size: var(--text-body); }
-.save-bar__discard { font-weight: var(--weight-regular); }
-.save-bar__save { font-weight: var(--weight-medium); }
+.save-bar__save { flex: none; font-size: var(--text-body); }
+
+/* The body hands its bottom padding to the footer, as in ViewerPanel. */
+.viewer-overlay .item-sheet > .item-sheet__scroll:has(+ .viewer-footer:not(:empty)) { padding-bottom: var(--s-2); }
+.item-sheet__scroll:has(+ .viewer-footer:not(:empty)) .viewer-details.editing { padding-bottom: var(--s-2); }
 
 @keyframes save-bar-in {
-  from { opacity: 0; transform: translateY(12px); }
+  from { opacity: 0; transform: translateY(6px); }
 }
 
 /* ─── Add a way to wear it: its own sheet ─── */

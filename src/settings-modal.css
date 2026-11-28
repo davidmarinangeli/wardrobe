@@ -56,6 +56,22 @@
    dropped here rather than in the wizard's stylesheet. */
 .settings-panel .provider-switch { margin: 0; padding-top: 0; border-top: 0; }
 
+/* The AI tab's sections read like every panel's (.viewer-section): space
+   between them instead of rules, and a sentence-case title at
+   --text-section ("AI provider", "Reference photos") instead of a caps
+   label. */
+.settings-panel .settings-ai { gap: var(--viewer-section-gap); }
+.settings-panel .provider-switch,
+.settings-panel .settings-ai__photos { gap: var(--s-3); }
+.settings-panel .provider-switch__label {
+  color: var(--ink);
+  font-size: var(--text-section);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--track-tight);
+  line-height: var(--leading-heading);
+  text-transform: none;
+}
+
 .settings-archive-off h3 { margin: 0 0 var(--s-2); color: var(--ink); font-size: var(--text-section); font-weight: var(--weight-medium); line-height: var(--leading-heading); letter-spacing: var(--track-tight); }
 .settings-archive-off p:last-child { margin: 0; color: var(--ink-soft); font-size: var(--text-body); line-height: var(--leading-body); }
 .settings-archive-off code { font-size: var(--text-caption); }

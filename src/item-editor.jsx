@@ -383,8 +383,8 @@ function OutfitsWithItem({ outfits, onOpen }) {
   if (!outfits.length) return null;
 
   return (
-    <section className="item-outfits">
-      <p className="details-label">Outfits · {outfits.length}</p>
+    <section className="item-outfits viewer-section" aria-labelledby="item-outfits-title">
+      <h3 id="item-outfits-title" className="viewer-section__title">Outfits <span className="viewer-section__count">{outfits.length}</span></h3>
       <div className="item-outfits__row">
         {outfits.map((outfit) => (
           <button
@@ -432,7 +432,7 @@ function draftFromItem(item) {
  * entries take two taps — the first turns the entry into its own confirmation,
  * so a stray tap in a menu that has only just opened cannot delete anything.
  */
-function MoreMenu({ sections, busyAction, onSelect, onClose }) {
+export function MoreMenu({ sections, busyAction, onSelect, onClose }) {
   const menuRef = useRef(null);
   const [confirming, setConfirming] = useState(null);
 
@@ -498,8 +498,8 @@ function VariantStrip({ item, selectedVariantId, onSelect, onAdd, canAdd }) {
   const several = variants.length > 1;
 
   return (
-    <section className="variant-strip" aria-label="Ways to wear it">
-      <p className="variant-strip__label">Ways to wear it{several ? ` · ${variants.length}` : ""}</p>
+    <section className="variant-strip viewer-section" aria-labelledby="variant-strip-title">
+      <h3 id="variant-strip-title" className="viewer-section__title">Ways to wear it <span className="viewer-section__count">{variants.length}</span></h3>
       <div className="variant-strip__row">
         {variants.map((variant) => {
           const image = variantOwnImage(item, variant.id);
@@ -571,7 +571,7 @@ function ItemDetails({ draft, setDraft, palette, sampling, setSampling, sampleSt
   const suggestedSecondary = palette.find((color) => color.toLowerCase() !== draft.color?.toLowerCase()) || DEFAULT_ITEM_COLOR;
 
   return (
-    <section className="detail-rows" aria-label="Details">
+    <section className="detail-rows viewer-group viewer-section" aria-label="Details">
       {/* A real select, styled as a row: on a phone the tap opens the native
           picker, which is the best category chooser the platform has. */}
       <label className="detail-row">
@@ -1289,12 +1289,16 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
         />
 
         {onOpenOutfit && <OutfitsWithItem outfits={outfits} onOpen={openOutfit} />}
+      </div>
+      </div>
 
-        {/* Save and Discard exist only while there is something to save — the
-            contextual save bar of Shopify's admin. The footer they replace
-            showed Delete, Cancel and a filled Save on every item, always. */}
+      {/* The fixed footer holds the sheet's primary, as on every panel; rare
+          and destructive actions stay behind ⋯. The item sheet's primary is
+          Save, and it exists only while there is something to save — the
+          contextual save bar of Shopify's admin — so the footer does too. */}
+      <footer className="viewer-footer">
         {isDirty && (
-          <div className={`save-bar${closeBlocked ? " is-blocked" : ""}`} role="region" aria-label="Unsaved changes">
+          <div className={`viewer-actions save-bar${closeBlocked ? " is-blocked" : ""}`} role="region" aria-label="Unsaved changes">
             <span className="save-bar__label" role="status">
               {closeBlocked ? "Save or discard before closing" : unsavedLabel(changes.length)}
             </span>
@@ -1304,8 +1308,7 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
             </button>
           </div>
         )}
-      </div>
-      </div>
+      </footer>
     </aside>
     </div>
     </div>
