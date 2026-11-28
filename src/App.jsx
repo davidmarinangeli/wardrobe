@@ -582,7 +582,7 @@ export function App() {
         </nav>
         <div className="app-top-bar__right">
           {/* Global tools, always in the same place: one import primary per
-              view (relabelled to Add Inspo on Inspo) and Mirror as the
+              view (relabelled to Add inspo on Inspo) and Mirror as the
               secondary everywhere. Overview's sections carry their own
               + Outfit / Suggest outfit / + Cheat sheet in their header rows. */}
           {!archiveMaintenanceActive && <div className="top-actions" ref={topActionsRef} data-hidden="false" data-overview-selection={view === "overview" && overviewSelectionCount > 0 ? "true" : "false"}>
@@ -593,7 +593,7 @@ export function App() {
             <WardrobeImportFlow
               onGarmentApproved={addImportedItem}
               externalSetup={aiSetup}
-              idleLabel={view === "inspo" ? "Add Inspo" : undefined}
+              idleLabel={view === "inspo" ? "Add inspo" : undefined}
               onIdleActivate={view === "inspo" ? () => setShowInspoImporter(true) : undefined}
             />
           </div>}
