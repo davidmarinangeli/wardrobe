@@ -347,12 +347,16 @@ function PinViewer({ pin, wishlistCount, onClose, onSave, onDelete, onDetect, op
 // Inspo pins and Wishlist pieces are one pipeline, not two features: a piece
 // can only ever come from detecting it out of a pin (see
 // detectAndCreateWishlistItems in scripts/wishlist-api.mjs — there is no
-// standalone "add to wishlist" route). The nav says exactly that, in two
-// groups: "Sources" is every pin you imported, and everything past the divider
-// — "All" plus each garment type — is the pieces detected out of them. The two
-// never mix in one grid, so a garment can't appear twice (once inside the photo
-// it came from, once as its own cutout) the way it did when "All" showed both.
-export function Inspo({ showImporter, onImporterClose }) {
+// standalone "add to wishlist" route). The page header says exactly that with
+// two tabs (App owns which one is open, `view`): "Pieces" is what was detected
+// out of your inspo, filtered by garment type below; "Sources" is every pin you
+// imported. The two never mix in one grid, so a garment can't appear twice
+// (once inside the photo it came from, once as its own cutout).
+const PIECE_CATEGORIES = CATEGORIES
+  .filter((cat) => cat.id !== "sources")
+  .map(({ dividerBefore, ...cat }) => cat);
+
+export function Inspo({ view = "pieces", onCountsChange, showImporter, onImporterClose }) {
   const [pins, setPins] = useState([]);
   const [wishlistItems, setWishlistItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -406,10 +410,16 @@ export function Inspo({ showImporter, onImporterClose }) {
     if (item.sourcePinId) wishlistCounts[item.sourcePinId] = (wishlistCounts[item.sourcePinId] || 0) + 1;
   }
 
+  // Each tab counts its own collection, so the header always describes the view
+  // you are on. Null while loading, so no "0" flashes before the lists arrive.
+  useEffect(() => {
+    onCountsChange?.(loading ? null : { pieces: wishlistItems.length, sources: pins.length });
+  }, [loading, wishlistItems.length, pins.length, onCountsChange]);
+
   // A pin is a source whatever it depicts, so "Sources" is unfiltered — its own
   // stored category (full_look, a garment type, or nothing yet) is a detection
-  // outcome and never decided which pill it belongs under.
-  const showingSources = activeCategory === "sources";
+  // outcome and never decided which filter it belongs under.
+  const showingSources = view === "sources";
   const visiblePins = showingSources ? pins : [];
   // Sources falls through to a sentinel that matches no part, so the pieces grid
   // stays empty there; every other pill is a real garment filter, and "all"
@@ -475,13 +485,10 @@ export function Inspo({ showImporter, onImporterClose }) {
 
   return (
     <PageShell
-      count={totalCount}
-      noun="item"
-      categories={CATEGORIES}
+      categories={showingSources ? undefined : PIECE_CATEGORIES}
       activeCategory={activeCategory}
       onCategory={setActiveCategory}
-      renderCategory={(cat) => cat.id === "sources" && pins.length ? `${cat.label} (${pins.length})` : cat.label}
-      navLabel="Filter inspo by category"
+      navLabel="Filter inspo pieces by category"
     >
       <PageStatus
         loading={loading}
@@ -496,7 +503,7 @@ export function Inspo({ showImporter, onImporterClose }) {
       />
 
       {(!!visiblePins.length || !!visibleItems.length) && (
-        <section className="gallery-grid" aria-label={`${CATEGORY_LABEL[activeCategory] || "All"} inspo`}>
+        <section className="gallery-grid" aria-label={showingSources ? "Inspo sources" : `${CATEGORY_LABEL[activeCategory] || "All"} inspo pieces`}>
           {visiblePins.map((pin, index) => (
             <PinCard
               key={pin.id}

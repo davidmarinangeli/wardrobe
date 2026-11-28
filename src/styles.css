@@ -320,7 +320,10 @@ button { font: inherit; }
   pointer-events: none;
 }
 
-.app-view-switch {
+/* The segmented control: the main nav (.app-view-switch) and, in small, the
+   section switch in a page head (.segmented, PageTabs). One component. */
+.app-view-switch,
+.segmented {
   display: flex;
   width: max-content;
   gap: var(--s-1);
@@ -718,17 +721,20 @@ button { font: inherit; }
 .ai-mode-switch__pill button:active { transform: scale(.97); }
 
 
-.app-view-switch button {
+/* The main nav speaks in sentence case, like every other control that moves
+   you somewhere (the section switch, the phone's bottom nav); tracked caps are
+   kept for labels. */
+.app-view-switch button,
+.segmented button {
   min-height: 34px;
   border: 0;
   border-radius: var(--r-full);
   padding: 7px var(--s-4);
   background: transparent;
   color: var(--muted);
-  font-size: var(--text-eyebrow);
+  font-size: var(--text-body);
   font-weight: var(--weight-medium);
-  letter-spacing: var(--track-caps);
-  text-transform: uppercase;
+  letter-spacing: var(--track-body);
   cursor: pointer;
   transition:
     background var(--dur-pop) var(--ease-out),
@@ -736,69 +742,158 @@ button { font: inherit; }
     transform var(--dur-press) var(--ease-out);
 }
 
-.app-view-switch button.active {
+.app-view-switch button.active,
+.segmented button[aria-selected="true"] {
   background: var(--paper-raised);
   color: var(--ink-soft);
   box-shadow: var(--shadow-sm);
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .app-view-switch button:hover { color: var(--ink-soft); }
-  .app-view-switch button:not(.active):hover { background: var(--wash-1); }
+  .app-view-switch button:hover,
+  .segmented button:hover { color: var(--ink-soft); }
+  .app-view-switch button:not(.active):hover,
+  .segmented button:not([aria-selected="true"]):hover { background: var(--wash-1); }
 }
 
-.app-view-switch button:focus-visible {
+.app-view-switch button:focus-visible,
+.segmented button:focus-visible {
   outline: 2px solid var(--accent-warm);
   outline-offset: 2px;
 }
 
-.app-view-switch button:active { transform: scale(.97); }
+.app-view-switch button:active,
+.segmented button:active { transform: scale(.97); }
+
+/* In small: the page's section switch sits beside a title, not in the chrome. */
+.segmented button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-1);
+  min-height: 30px;
+  padding: var(--s-1) var(--s-3);
+  white-space: nowrap;
+}
+
+.segmented__count { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* == S1 page shell ==========================================================
+   Variant B, "title + segmented". Every view has one visible h1 naming what
+   you are looking at (Wardrobe; on Overview the open section; Inspo) with its
+   count in muted figures beside it. Where the page has sections, a segmented
+   control (the main nav's own component, in small) sits next to the title,
+   and the section's actions close the same row on the right. No tab bar and
+   no section h2 under it. The row sits at the same height on every page. */
+.app-shell__page {
+  position: relative;
+  /* Where the head row starts and how tall it is. Overview's section actions
+     (overview.css) are placed on that row. */
+  --page-head-top: var(--s-5);
+  --page-head-h: 44px;
+}
+
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3) var(--s-5);
+  min-height: var(--page-head-h);
+  padding: var(--page-head-top) var(--page-x) 0;
+  box-sizing: content-box;
+}
+
+.page-head__title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  min-width: 0;
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--text-display);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-display);
+  letter-spacing: var(--track-display);
+}
+
+/* The longest possible title sits invisibly in the same cell (PageHeader
+   `titles`), so the cell, and the segmented control after it, keep one width. */
+.page-head__label { display: inline-grid; }
+.page-head__label > * { grid-area: 1 / 1; }
+.page-head__ghost { visibility: hidden; }
+
+.page-head__count {
+  min-width: 2ch;
+  color: var(--muted);
+  font-size: var(--text-section);
+  font-weight: var(--weight-regular);
+  letter-spacing: var(--track-tight);
+  font-variant-numeric: tabular-nums;
+}
+
+.page-head__nav { flex: none; min-width: 0; }
+
+.page-head__settings { position: relative; flex: none; margin-left: auto; --btn-shadow: var(--shadow-xs); }
+
+@media (min-width: 861px) {
+  .page-head .page-head__settings { display: none; }
+}
 
 .gallery-header {
-  padding: 40px var(--page-x) 0;
+  padding: var(--s-4) var(--page-x) 0;
 }
 
-/* The page title. Every view has exactly one h1 and it always looks the same:
-   the large title from MobileHeadRow. On a phone mobile-chrome.css lays it out
-   with the gear beside it; on desktop the gear already lives in the top bar, so
-   only the title shows, sitting where Overview's own title used to and pulling
-   the page content up under it. */
-@media (min-width: 861px) {
-  .app-shell .mobile-headrow {
-    display: block;
-    padding: 28px var(--page-x) 0;
-  }
-  .app-shell .mobile-headrow .mobile-settings { display: none; }
-  .mobile-largetitle {
-    margin: 0;
-    color: var(--ink);
-    font-size: var(--text-display);
-    font-weight: var(--weight-medium);
-    line-height: var(--leading-display);
-    letter-spacing: var(--track-display);
-  }
-  .app-shell .gallery-header { padding-top: 14px; }
-  .app-shell .overview-page { padding-top: 22px; }
-}
-
+/* The filters, one row. A count, when a page passes one, leads it. */
 .gallery-meta-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--s-5);
+  gap: var(--s-4);
+  min-width: 0;
 }
 
-/* Caps kept as the structural device, but at roughly half the volume:
-   tracking down from .1em, lighter weight, warm muted instead of ink. */
+/* Layout only (the pill row's own styling is S3's): the nav carries 6px / 18px
+   of padding so the active pill's shadow survives its scroll clip; the
+   negative margins give that room back so the row is as tall as one pill. */
+.gallery-meta-row > .category-nav {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: -6px 0 -18px;
+  /* When the pills outrun the row they fade out at its end instead of being
+     cut flat, so the clipped ones read as "scroll for more". The fade covers
+     the trailing padding, so a row that fits ends before it. */
+  padding-inline-end: var(--s-7);
+  -webkit-mask-image: linear-gradient(to left, transparent, #000 var(--s-7));
+  mask-image: linear-gradient(to left, transparent, #000 var(--s-7));
+}
+
 .piece-count {
+  flex: none;
   margin: 0;
   color: var(--muted);
-  font-size: var(--text-eyebrow);
-  font-weight: var(--weight-medium);
-  letter-spacing: var(--track-caps);
+  font-size: var(--text-body);
+  font-variant-numeric: tabular-nums;
   line-height: var(--leading-none);
-  text-transform: uppercase;
+  white-space: nowrap;
 }
+
+/* One primary per view. Overview's sections bring their own (+ Outfit,
+   + Cheat sheet), so there the global import action takes the secondary tone.
+   An import error keeps its error fill: that is state, not emphasis. */
+.top-actions[data-view="overview"] .top-action--primary:not(.is-error) {
+  border-color: var(--glass-border);
+  background: var(--paper-raised);
+  color: var(--ink-soft);
+  box-shadow: var(--shadow-sm);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .top-actions[data-view="overview"] .top-action--primary:not(.is-error):hover {
+    border-color: var(--line);
+    background: var(--paper-raised);
+    box-shadow: var(--shadow-md);
+  }
+}
+/* == /S1 page shell == */
 
 .category-nav {
   width: max-content;
@@ -2253,7 +2348,6 @@ button:where(.edit-button, .primary-button, .secondary-button, .danger-button, .
 
 @media (max-width: 860px) {
   :root { --page-x: 24px; --item-pad: 12px; }
-  .gallery-header { padding-top: 28px; }
   .category-nav { width: 100%; margin: 22px 0 0; }
   .category-nav button { min-height: 40px; padding: 9px 15px; }
   .gallery-grid {
@@ -2322,8 +2416,6 @@ button:where(.edit-button, .primary-button, .secondary-button, .danger-button, .
   :root { --page-x: 16px; --item-pad: 10px; }
   .app-top-bar { padding-top: max(10px, env(safe-area-inset-top)); gap: var(--s-2) var(--s-3); }
   .app-view-switch button { padding: 7px var(--s-3); }
-  .gallery-header { padding-top: 22px; }
-  .piece-count { font-size: var(--text-eyebrow); }
   .category-nav { margin: 18px 0 0; }
   /* 44px minimum hit target on touch. */
   .category-nav button { min-height: 44px; padding: 11px 15px; font-size: var(--text-eyebrow); }
@@ -2363,7 +2455,6 @@ button:where(.edit-button, .primary-button, .secondary-button, .danger-button, .
   .viewer-actions > button { min-height: 44px; padding-inline: var(--s-2); font-size: var(--text-caption); }
   .color-controls { align-items: flex-start; flex-direction: column; }
   .sample-button { width: 100%; }
-  .gallery-meta-row { align-items: flex-start; }
 }
 
 /* ─── Accessibility ────────────────────────────────────────────────────────

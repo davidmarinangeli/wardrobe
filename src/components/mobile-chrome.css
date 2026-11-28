@@ -1,5 +1,5 @@
-/* Mobile chrome: the floating bottom nav, and the top bar's actions relocated
-   to sit above it.
+/* Mobile chrome: the page head, the floating bottom nav, and the top bar's
+   actions relocated to sit beside it.
 
    Everything here is scoped to <= 860px. Desktop keeps .app-view-switch and the
    top bar exactly as they were.
@@ -11,77 +11,25 @@
    ancestor to win on specificity rather than on order, which also means moving
    the imports around later cannot silently break them. */
 
-.bottom-nav,
-.mobile-header,
-.mobile-headrow,
-.mobile-compactbar { display: none; }
+.bottom-nav { display: none; }
 
 @media (max-width: 860px) {
-  /* ─── Mobile Header: Large title + gear on page; compact bar on scroll ─────── */
-  .mobile-headrow {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: var(--s-4);
-    padding: max(18px, env(safe-area-inset-top)) var(--page-x) 0;
-  }
+  /* ─── Page head: title + count + gear, the section switch below ──────────
+     The large title stays (it names what you are looking at, which on
+     Overview the bottom nav does not), but no scrolled-in pill repeats it:
+     the title scrolls away with the page and the bottom nav keeps your place. */
+  .app-shell .app-shell__page { --page-head-top: max(18px, env(safe-area-inset-top)); }
 
-  .mobile-largetitle {
-    margin: 0;
-    font-size: var(--text-display);
-    font-weight: var(--weight-medium);
-    letter-spacing: var(--track-display);
-    line-height: var(--leading-display);
-    color: var(--ink);
-    transform-origin: left center;
-  }
+  .app-shell .page-head { gap: var(--s-3) var(--s-4); }
 
-  .mobile-subtitle {
-    margin: var(--s-1) 0 0;
-    padding: 0 var(--page-x);
-    font-size: var(--text-eyebrow);
-    letter-spacing: var(--track-caps);
-    text-transform: uppercase;
-    color: var(--muted);
-  }
+  .app-shell .page-head__title { flex: 1 1 auto; }
 
-  .mobile-compactbar {
-    position: fixed;
-    top: calc(6px + env(safe-area-inset-top));
-    right: 68px;
-    left: 68px;
-    z-index: 25;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 44px;
-    border-radius: var(--r-full);
-    opacity: 0;
-    pointer-events: none;
-  }
+  /* Second row, full width: three (or two) equal segments, 44px targets. */
+  .app-shell .page-head__nav { order: 3; flex: 1 0 100%; }
+  .app-shell .page-head .segmented { width: 100%; }
+  .app-shell .page-head .segmented button { flex: 1 1 0; min-height: 44px; }
 
-  .mobile-compactbar::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    border-radius: inherit;
-    background: var(--paper-raised);
-    box-shadow: var(--glass-edge), var(--shadow-sm);
-    border: 1px solid var(--line);
-  }
-
-  .mobile-compactbar__title {
-    font-size: var(--text-subsection);
-    font-weight: var(--weight-medium);
-    color: var(--ink);
-    letter-spacing: var(--track-tight);
-  }
-
-  /* .icon-button.icon-button--outlined — the same button as the desktop gear. */
-  .mobile-settings { position: relative; --btn-shadow: var(--shadow-xs); }
-
-  /* ─── The desktop top bar yields to .mobile-header on mobile ──────────────── */
+  /* ─── The desktop top bar yields to the page head on mobile ──────────────── */
   .app-shell .app-top-bar {
     position: static;
     height: 0;
@@ -106,69 +54,77 @@
     display: contents;
   }
 
-  .app-shell .gallery-header {
-    padding-top: 10px;
-  }
-
+  /* The global actions share the nav's row instead of floating in a second
+     row above it, where they sat over the grid even at rest. Two circles the
+     height of the bar, at its right end: Mirror in the nav's dark glass, the
+     import action solid. What they cover is what the nav already covers, and
+     the grid's bottom padding clears that. */
   .app-top-bar .top-actions {
     position: fixed;
     right: 12px;
-    left: auto;
-    max-width: calc(100% - 24px);
-    /* Clear of the nav rather than nearly touching it: two floating rows a few
-       px apart read as one crowded object rather than two controls. */
-    bottom: calc(var(--nav-inset) + 14px);
-    z-index: 29;
-    /* Primary last (rightmost). With row-reverse, flex-start packs to the right
-       edge so the CTAs sit on the right above the bottom nav.
-       Reversing here keeps the desktop markup untouched. */
+    bottom: calc(var(--nav-gap) + env(safe-area-inset-bottom));
+    z-index: 30;
     gap: var(--s-2);
-    justify-content: flex-end;
     padding: 0;
     border: none;
-    transition: transform 300ms var(--ease-out), opacity 200ms var(--ease-out);
+    transition: opacity 200ms var(--ease-out);
   }
 
-  .app-top-bar .top-actions[data-hidden="true"] {
-    transform: translateY(calc(100% + 26px));
-    opacity: 0;
-    pointer-events: none;
+  /* They stay with the nav while scrolling: hiding them would only open a gap
+     at the end of the bar. useChromeScroll still writes data-hidden. */
+  .app-shell .app-top-bar .top-actions[data-hidden="true"] {
+    transform: none;
+    opacity: 1;
+    pointer-events: auto;
   }
 
-  /* Selection gets the space directly above the nav; the global tools return
-     as soon as the selection is cleared or the user leaves Overview. */
+  /* Selection gets the space directly above the nav (the Overview drawer);
+     the global tools return as soon as the selection is cleared or the user
+     leaves Overview. */
   .app-shell .app-top-bar .top-actions[data-overview-selection="true"] {
-    transform: translateY(calc(100% + 26px));
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
   }
 
-  /* With room to sit in, the actions get their labels back. The 860px block in
-     styles.css collapses them to 44px icon-only circles purely because the top
-     bar had no space — that compensation is obsolete down here, and an unlabelled
-     "+" was exactly the ambiguity worth removing. */
-  .app-top-bar .top-actions .top-action {
-    width: auto;
-    min-height: 44px;
-    padding: 0 var(--s-4);
+  .app-shell .app-top-bar .top-actions .top-action {
+    width: var(--nav-h);
+    height: var(--nav-h);
+    min-height: 0;
+    padding: 0;
+    justify-content: center;
     border-radius: var(--r-full);
+    transition: width 260ms var(--ease-out), height 260ms var(--ease-out), background var(--dur-pop) var(--ease-out);
   }
 
-  .app-top-bar .top-actions .top-action__label {
-    display: inline;
-    font-size: var(--text-body);
-    letter-spacing: var(--track-tight);
+  /* With the nav compact (labels collapsed) the circles shrink with it. */
+  .app-shell:has(.bottom-nav[data-compact="true"]) .app-top-bar .top-actions .top-action {
+    width: var(--nav-h-compact);
+    height: var(--nav-h-compact);
   }
 
-  /* The gallery has to clear both floating rows. Replaces the dead
-     padding-bottom the 860/520 blocks already carried for no reason. */
+  .app-top-bar .top-actions .top-action__label { display: none; }
+
+  /* The gallery has to clear the floating row. */
   .app-shell .gallery-grid { padding-bottom: calc(var(--nav-inset) + var(--s-6)); }
 
   /* ─── Bottom nav ─────────────────────────────────────────────────────────── */
+  .app-shell {
+    /* The compact bar: 44px tabs + 3px padding each side + the 1px border. */
+    --nav-h-compact: 52px;
+    /* --glass-dark is 32% ink: over cream it turns into a light grey, and the
+       cream labels on it measured 2.0:1 (active) and 1.5:1 (the rest). The
+       floating chrome takes the same dark glass at 85% instead (no new colour:
+       it is --glass-dark-solid, thinned), which keeps every label above 4.5:1
+       on any page colour, under the selection pill too, while the blur and
+       the refraction still show through. */
+    --nav-glass: color-mix(in srgb, var(--glass-dark-solid) 85%, transparent);
+  }
+
   .bottom-nav {
     position: fixed;
-    right: 12px;
+    /* Leaves the end of the row to the two action circles. */
+    right: calc(12px + 2 * var(--nav-h) + 2 * var(--s-2));
     bottom: calc(var(--nav-gap) + env(safe-area-inset-bottom));
     left: 12px;
     z-index: 30;
@@ -193,12 +149,12 @@
        phone is a ~100px kernel across the screen and drops frames on a flagship
        Android. 10px holds. The refraction filter is appended to this inline by
        useGlassSurface. */
-    background: var(--glass-dark);
+    background: var(--nav-glass);
     border: 1px solid var(--glass-dark-border);
     box-shadow: var(--glass-dark-edge), var(--shadow-lg);
     -webkit-backdrop-filter: var(--glass-blur-chrome);
     backdrop-filter: var(--glass-blur-chrome);
-    transition: padding 260ms var(--ease-out), left 260ms var(--ease-out), right 260ms var(--ease-out);
+    transition: padding 260ms var(--ease-out);
   }
 
   /* Compact: past the threshold the labels collapse and the bar contracts on
@@ -206,8 +162,6 @@
      rather than transformed — scaleX would squash the icons — which makes this
      the one place here that animates layout, once per threshold crossing. */
   .bottom-nav[data-compact="true"] {
-    right: 72px;
-    left: 72px;
     padding: 3px 6px;
   }
 
@@ -238,6 +192,7 @@
   }
 
   .bottom-nav__tab[aria-current="page"] { color: var(--glass-dark-ink); }
+  .bottom-nav__tab[aria-current="page"] .bottom-nav__label { font-weight: var(--weight-semibold); }
   .bottom-nav__tab:active { transform: scale(.94); }
 
   .bottom-nav__labelwrap {
@@ -251,12 +206,14 @@
     opacity: 0;
   }
 
+  /* Labels in full ink on every tab: the selection is carried by the pill, the
+     filled icon and the weight, not by dimming the other labels below AA. */
   .bottom-nav__label {
     overflow: hidden;
-    font-size: var(--text-eyebrow);
+    color: var(--glass-dark-ink);
+    font-size: var(--text-caption);
     font-weight: var(--weight-medium);
-    letter-spacing: var(--track-caps);
-    text-transform: uppercase;
+    line-height: var(--leading-caption);
   }
 
   /* Centred on the row, not pinned to its top: the bar's padding and the pill's
@@ -270,7 +227,9 @@
     z-index: 0;
     height: 48px;
     border-radius: var(--r-full);
-    background: linear-gradient(160deg, rgba(255, 255, 255, .26), rgba(255, 255, 255, .12));
+    /* Lit, not white: a brighter pill would lift the glass under the active
+       label below 4.5:1. */
+    background: linear-gradient(160deg, rgba(255, 255, 255, .16), rgba(255, 255, 255, .08));
     box-shadow: var(--glass-dark-edge);
     transition: transform 220ms var(--ease-in-out), width 220ms var(--ease-in-out), height 260ms var(--ease-out);
     pointer-events: none;
@@ -315,8 +274,8 @@
      through an opaque fill shows nothing, and the main CTA should be the most
      solid thing on the screen. */
   .app-top-bar .top-actions .top-action--secondary,
-  .app-top-bar .top-actions .mirror-trigger {
-    background: var(--glass-dark);
+  .app-shell .app-top-bar .top-actions[data-view="overview"] .top-action--primary:not(.is-error) {
+    background: var(--nav-glass);
     border: 1px solid var(--glass-dark-border);
     box-shadow: var(--glass-dark-edge), var(--shadow-md);
     color: var(--glass-dark-ink);

@@ -1,57 +1,47 @@
 .overview-page {
   width: min(100%, 1760px);
   margin: 0 auto;
-  padding: 28px var(--page-x) 100px;
+  padding: var(--s-5) var(--page-x) 100px;
 }
 
-/* Shell header: page title and the section tabs. */
-.overview-header {
-  position: relative;
-  display: grid;
-  gap: 18px 28px;
-  margin-bottom: var(--s-5);
+/* Each section's head (outfits.jsx, cheat-sheets.jsx): its h2 and its actions.
+   The page h1 already names the section and carries its count ("Outfits 5"),
+   so the h2 is for the outline only, and the actions move up onto the head
+   row, at its right end: one row says where you are and what you can do there.
+   Positioned against .app-shell__page, where the head row is (styles.css). */
+.overview-panel-head { display: flex; align-items: center; justify-content: flex-end; gap: var(--s-3); }
+.overview-panel-head h2 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
-
-/* One header row for every section: title + count left, actions right. */
-.overview-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: var(--s-5); }
-.overview-panel-head h2 { margin: 0; color: var(--ink); font-size: var(--text-title); font-weight: var(--weight-medium); letter-spacing: var(--track-title); line-height: var(--leading-title); }
-.overview-panel-head h2 > span { margin-left: var(--s-2); color: var(--muted); font-size: var(--text-subsection); font-variant-numeric: tabular-nums; }
-.overview-panel-head__actions { display: flex; align-items: center; gap: 10px; }
+@media (min-width: 861px) {
+  .overview-panel-head {
+    position: absolute;
+    top: var(--page-head-top);
+    right: var(--page-x);
+    height: var(--page-head-h);
+  }
+}
+.overview-panel-head__actions { display: flex; align-items: center; gap: var(--s-2); }
 .overview-panel-head__actions .top-action { min-height: var(--btn-h); }
 /* The section's one primary (.primary-button). */
 .overview-panel-head__add { font: inherit; font-size: var(--text-body); }
 
-/* Pieces: search, active filter and hidden-selection note. */
+/* Pieces: search, active filter and hidden-selection note. The search is a
+   tool, not a banner: it keeps a field's width instead of spanning 1300px. */
 .overview-toolbar {
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(300px, 620px) minmax(180px, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 18px 28px;
+  gap: var(--s-3) var(--s-4);
   margin-bottom: 28px;
 }
-
-.overview-subnav {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  min-height: 42px;
-  border-bottom: 1px solid var(--line);
-}
-.overview-subnav button {
-  position: relative;
-  min-height: 42px;
-  padding: var(--s-2) 2px;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-size: var(--text-body);
-  cursor: pointer;
-}
-.overview-subnav button.is-active { color: var(--ink-soft); font-weight: var(--weight-semibold); }
-.overview-subnav button.is-active::after { position: absolute; right: 0; bottom: -1px; left: 0; height: 2px; background: var(--accent); content: ""; }
-.overview-subnav button:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
+.overview-toolbar > .overview-search { flex: 0 1 480px; }
 
 .overview-search {
   grid-column: 1 / -1;
@@ -127,12 +117,9 @@
 .overview-drawer button:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
 
 .overview-active-filter {
-  grid-column: 2;
   display: flex;
   align-items: center;
-  justify-self: center;
   gap: var(--s-2);
-  margin-top: -8px;
   padding: 3px 7px 3px 11px;
   border: 1px solid var(--line);
   border-radius: var(--r-full);
@@ -144,8 +131,8 @@
 .overview-active-filter button { width: 24px; height: 24px; }
 
 .overview-hidden-selection {
-  grid-column: 1 / -1;
-  margin: -12px 0 0;
+  flex-basis: 100%;
+  margin: 0;
   color: var(--muted);
   font-size: var(--text-caption);
 }
@@ -273,19 +260,18 @@
 @media (max-width: 1180px) and (min-width: 861px) {
   .overview-layout { grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; }
   .overview-grid { grid-template-columns: repeat(auto-fill, minmax(135px, 1fr)); gap: 18px 13px; }
-  .overview-toolbar { grid-template-columns: minmax(170px, 1fr) minmax(260px, 1.5fr) minmax(20px, .3fr); }
 }
 
 @media (max-width: 860px) {
-  .overview-page { padding: 20px var(--page-x) calc(var(--nav-inset) + var(--s-5)); }
-  .overview-header { margin-bottom: 20px; }
-  .overview-toolbar { display: flex; flex-direction: column; align-items: stretch; gap: 14px; margin: 0 0 var(--s-5); }
-  .overview-panel-head { align-items: flex-start; gap: var(--s-3); }
-  .overview-panel-head h2 { font-size: var(--text-title); }
+  .overview-page { padding: var(--s-4) var(--page-x) calc(var(--nav-inset) + var(--s-5)); }
+  .overview-toolbar { flex-direction: column; align-items: stretch; gap: 14px; margin: 0 0 var(--s-5); }
+  .overview-toolbar > .overview-search { flex: none; }
+  /* No room beside the title at this width: the actions open the section,
+     right-aligned under the section switch. */
+  .overview-panel-head { margin-bottom: var(--s-4); }
   .overview-panel-head__add { font-size: var(--text-body); --btn-pad-x: var(--s-3); }
   .overview-search { order: 0; height: 46px; }
-  .overview-active-filter { align-self: center; margin: -4px 0 0; }
-  .overview-hidden-selection { margin: -5px 0 0; }
+  .overview-active-filter { align-self: center; }
   .overview-layout { display: block; }
   .overview-selection--desktop { display: none; }
   .overview-section { margin-bottom: 28px; }
@@ -349,7 +335,6 @@
 
 @media (max-width: 520px) {
   .overview-page { padding-inline: var(--page-x); }
-  .overview-subnav button { flex: 1; }
   .overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px var(--s-3); }
   .overview-card .gallery-item__art { aspect-ratio: .82; }
   .overview-section__header { margin-bottom: 10px; }
