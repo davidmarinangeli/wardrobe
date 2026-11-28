@@ -18,7 +18,7 @@ import { hasGoogleDrivePrivatePathComponent } from "./google-drive-private-path.
 import { safeArchivePath } from "../shared/portable-assets.mjs";
 import { fsyncDirectory, readFileWithRetry, renameWithRetry } from "./fs-durability.mjs";
 
-export const GOOGLE_DRIVE_OUTAGE_NOTICE = "Le modifiche vengono salvate sul computer. Quando il collegamento sarà ripristinato, l’archivio locale sovrascriverà quello su Google Drive.";
+export const GOOGLE_DRIVE_OUTAGE_NOTICE = "Changes are saved on this computer. When the connection is restored, the local archive will overwrite the one on Google Drive.";
 
 const STATE_VERSION = 1;
 const COMMIT_NAME = "wardrobe-archive-commit.json";
@@ -1981,7 +1981,7 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
       return {
         backupEnabled: false, syncState: "error", syncCurrentFiles: 0, syncTotalFiles: 0,
         syncCurrentBytes: 0, syncTotalBytes: 0, pendingChanges: false, syncPaused: true,
-        syncError: { code: safeErrorCode(error), message: "Lo stato della sincronizzazione non è leggibile.", retryable: false },
+        syncError: { code: safeErrorCode(error), message: "The backup state is unreadable.", retryable: false },
         lastCompletedBackup: null, outageNotice: GOOGLE_DRIVE_OUTAGE_NOTICE,
       };
     }
@@ -2013,9 +2013,9 @@ export function createGoogleDriveSyncWorker({ service, dataDir, pollIntervalMs =
       syncPaused: state.paused,
       syncError: visibleError ? {
         code: visibleError,
-        message: visibleError === "google_unavailable" ? "Google Drive non è raggiungibile in questo momento."
-          : visibleError === "target_changed" ? "La destinazione Google Drive è cambiata. Rivedi l’archivio prima di riattivare la sincronizzazione."
-            : "La sincronizzazione è in attesa di essere ripresa.",
+        message: visibleError === "google_unavailable" ? "Google Drive can't be reached right now."
+          : visibleError === "target_changed" ? "The Google Drive destination has changed. Review the archive before turning backup back on."
+            : "Backup is waiting to resume.",
         retryable: visibleError === "google_unavailable" || Boolean(state.retry?.at),
       } : null,
       retryAt: Number.isFinite(state.retry?.at) ? new Date(state.retry.at).toISOString() : null,

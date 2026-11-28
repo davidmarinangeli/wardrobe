@@ -295,7 +295,7 @@ export function createArchiveAdmissionMiddleware(dataDir) {
       res.statusCode = status;
       res.setHeader("Content-Type", "application/json; charset=utf-8");
       res.setHeader("Cache-Control", "no-store");
-      res.end(JSON.stringify({ error: { code: error.code || "archive_unavailable", message: status === 503 ? "L’archivio è in manutenzione. Riprova tra poco." : "L’archivio non è disponibile in modo sicuro.", retryable: status === 503 } }));
+      res.end(JSON.stringify({ error: { code: error.code || "archive_unavailable", message: status === 503 ? "The archive is under maintenance. Try again shortly." : "The archive can't be accessed safely right now.", retryable: status === 503 } }));
     });
   };
 }

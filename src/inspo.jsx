@@ -101,7 +101,7 @@ function InspoImporter({ onClose, onImported }) {
 
   return (
     <ViewerPanel
-      title="Add Inspo"
+      title="Add inspo"
       ariaLabel="Add inspiration"
       onClose={onClose}
       closeRef={closeButtonRef}

@@ -252,7 +252,7 @@ export function Mirror({ items }) {
         <section ref={panelRef} className="mirror-popover" role="dialog" aria-modal="true" aria-labelledby="mirror-title">
           <header className="mirror-popover__header">
             <div className="mirror-popover__heading">
-              <p className="mirror-popover__eyebrow popover-eyebrow">AI Mirror</p>
+              <p className="mirror-popover__eyebrow popover-eyebrow">AI mirror</p>
               {/* Same icon, same words as the chip — this block IS the chip,
                   moved. usePopoverOrigin measures where it has to start. */}
               <div className="popover-identity" ref={identityRef}>
