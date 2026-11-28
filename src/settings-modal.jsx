@@ -61,6 +61,36 @@ export function SettingsModal({ open, tab, onTabChange, onClose, aiSetup, aiBadg
     tabRefs.current[next]?.focus();
   };
 
+  // The tabs are the header's second row: they stay put while a section scrolls.
+  const tabs = (
+    <div className="settings-tabs" role="tablist" aria-label="Settings sections" onKeyDown={onTabKeyDown}>
+      {TABS.map((item) => {
+        const disabled = item.id === "archive" && archiveDisabled;
+        const selected = tab === item.id;
+        return (
+          <button
+            key={item.id}
+            ref={(element) => { tabRefs.current[item.id] = element; }}
+            type="button"
+            role="tab"
+            id={`settings-tab-${item.id}`}
+            aria-controls={`settings-panel-${item.id}`}
+            aria-selected={selected}
+            // aria-disabled rather than disabled: a greyed tab still has to
+            // be clickable, or nobody finds out why it is greyed.
+            aria-disabled={disabled || undefined}
+            tabIndex={selected ? 0 : -1}
+            className={`settings-tab${selected ? " is-active" : ""}${disabled ? " is-disabled" : ""}`}
+            onClick={() => onTabChange(item.id)}
+          >
+            {item.label}
+            {item.id === "ai" && aiBadge}
+          </button>
+        );
+      })}
+    </div>
+  );
+
   return (
     <>
       <GoogleDriveOfflineNotice status={status} />
@@ -78,34 +108,8 @@ export function SettingsModal({ open, tab, onTabChange, onClose, aiSetup, aiBadg
           closeDisabled={snapshot.busy === "cancel-preview"}
           swipeToClose={!snapshot.preview}
           focusTrap
+          headerBelow={tabs}
         >
-          <div className="settings-tabs" role="tablist" aria-label="Settings sections" onKeyDown={onTabKeyDown}>
-            {TABS.map((item) => {
-              const disabled = item.id === "archive" && archiveDisabled;
-              const selected = tab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  ref={(element) => { tabRefs.current[item.id] = element; }}
-                  type="button"
-                  role="tab"
-                  id={`settings-tab-${item.id}`}
-                  aria-controls={`settings-panel-${item.id}`}
-                  aria-selected={selected}
-                  // aria-disabled rather than disabled: a greyed tab still has to
-                  // be clickable, or nobody finds out why it is greyed.
-                  aria-disabled={disabled || undefined}
-                  tabIndex={selected ? 0 : -1}
-                  className={`settings-tab${selected ? " is-active" : ""}${disabled ? " is-disabled" : ""}`}
-                  onClick={() => onTabChange(item.id)}
-                >
-                  {item.label}
-                  {item.id === "ai" && aiBadge}
-                </button>
-              );
-            })}
-          </div>
-
           <div id="settings-panel-ai" role="tabpanel" aria-labelledby="settings-tab-ai" hidden={tab !== "ai"}>
             {/* Mounted only while shown: the key form inside should start empty every time. */}
             {tab === "ai" && <AiSettings setup={aiSetup} onSetupChange={onAiSetupChange} onModeChange={onAiModeChange} />}

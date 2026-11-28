@@ -372,10 +372,11 @@
     border-bottom: 0 !important;
     max-height: 92dvh;
     height: auto;
-    overflow-y: auto;
-    overscroll-behavior: contain;
+    /* The frame never scrolls; .viewer-body does (see the anatomy in styles.css). */
+    overflow: hidden;
     touch-action: pan-y;
   }
+
 
   .viewer.is-dragging {
     cursor: grabbing;

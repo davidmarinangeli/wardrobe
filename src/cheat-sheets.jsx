@@ -4,6 +4,7 @@ import { PencilSimple } from "@phosphor-icons/react";
 import { api } from "./api.js";
 import { ViewerPanel } from "./components/ViewerPanel.jsx";
 import { PiecePicker } from "./components/PiecePicker.jsx";
+import { ConfirmDialog } from "./components/ConfirmDialog.jsx";
 import { GenerateButton, useRememberedTier } from "./components/ModelPhotoControls.jsx";
 import { useIsPhone } from "./hooks/useIsPhone.js";
 import { initialVariantForPiece, variantImage, variantOwnImage } from "../shared/wardrobe-model.mjs";
@@ -732,20 +733,30 @@ function CheatSheetEditor({ items, entry, onClose, onSaved, onSheetUpdate, premi
       </div>
 
       {closeConfirm && (
-        <div className="cheat-confirm-layer" role="presentation">
-          <div className="cheat-confirm" role="alertdialog" aria-modal="true" aria-labelledby="cheat-close-title" aria-describedby="cheat-close-copy">
-            <span className="cheat-confirm__eyebrow">Unsaved changes</span><h2 id="cheat-close-title">Leave this cheat sheet?</h2><p id="cheat-close-copy">Your changes haven’t been saved yet.</p>
-            <div className="cheat-confirm__actions"><button ref={closeKeepRef} type="button" className="secondary-button cheat-confirm__keep" onClick={() => { setCloseConfirm(false); requestAnimationFrame(restoreCloseConfirmFocus); }}>Keep editing</button><button type="button" className="danger-button cheat-confirm__discard" onClick={confirmDiscard}>Discard changes</button></div>
-          </div>
-        </div>
+        <ConfirmDialog
+          eyebrow="Unsaved changes"
+          title="Leave this cheat sheet?"
+          description="Your changes haven’t been saved yet."
+          keepLabel="Keep editing"
+          discardLabel="Discard changes"
+          keepRef={closeKeepRef}
+          onKeep={() => { setCloseConfirm(false); requestAnimationFrame(restoreCloseConfirmFocus); }}
+          onDiscard={confirmDiscard}
+        />
       )}
       {deleteConfirm && (
-        <div className="cheat-confirm-layer" role="presentation">
-          <div className="cheat-confirm" role="alertdialog" aria-modal="true" aria-labelledby="cheat-delete-title" aria-describedby="cheat-delete-copy">
-            <span className="cheat-confirm__eyebrow">Delete sheet</span><h2 id="cheat-delete-title">Delete “{savedSheet?.title}”?</h2><p id="cheat-delete-copy">This permanently removes the saved cheat sheet and all its images.</p>
-            <div className="cheat-confirm__actions"><button ref={deleteKeepRef} type="button" className="secondary-button cheat-confirm__keep" onClick={() => { setDeleteConfirm(false); requestAnimationFrame(() => deleteTriggerRef.current?.focus({ preventScroll: true })); }} disabled={deleting}>Cancel</button><button type="button" className="danger-button danger-button--solid cheat-confirm__discard" onClick={deleteSheet} disabled={deleting} aria-busy={deleting || undefined}>{deleting ? <><SpinnerGap size={15} className="cheat-spinner" /> Deleting…</> : <><Trash size={15} aria-hidden="true" /> Delete sheet</>}</button></div>
-          </div>
-        </div>
+        <ConfirmDialog
+          eyebrow="Delete sheet"
+          title={`Delete “${savedSheet?.title}”?`}
+          description="This permanently removes the saved cheat sheet and all its images."
+          keepLabel="Cancel"
+          discardLabel={deleting ? <><SpinnerGap size={15} className="cheat-spinner" /> Deleting…</> : <><Trash size={15} aria-hidden="true" /> Delete sheet</>}
+          keepRef={deleteKeepRef}
+          busy={deleting}
+          solid
+          onKeep={() => { setDeleteConfirm(false); requestAnimationFrame(() => deleteTriggerRef.current?.focus({ preventScroll: true })); }}
+          onDiscard={deleteSheet}
+        />
       )}
     </ViewerPanel>
     {/* After the editor's panel: both overlays share z-index 40, so the later portal paints on top. */}

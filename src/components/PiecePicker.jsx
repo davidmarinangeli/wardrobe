@@ -199,6 +199,17 @@ export function PiecePicker({
   }, [confirmOpen, pending, hasChanges, isPhone, onClose]);
 
   const hasSide = Boolean(renderPreview || footer);
+  const confirmButton = (
+    <button
+      type="button"
+      className="primary-button piece-picker__confirm"
+      onClick={confirm}
+      disabled={!canConfirm}
+      aria-busy={pending || undefined}
+    >
+      {confirmLabel}
+    </button>
+  );
 
   return (
     <ViewerPanel
@@ -216,16 +227,6 @@ export function PiecePicker({
       <div className="piece-picker" inert={confirmOpen || undefined}>
         <header className="piece-picker__header">
           <h2 className="piece-picker__title">{title}</h2>
-          <span className="piece-picker__count" aria-live="polite">{count} selected</span>
-          <button
-            type="button"
-            className="primary-button piece-picker__confirm"
-            onClick={confirm}
-            disabled={!canConfirm}
-            aria-busy={pending || undefined}
-          >
-            {confirmLabel}
-          </button>
           <span className="piece-picker__close-spacer" aria-hidden="true" />
         </header>
 
@@ -355,17 +356,25 @@ export function PiecePicker({
 
           {hasSide && (
             <aside className={`piece-picker__side${trayOpen ? " is-open" : ""}`}>
+              {/* On a phone the tray's own bar is the picker's footer: what is
+                  selected (and opens the tray) on the left, the primary action
+                  rightmost. One bar, not a tray stacked on a footer. First in the DOM, so
+                  Tab reaches the toggle before what it opens; CSS `order` puts it
+                  at the foot of the tray. */}
               {isPhone && (
-                <button
-                  type="button"
-                  className="piece-picker__tray-toggle"
-                  aria-expanded={trayOpen}
-                  aria-controls={trayId}
-                  onClick={() => setTrayOpen((open) => !open)}
-                >
-                  <span>{count} selected</span>
-                  <CaretUp size={16} weight="bold" aria-hidden="true" className="piece-picker__tray-caret" />
-                </button>
+                <div className="piece-picker__tray-bar">
+                  <button
+                    type="button"
+                    className="piece-picker__tray-toggle"
+                    aria-expanded={trayOpen}
+                    aria-controls={trayId}
+                    onClick={() => setTrayOpen((open) => !open)}
+                  >
+                    <span>{count} selected</span>
+                    <CaretUp size={16} weight="bold" aria-hidden="true" className="piece-picker__tray-caret" />
+                  </button>
+                  {confirmButton}
+                </div>
               )}
               <div id={trayId} className="piece-picker__side-content" hidden={isPhone && !trayOpen}>
                 {renderPreview && <div className="piece-picker__preview">{renderPreview(selectedPieces)}</div>}
@@ -374,6 +383,17 @@ export function PiecePicker({
             </aside>
           )}
         </div>
+
+        {/* The action row, fixed under the panes like every panel's footer:
+            what is selected on the left, the primary action rightmost. On a
+            phone the tray bar above takes this role. */}
+        {!(isPhone && hasSide) && (
+          <footer className="piece-picker__actions">
+            <span className="piece-picker__count" aria-live="polite">{count} selected</span>
+            <span className="action-spacer" />
+            {confirmButton}
+          </footer>
+        )}
       </div>
 
       {confirmOpen && (

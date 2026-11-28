@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowCounterClockwise, Heart, MagicWand, SpinnerGap, Sparkle, X } from "@phosphor-icons/react";
 import { api } from "./api.js";
 import { OutfitStack } from "./components/OutfitStack.jsx";
-import { ViewerPanel } from "./components/ViewerPanel.jsx";
+import { ViewerFooter, ViewerPanel } from "./components/ViewerPanel.jsx";
 import { useViewerKeyboard } from "./hooks/useViewerKeyboard.js";
 import { useDeckGesture } from "./hooks/useDeckGesture.js";
 import { resolveOutfitPieces } from "../shared/wardrobe-model.mjs";
@@ -422,34 +422,37 @@ export function SuggestionPanel({ items, onSaveOutfit, onClose }) {
               ))}
             </div>
 
-            <div className="deck-controls">
-              <button
-                type="button"
-                className="deck-action deck-action--pass"
-                onClick={() => commit("pass")}
-                disabled={!current || Boolean(leaving)}
-                aria-label="Pass on this outfit"
-                title="Not today  ·  ←"
-              >
-                <X size={22} weight="bold" aria-hidden="true" />
-              </button>
+            {/* The deck's answers are its action row: in the fixed footer. */}
+            <ViewerFooter>
+              <div className="deck-controls">
+                <button
+                  type="button"
+                  className="deck-action deck-action--pass"
+                  onClick={() => commit("pass")}
+                  disabled={!current || Boolean(leaving)}
+                  aria-label="Pass on this outfit"
+                  title="Not today  ·  ←"
+                >
+                  <X size={22} weight="bold" aria-hidden="true" />
+                </button>
 
-              <p className="deck-count">
-                {Math.min(index + 1, suggestions.length)} <span>/ {suggestions.length}</span>
-              </p>
+                <p className="deck-count">
+                  {Math.min(index + 1, suggestions.length)} <span>/ {suggestions.length}</span>
+                </p>
 
-              <button
-                type="button"
-                className="deck-action deck-action--like"
-                onClick={() => commit("like")}
-                disabled={!current || Boolean(leaving)}
-                aria-label="Save this outfit"
-                title="Save it  ·  →"
-              >
-                <Heart size={24} weight="fill" aria-hidden="true" />
-                {burst > 0 && <HeartBurst key={burst} id={burst} />}
-              </button>
-            </div>
+                <button
+                  type="button"
+                  className="deck-action deck-action--like"
+                  onClick={() => commit("like")}
+                  disabled={!current || Boolean(leaving)}
+                  aria-label="Save this outfit"
+                  title="Save it  ·  →"
+                >
+                  <Heart size={24} weight="fill" aria-hidden="true" />
+                  {burst > 0 && <HeartBurst key={burst} id={burst} />}
+                </button>
+              </div>
+            </ViewerFooter>
           </>
         )}
 

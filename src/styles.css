@@ -1164,7 +1164,23 @@ button { font: inherit; }
 .viewer-overlay[data-closing="instant"]::before,
 .viewer-overlay[data-closing="instant"] .viewer-entry { animation: none; opacity: 0; }
 
+/* ─── Panel anatomy ─────────────────────────────────────────────────────────
+   The panel is a frame that never scrolls: a fixed header (title left, close
+   right), a body that is the only scroller, and a fixed footer for the action
+   row when there is one. The padding the panel used to carry lives in these
+   variables, so header, body and footer share the same gutters; a panel that
+   needs other gutters sets the variables, not `padding`. */
 .viewer {
+  --viewer-pad-top: 42px;
+  --viewer-pad-x: 34px;
+  --viewer-pad-bottom: 46px;
+  /* The text gutter, which a full-bleed photo panel keeps even when it zeroes
+     the body padding (its details carry their own). */
+  --viewer-gutter: 34px;
+  /* Where the close button sits: its distance from the top and right edges.
+     One value for every kind of panel (24px here, 18px on a phone), so the X
+     is in the same place whichever modal is open. */
+  --viewer-close-inset: 24px;
   position: relative;
   min-width: 0;
   width: 100%;
@@ -1173,15 +1189,203 @@ button { font: inherit; }
   border-radius: var(--r-xl);
   display: flex;
   flex-direction: column;
-  padding: 42px 34px 46px;
+  padding: 0;
   background: var(--paper-warm);
-  overflow: auto;
+  overflow: hidden;
   box-shadow: var(--glass-edge), var(--shadow-lg);
 }
 
 .viewer.has-modeled-image {
+  --viewer-pad-top: 0px;
+  --viewer-pad-x: 0px;
+  --viewer-pad-bottom: 0px;
+}
+
+/* Header row: title on the left, close on the right, on one line, then an
+   optional second row (tabs). The hairline under it only appears once content
+   is scrolled beneath it. */
+.viewer-header {
+  position: relative;
+  z-index: 8;
+  flex: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color var(--dur-pop) var(--ease-out);
+}
+
+.viewer-header--row { padding-bottom: 10px; }
+
+.viewer[data-scrolled] > .viewer-header--row { border-bottom-color: var(--line); }
+
+/* The title row carries the top padding, so all of it is the grab handle. */
+.viewer-header__row {
+  display: flex;
+  align-items: center;
+  column-gap: 16px;
+  padding: var(--viewer-close-inset) var(--viewer-close-inset) 0 var(--viewer-gutter);
+}
+
+.viewer-header__row > .viewer-heading,
+.viewer-header__content {
+  flex: 1 1 0;
+  display: flex;
+  min-width: 0;
+  min-height: 42px;
+  align-items: center;
   padding: 0;
 }
+
+.viewer-header__row > .viewer-heading h2 {
+  max-width: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.viewer-header__row > .viewer-icon-close {
+  position: relative;
+  top: auto;
+  right: auto;
+  flex: none;
+  margin-left: auto;
+}
+
+/* On the text gutter on both sides: the close sits nearer the edge than the
+   content does. */
+.viewer-header__below {
+  min-width: 0;
+  margin: 0 var(--viewer-gutter);
+}
+
+/* No title row: the close floats in the corner and the panel draws its own
+   header (piece picker, cheat sheet editor). The frame doesn't scroll, so the
+   corner stays put. */
+.viewer-header--floating {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* Over content scrolled beneath it, a bare X would sit on whatever is there. */
+.viewer[data-scrolled] > .viewer-header--floating > .viewer-icon-close {
+  background: color-mix(in srgb, var(--paper-warm) 82%, transparent);
+  -webkit-backdrop-filter: var(--glass-blur-panel);
+  backdrop-filter: var(--glass-blur-panel);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Photo-led panels: the controls ride on the photo in a bar that is clear at
+   rest and turns to glass, with the name in it, once the name has scrolled
+   away. Shared by ViewerPanel's compactTitle and the item sheet. */
+.viewer-topbar {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: var(--viewer-close-inset) var(--viewer-close-inset) 12px var(--viewer-gutter);
+  border: 0;
+  pointer-events: none;
+}
+
+.viewer-topbar > * { pointer-events: auto; }
+
+.viewer-topbar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--paper-warm) 86%, transparent);
+  -webkit-backdrop-filter: var(--glass-blur-panel);
+  backdrop-filter: var(--glass-blur-panel);
+  opacity: 0;
+  transition: opacity var(--dur-pop) var(--ease-out);
+  pointer-events: none;
+}
+
+.viewer-topbar > .viewer-topbar__title {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity var(--dur-pop) var(--ease-out), transform var(--dur-pop) var(--ease-out);
+  pointer-events: none;
+}
+
+.viewer-topbar__title h2 {
+  max-width: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viewer[data-past-title] > .viewer-topbar::before,
+.viewer[data-past-title] > .viewer-topbar > .viewer-topbar__title { opacity: 1; transform: none; }
+
+.viewer-topbar > .viewer-icon-close {
+  position: relative;
+  top: auto;
+  right: auto;
+  flex: none;
+}
+
+/* The only scroller. A flex column like the panel it replaced, so content that
+   sizes itself to the panel (the deck, the picker, the cheat sheet editor)
+   lays out exactly as before. Deliberately not positioned: layers that cover
+   the whole panel (ConfirmDialog) still resolve against the frame. */
+.viewer-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  padding: var(--viewer-pad-top) var(--viewer-pad-x) var(--viewer-pad-bottom);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--wash-3) transparent;
+}
+
+.viewer-body::-webkit-scrollbar { width: 8px; }
+.viewer-body::-webkit-scrollbar-track { background: transparent; margin-block: 12px; }
+.viewer-body::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: var(--r-full);
+  background: var(--wash-3);
+  background-clip: padding-box;
+}
+
+/* Under a title row the header already spends the top padding. */
+.viewer-header--row + .viewer-body { padding-top: 4px; }
+
+/* A footer takes over the bottom padding (and the home indicator's inset),
+   including the bottom padding of a photo panel's details. Kept tight, so a
+   panel that didn't scroll before the footer existed still doesn't. */
+.viewer-body:has(+ .viewer-footer:not(:empty)) { padding-bottom: 8px; }
+.viewer-body:has(+ .viewer-footer:not(:empty)) > .viewer-details:last-child { padding-bottom: 0; }
+
+/* Footer: the panel's action row, fixed under the body. Same order everywhere
+   (PanelActions): a destructive action far left, then a spacer, then the
+   secondary, then the primary rightmost. */
+.viewer-footer {
+  position: relative;
+  z-index: 7;
+  flex: none;
+  padding: 12px var(--viewer-gutter) max(16px, env(safe-area-inset-bottom));
+  border-top: 1px solid transparent;
+  background: var(--paper-warm);
+  transition: border-color var(--dur-pop) var(--ease-out);
+}
+
+.viewer-footer:empty { display: none; }
+.viewer[data-more-below] > .viewer-footer { border-top-color: var(--line); }
+
+.viewer-footer > .viewer-actions,
+.viewer-footer > .onboarding-actions { margin-top: 0; }
 
 .modeled-hero {
   position: relative;
@@ -1262,8 +1466,8 @@ button { font: inherit; }
    components/buttons.css. Contexts here only place them. */
 .viewer-icon-close {
   position: absolute;
-  top: 32px;
-  right: 32px;
+  top: var(--viewer-close-inset);
+  right: var(--viewer-close-inset);
   z-index: 8;
 }
 
@@ -1310,8 +1514,6 @@ button { font: inherit; }
 /* Over the photo, the close takes the frosted on-media treatment (the same
    tokens as .button--on-media) like the item viewer's toolbar. */
 .has-modeled-image .viewer-icon-close {
-  top: 24px;
-  right: 24px;
   --btn-bg: color-mix(in srgb, var(--paper-warm) 84%, transparent);
   --btn-border: var(--glass-border);
   --btn-shadow: var(--glass-edge), var(--shadow-sm);
@@ -2033,7 +2235,8 @@ button:where(.edit-button, .primary-button, .secondary-button, .danger-button, .
   :root { --page-x: 34px; }
   .gallery-grid { grid-template-columns: repeat(auto-fill, minmax(185px, 1fr)); }
   .category-nav { max-width: 100%; }
-  .viewer { padding-inline: 30px; }
+  .viewer { --viewer-pad-x: 30px; --viewer-gutter: 30px; }
+  .viewer.has-modeled-image { --viewer-pad-x: 0px; }
   .has-modeled-image .viewer-details.editing { padding-inline: 30px; }
 }
 
@@ -2085,19 +2288,24 @@ button:where(.edit-button, .primary-button, .secondary-button, .danger-button, .
     animation: sheet-out 160ms var(--ease-out) both;
   }
   .viewer {
+    --viewer-pad-top: 24px;
+    --viewer-pad-x: 22px;
+    --viewer-pad-bottom: calc(24px + env(safe-area-inset-bottom));
+    --viewer-gutter: 22px;
+    --viewer-close-inset: 18px;
     border: 0;
     border-radius: var(--r-xl) var(--r-xl) 0 0;
     max-height: 92dvh;
     height: auto;
-    padding: 24px 22px calc(24px + env(safe-area-inset-bottom));
     background: var(--paper-warm);
-    overflow-y: auto;
-    overscroll-behavior: contain;
+  }
+  .viewer.has-modeled-image {
+    --viewer-pad-top: 0px;
+    --viewer-pad-x: 0px;
+    --viewer-pad-bottom: 0px;
   }
   .modeled-hero { border-radius: var(--r-xl) var(--r-xl) 0 0; }
   .viewer-heading { padding-top: 0; }
-  .viewer-icon-close { top: 18px; right: 18px; }
-  .has-modeled-image .viewer-icon-close { top: 20px; right: 20px; }
   .has-modeled-image .viewer-details.editing { padding: 14px 30px 38px; }
   .viewer-art { flex-basis: min(32vh, 300px); height: min(32vh, 300px); min-height: 210px; }
   .viewer-art.viewer-art-floating { flex-basis: auto; width: 36%; height: 178px; min-height: 0; }
@@ -2133,14 +2341,16 @@ button:where(.edit-button, .primary-button, .secondary-button, .danger-button, .
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
   }
-  .viewer { padding: max(24px, env(safe-area-inset-top)) 22px max(28px, env(safe-area-inset-bottom)); }
+  .viewer:not(.has-modeled-image) {
+    --viewer-pad-top: max(24px, env(safe-area-inset-top));
+    --viewer-pad-bottom: max(28px, env(safe-area-inset-bottom));
+  }
   .modeled-hero { flex-basis: 360px; height: 360px; }
   .modeled-hero-photo { height: 326px; object-position: 49% 43%; }
   .modeled-hero::before { height: 150px; }
   .modeled-hero::after { height: 112px; }
   .modeled-heading { top: 20px; left: 20px; padding: 11px 13px 12px; }
   .modeled-heading h2 { font-size: var(--text-title); }
-  .has-modeled-image .viewer-icon-close { top: 20px; right: 20px; }
   .viewer-art.viewer-art-floating { right: 15px; bottom: 0; flex-basis: auto; width: 40%; height: 158px; min-height: 0; padding: 0; }
   .has-modeled-image .viewer-details.editing { padding: 12px 22px 30px; }
   .viewer-heading { padding-top: 0; }
@@ -2365,15 +2575,19 @@ button:where(.edit-button, .primary-button, .secondary-button, .danger-button, .
 
 /* ⋯ and ✕, riding on the photo in both hero treatments. */
 .viewer-toolbar {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 8;
   display: flex;
   gap: 8px;
 }
 
-.modeled-hero .viewer-toolbar { top: 20px; right: 20px; }
+/* The item sheet's top bar is the shared .viewer-topbar (see the panel
+   anatomy), and it never moves while the sheet scrolls. Over a model photo it
+   sits in the same corner as every other panel's close. Over a cutout it sits
+   inside the cutout's stage, 10px from its corner, as it always did: in the
+   panel's corner it would straddle the stage's rounded edge. */
+.item-sheet:not(.has-modeled-image) > .item-sheet__bar {
+  padding-top: calc(var(--viewer-pad-top) + 10px);
+  padding-right: calc(var(--viewer-pad-x) + 10px);
+}
 
 .viewer-more { position: relative; }
 
@@ -2966,6 +3180,7 @@ button.variant-strip__tile:active .variant-strip__art { transform: scale(.96); }
 
 .add-variant-scrim { position: absolute; inset: 0; background: var(--scrim); animation: scrim-in var(--dur-panel) var(--ease-out); }
 
+/* Same anatomy as every panel: fixed header, scrolling body, fixed footer. */
 .add-variant-sheet {
   position: relative;
   width: 100%;
@@ -2973,14 +3188,46 @@ button.variant-strip__tile:active .variant-strip__art { transform: scale(.96); }
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 12px 20px calc(24px + env(safe-area-inset-bottom));
-  overflow-y: auto;
+  overflow: hidden;
   border-radius: var(--r-xl) var(--r-xl) 0 0;
   background: var(--paper-warm);
   box-shadow: var(--shadow-lg);
   animation: add-sheet-in var(--dur-panel) var(--ease-drawer);
 }
+
+.add-variant-sheet__header {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 12px 20px 14px;
+  border-bottom: 1px solid transparent;
+  transition: border-color var(--dur-pop) var(--ease-out);
+}
+
+.add-variant-sheet__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 4px 20px 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.add-variant-sheet__footer {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 20px calc(24px + env(safe-area-inset-bottom));
+  border-top: 1px solid transparent;
+  transition: border-color var(--dur-pop) var(--ease-out);
+}
+
+.add-variant-sheet[data-scrolled] > .add-variant-sheet__header { border-bottom-color: var(--line); }
+.add-variant-sheet[data-more-below] > .add-variant-sheet__footer { border-top-color: var(--line); }
 
 .add-variant-sheet:focus { outline: none; }
 .add-variant-sheet__grabber { width: 36px; height: 4px; margin: 0 auto; border-radius: var(--r-full); background: var(--line); }
@@ -3051,10 +3298,12 @@ button.variant-strip__tile:active .variant-strip__art { transform: scale(.96); }
   .add-variant-layer { align-items: center; }
   .add-variant-sheet {
     width: min(440px, calc(100vw - 48px));
-    padding-bottom: 24px;
     border-radius: var(--r-xl);
     animation-name: popover-in;
   }
+  .add-variant-sheet__header { padding-top: 20px; }
+  .add-variant-sheet__footer { padding-bottom: 24px; }
+
   .add-variant-sheet__grabber { display: none; }
   .add-variant-sheet__head { margin-top: 0; }
 }

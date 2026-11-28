@@ -1,6 +1,5 @@
-/* Copied from the cheat sheet editor's .cheat-confirm* rules under generic
-   names, so the dialog doesn't depend on another module's stylesheet. The
-   layer covers the whole panel, including its close button (z 8). */
+/* The one confirm dialog: the piece picker and the cheat sheet editor both use
+   it. The layer covers the whole panel, including its close button (z 8). */
 .confirm-layer { position: absolute; inset: 0; z-index: 10; display: grid; place-items: center; padding: 20px; background: var(--scrim); }
 .confirm-dialog { width: min(100%, 380px); padding: 28px; border: 1px solid var(--glass-border); border-radius: var(--r-lg); background: var(--paper-raised); box-shadow: var(--shadow-lg); }
 .confirm-dialog__eyebrow { display: block; margin-bottom: 5px; color: var(--muted); font-size: var(--text-eyebrow); font-weight: var(--weight-medium); letter-spacing: var(--track-caps); text-transform: uppercase; }
