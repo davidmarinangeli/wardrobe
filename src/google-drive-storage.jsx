@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowClockwise, CloudArrowDown, CloudArrowUp, Folder, HardDrive, LinkSimple, SignOut, SpinnerGap, User, X } from "@phosphor-icons/react";
+import { ArrowClockwise, CloudArrowDown, CloudArrowUp, HardDrive, LinkSimple, SignOut, SpinnerGap, X } from "@phosphor-icons/react";
 import { createGoogleDriveStorageController, formatArchiveBytes, formatBackupDate, GOOGLE_DRIVE_OUTAGE_NOTICE, GOOGLE_DRIVE_REMOTE_CONNECT_NOTICE, isRemoteHostname } from "./google-drive-storage.js";
 import "./google-drive-storage.css";
 
@@ -320,43 +320,41 @@ export function ArchiveSettings({ controller, snapshot, open }) {
         </section>
       )}
 
-      <section className="drive-account" aria-labelledby="drive-account-heading">
-        <div className="drive-account__title">
-          <img src="/google-drive.svg" alt="" width="24" height="24" />
-          <h4 id="drive-account-heading">Google Drive account</h4>
-        </div>
+      {/* Three sections, each a title and its rows, then its actions: the same
+          key/value rows as the item and outfit viewers. */}
+      <section className="drive-account viewer-section" aria-labelledby="drive-account-heading">
+        <h4 id="drive-account-heading" className="drive-section-title">
+          <img src="/google-drive.svg" alt="" width="16" height="16" />
+          Google Drive
+        </h4>
         {status?.account ? (
-          <div className="drive-account__card">
-            <dl className="drive-account__details">
-              <div>
-                <dt><User size={16} aria-hidden="true" /><span className="sr-only">Account</span></dt>
-                <dd>
+          <dl className="detail-rows drive-rows">
+            <div className="detail-row detail-row--static">
+              <dt className="detail-row__label">Account</dt>
+              <dd className="detail-row__value drive-rows__text">
+                <span>
                   {status.account.name || status.account.email || "Connected account"}
                   {status.account.name && status.account.email && <span className="drive-account__email"> — {status.account.email}</span>}
-                </dd>
-              </div>
-              <div>
-                <dt><Folder size={16} aria-hidden="true" /><span className="sr-only">Folder</span></dt>
-                <dd>{status.folder?.name ? `/${status.folder.name}` : "Not available"}</dd>
-              </div>
-              <div>
-                <dt>
-                  <span className={`drive-dot${status.reconnectRequired || (status.connected && !folderReady) ? " is-warn" : status.connected ? " is-ok" : ""}`} aria-hidden="true" />
-                  <span className="sr-only">Status</span>
-                </dt>
-                <dd>{status.reconnectRequired ? "Needs reconnecting" : status.connected ? (folderReady ? "Connected" : "Folder not accessible") : "Not connected"}</dd>
-              </div>
-            </dl>
-            <button className="danger-button button--sm drive-disconnect" type="button" disabled={accountLocked} onClick={() => controller.confirmAction("disconnect")}>
-              <SignOut size={15} aria-hidden="true" />
-              Disconnect account
-            </button>
-          </div>
+                </span>
+              </dd>
+            </div>
+            <div className="detail-row detail-row--static">
+              <dt className="detail-row__label">Folder</dt>
+              <dd className="detail-row__value drive-rows__text">{status.folder?.name ? `/${status.folder.name}` : "Not available"}</dd>
+            </div>
+            <div className="detail-row detail-row--static">
+              <dt className="detail-row__label">Status</dt>
+              <dd className="detail-row__value drive-rows__state">
+                <span className={`drive-dot${status.reconnectRequired || (status.connected && !folderReady) ? " is-warn" : status.connected ? " is-ok" : ""}`} aria-hidden="true" />
+                {status.reconnectRequired ? "Needs reconnecting" : status.connected ? (folderReady ? "Connected" : "Folder not accessible") : "Not connected"}
+              </dd>
+            </div>
+          </dl>
         ) : <p className="drive-hint">No account connected.</p>}
-        {(status && (!status.connected || status.reconnectRequired) || needsVerify) && <div className="drive-actions">
-          {status && (!status.connected || status.reconnectRequired) && remote && (
-            <p className="drive-hint" data-testid="drive-remote-connect">{GOOGLE_DRIVE_REMOTE_CONNECT_NOTICE}</p>
-          )}
+        {status && (!status.connected || status.reconnectRequired) && remote && (
+          <p className="drive-hint" data-testid="drive-remote-connect">{GOOGLE_DRIVE_REMOTE_CONNECT_NOTICE}</p>
+        )}
+        {((status && (!status.connected || status.reconnectRequired) && !remote) || needsVerify || status?.account) && <div className="drive-actions">
           {status && (!status.connected || status.reconnectRequired) && !remote && (
             <button className="primary-button" type="button" disabled={accountLocked} aria-busy={busy === "connect"} onClick={() => void controller.startOAuth()}>
               {busy === "connect" ? spinner : <LinkSimple size={15} aria-hidden="true" />}
@@ -367,6 +365,12 @@ export function ArchiveSettings({ controller, snapshot, open }) {
             <button className="secondary-button" type="button" disabled={accountLocked} aria-busy={busy === "verify"} onClick={() => void controller.verify()}>
               {busy === "verify" ? spinner : <ArrowClockwise size={15} aria-hidden="true" />}
               {busy === "verify" ? "Verifying…" : "Verify access"}
+            </button>
+          )}
+          {status?.account && (
+            <button className="danger-button drive-disconnect" type="button" disabled={accountLocked} onClick={() => controller.confirmAction("disconnect")}>
+              <SignOut size={15} aria-hidden="true" />
+              Disconnect account
             </button>
           )}
         </div>}
@@ -387,33 +391,20 @@ export function ArchiveSettings({ controller, snapshot, open }) {
         )}
       </section>
 
-      <section className="drive-backup" aria-labelledby="drive-backup-heading">
-        <div className="drive-section-heading">
-          <h4 id="drive-backup-heading" ref={backupHeadingRef} tabIndex={-1}>Backup to Google Drive</h4>
-          <div className="drive-section-heading__actions">
-            {status?.backupEnabled && status.retryAt && !status.syncPaused && (
-              <button className="secondary-button button--sm drive-retry" type="button" disabled={blocked} aria-busy={busy === "retry"} aria-label={busy === "retry" ? "Retrying…" : undefined} onClick={() => void controller.retrySync()}>
-                {busy === "retry" ? spinner : <><ArrowClockwise size={15} aria-hidden="true" />Retry now</>}
-              </button>
-            )}
-            {!snapshot.preview && snapshot.confirmation !== "disable" && (
-              <div className="drive-actions">
-                {status?.backupEnabled ? (
-                  <button className="secondary-button" type="button" disabled={blocked} onClick={() => controller.confirmAction("disable")}>
-                    <HardDrive size={15} aria-hidden="true" />
-                    Turn off backup
-                  </button>
-                ) : (
-                  <button className={hasVerifiedFolder ? "primary-button" : "secondary-button"} type="button" disabled={!status || blocked || !hasVerifiedFolder} aria-busy={busy === "activation-preview"} onClick={() => void controller.openPreview("activation")}>
-                    {busy === "activation-preview" ? spinner : <CloudArrowUp size={15} aria-hidden="true" />}
-                    {busy === "activation-preview" ? "Checking the copies…" : "Turn on backup"}
-                  </button>
-                )}
-              </div>
-            )}
+      <section className="drive-backup viewer-section" aria-labelledby="drive-backup-heading">
+        <h4 id="drive-backup-heading" className="drive-section-title" ref={backupHeadingRef} tabIndex={-1}>Backup</h4>
+        <dl className="detail-rows drive-rows">
+          <div className="detail-row detail-row--static">
+            <dt className="detail-row__label">Status</dt>
+            <dd className="detail-row__value drive-rows__state"><span className={`drive-dot is-${backup.tone}`} aria-hidden="true" />{backup.label}</dd>
           </div>
-        </div>
-        <p className="drive-backup__state"><span className={`drive-dot is-${backup.tone}`} aria-hidden="true" />{backup.label}</p>
+          <div className="detail-row detail-row--static">
+            <dt className="detail-row__label">Last backup</dt>
+            <dd className="detail-row__value drive-rows__text">{status?.lastCompletedBackup?.completedAt
+              ? <span><strong>{formatBackupDate(status.lastCompletedBackup.completedAt)}</strong> · {formatCount(status.lastCompletedBackup.fileCount)} {status.lastCompletedBackup.fileCount === 1 ? "file" : "files"} · {formatArchiveBytes(status.lastCompletedBackup.totalBytes)}</span>
+              : "No completed backup yet"}</dd>
+          </div>
+        </dl>
         {backup.detail && <p className="drive-hint">{backup.detail}</p>}
         {syncing && (
           <>
@@ -426,13 +417,30 @@ export function ArchiveSettings({ controller, snapshot, open }) {
         {snapshot.notice === "activated" && (
           <p className="drive-success" role="status">Backup turned on. The upload to Drive continues in the background: you can close Settings.</p>
         )}
-        <p className="drive-last-backup">{status?.lastCompletedBackup?.completedAt
-          ? <>Last completed backup: <strong>{formatBackupDate(status.lastCompletedBackup.completedAt)}</strong> · {formatCount(status.lastCompletedBackup.fileCount)} {status.lastCompletedBackup.fileCount === 1 ? "file" : "files"} · {formatArchiveBytes(status.lastCompletedBackup.totalBytes)}</>
-          : "No completed backup yet."}</p>
         {!status?.backupEnabled && !hasVerifiedFolder && (
           <p className="drive-hint">{status?.connected && !status.reconnectRequired
             ? "The Google Drive folder isn't accessible: verify access above."
             : "Connect a Google Drive account above first."}</p>
+        )}
+        {((status?.backupEnabled && status.retryAt && !status.syncPaused) || (!snapshot.preview && snapshot.confirmation !== "disable")) && (
+          <div className="drive-actions">
+            {status?.backupEnabled && status.retryAt && !status.syncPaused && (
+              <button className="secondary-button drive-retry" type="button" disabled={blocked} aria-busy={busy === "retry"} aria-label={busy === "retry" ? "Retrying…" : undefined} onClick={() => void controller.retrySync()}>
+                {busy === "retry" ? spinner : <><ArrowClockwise size={15} aria-hidden="true" />Retry now</>}
+              </button>
+            )}
+            {!snapshot.preview && snapshot.confirmation !== "disable" && (status?.backupEnabled ? (
+              <button className="secondary-button" type="button" disabled={blocked} onClick={() => controller.confirmAction("disable")}>
+                <HardDrive size={15} aria-hidden="true" />
+                Turn off backup
+              </button>
+            ) : (
+              <button className={hasVerifiedFolder ? "primary-button" : "secondary-button"} type="button" disabled={!status || blocked || !hasVerifiedFolder} aria-busy={busy === "activation-preview"} onClick={() => void controller.openPreview("activation")}>
+                {busy === "activation-preview" ? spinner : <CloudArrowUp size={15} aria-hidden="true" />}
+                {busy === "activation-preview" ? "Checking the copies…" : "Turn on backup"}
+              </button>
+            ))}
+          </div>
         )}
         {snapshot.confirmation === "disable" && (
           <div className="drive-confirm" role="group" aria-labelledby="drive-disable-title">
@@ -451,15 +459,15 @@ export function ArchiveSettings({ controller, snapshot, open }) {
 
       {snapshot.preview?.operation === "activation" && <PreviewContent preview={snapshot.preview} busy={busy} slow={snapshot.slow} onChoose={controller.choose} />}
 
-      <section className="drive-restore" aria-labelledby="drive-restore-heading">
-        <div>
-          <h4 id="drive-restore-heading">Restore from Google Drive</h4>
+      <section className="drive-restore viewer-section" aria-labelledby="drive-restore-heading">
+        <h4 id="drive-restore-heading" className="drive-section-title">Restore</h4>
+        <div className="drive-restore__row">
           <p>Replaces all the data on this computer with the copy on Drive. Anything that exists only on this computer is lost.</p>
+          <button className="secondary-button" type="button" disabled={!hasVerifiedFolder || blocked || Boolean(snapshot.preview)} aria-busy={busy === "restore-preview"} onClick={() => void controller.openPreview("restore")}>
+            {busy === "restore-preview" ? spinner : <CloudArrowDown size={16} aria-hidden="true" />}
+            {busy === "restore-preview" ? "Checking the copies…" : "Restore…"}
+          </button>
         </div>
-        <button className="secondary-button" type="button" disabled={!hasVerifiedFolder || blocked || Boolean(snapshot.preview)} aria-busy={busy === "restore-preview"} onClick={() => void controller.openPreview("restore")}>
-          {busy === "restore-preview" ? spinner : <CloudArrowDown size={16} aria-hidden="true" />}
-          {busy === "restore-preview" ? "Checking the copies…" : "Restore…"}
-        </button>
       </section>
 
       {snapshot.preview?.operation === "restore" && <PreviewContent preview={snapshot.preview} busy={busy} slow={snapshot.slow} onChoose={controller.choose} />}

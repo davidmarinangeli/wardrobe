@@ -389,21 +389,29 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
           <StageError message={generateError || outfit.modeledError} />
         )}
 
-        <EditableTitle
-          value={outfit.name}
-          placeholder="Outfit"
-          onChange={(name) => onRename(outfit, name)}
-          ariaLabel="Outfit name"
-        />
-        {outfit.description && (
-          <div className="outfit-style-summary">
-            <p className="outfit-style-description">{outfit.description}</p>
-            {!!outfit.tags?.length && (
-              <div className="outfit-style-tags">
+        {/* Same heading block as the item sheet: the name, then the one line
+            that says what this is. */}
+        <header className="item-heading outfit-heading">
+          <EditableTitle
+            value={outfit.name}
+            placeholder="Outfit"
+            onChange={(name) => onRename(outfit, name)}
+            ariaLabel="Outfit name"
+          />
+          {outfit.description && <p className="outfit-style-description">{outfit.description}</p>}
+        </header>
+        {/* Style is a property of the outfit, so it is a row like the item's
+            Category, Colors and Tags: key on the left, value on the right. It
+            opens nothing, so it has no chevron. */}
+        {outfit.description && !!outfit.tags?.length && (
+          <dl className="detail-rows viewer-section">
+            <div className="detail-row detail-row--static">
+              <dt className="detail-row__label">Style</dt>
+              <dd className="detail-row__value detail-row__tags outfit-style-tags">
                 {outfit.tags.map((tag) => <span key={tag} className="outfit-style-tag">{tag}</span>)}
-              </div>
-            )}
-          </div>
+              </dd>
+            </div>
+          </dl>
         )}
         {missing > 0 && (
           <p className="outfit-outdated">
@@ -413,18 +421,22 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
             {hasModeledImage && " The photo shows the old pieces."}
           </p>
         )}
-        <p className="details-label">{pieces.length} {pieces.length === 1 ? "piece" : "pieces"}</p>
-        <div className="outfit-viewer-pieces-grid">
-          {pieces.map((item) => (
-            <div className="outfit-viewer-piece-tile" key={item.id} title={item.name}>
-              <OptimizedImage src={item.thumbnail || item.image} alt="" sizes="72px" breakpoints={[72, 108]} />
-            </div>
-          ))}
-        </div>
+        <section className="viewer-section outfit-viewer-pieces" aria-label="Pieces">
+          <p className="details-label">Pieces · {pieces.length}</p>
+          <div className="outfit-viewer-pieces-grid">
+            {pieces.map((item) => (
+              <div className="outfit-viewer-piece-tile" key={item.id} title={item.name}>
+                <OptimizedImage src={item.thumbnail || item.image} alt="" sizes="72px" breakpoints={[72, 108]} />
+              </div>
+            ))}
+          </div>
+        </section>
 
         <ViewerFooter>
           <PanelActions
             onDelete={() => onDelete(outfit.id)}
+            deleteLabel="Delete outfit"
+            deleteConfirmLabel="Tap again to delete"
             onCancel={() => onEdit(outfit)}
             cancelLabel={<><PencilSimple size={15} weight="regular" aria-hidden="true" /> Edit</>}
             onConfirm={() => wearReady && !wornToday && onWear(outfit)}

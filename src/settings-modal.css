@@ -56,6 +56,14 @@
    dropped here rather than in the wizard's stylesheet. */
 .settings-panel .provider-switch { margin: 0; padding-top: 0; border-top: 0; }
 
+/* The AI tab's sections read like every panel's (.viewer-section): the same
+   gap, a hairline before each section after the first, the label close to
+   what it names. */
+.settings-panel .settings-ai { gap: var(--viewer-section-gap); }
+.settings-panel .provider-switch { gap: var(--s-3); }
+.settings-panel .settings-ai__photos { gap: var(--s-2); padding-top: var(--viewer-section-gap); border-top: 1px solid var(--line); }
+.settings-panel .settings-ai__photos > .provider-switch__label { margin-bottom: var(--s-1); }
+
 .settings-archive-off h3 { margin: 0 0 var(--s-2); color: var(--ink); font-size: var(--text-section); font-weight: var(--weight-medium); line-height: var(--leading-heading); letter-spacing: var(--track-tight); }
 .settings-archive-off p:last-child { margin: 0; color: var(--ink-soft); font-size: var(--text-body); line-height: var(--leading-body); }
 .settings-archive-off code { font-size: var(--text-caption); }

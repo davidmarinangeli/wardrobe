@@ -1,4 +1,8 @@
-.drive-settings { display: grid; gap: var(--s-5); padding-top: var(--s-3); }
+/* A column of sections (.viewer-section in styles.css: hairline, label,
+   content). The grid gap is the space above each hairline, so the sections'
+   own top margin is dropped here. */
+.drive-settings { display: grid; gap: var(--viewer-section-gap, var(--s-5)); padding-top: var(--s-3); }
+.drive-settings > .viewer-section { margin-top: 0; }
 .drive-settings h3,
 .drive-settings h4,
 .drive-settings p { margin-top: 0; }
@@ -6,41 +10,57 @@
 .drive-settings h4 { margin-bottom: var(--s-2); font-size: var(--text-subsection); line-height: var(--leading-heading); letter-spacing: var(--track-tight); font-weight: var(--weight-medium); }
 .drive-settings__intro { display: grid; gap: 6px; }
 .drive-settings__intro > p,
-.drive-restore > div > p { margin-bottom: 0; color: var(--muted); font-size: var(--text-body); line-height: var(--leading-body); }
+.drive-restore__row > p { margin-bottom: 0; color: var(--muted); font-size: var(--text-body); line-height: var(--leading-body); }
 .drive-account,
 .drive-backup,
-.drive-restore,
+.drive-restore { display: grid; gap: var(--s-3); }
 .drive-preview,
-.drive-operation { display: grid; gap: var(--s-3); padding-top: 19px; border-top: 1px solid var(--line); }
+.drive-operation { display: grid; gap: var(--s-3); }
+
+/* The section's label: the panel's one eyebrow voice (.details-label), with
+   the Drive mark in front of the section that is about the Drive account. */
+.drive-settings .drive-section-title {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-eyebrow);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--track-caps);
+  line-height: var(--leading-heading);
+  text-transform: uppercase;
+}
+.drive-section-title img { flex: none; }
+.drive-section-title:focus { outline: none; }
+.drive-section-title:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 4px; border-radius: var(--r-xs); }
+
+/* Rows sit right under the label; the label keeps them apart from the
+   hairline, so the block needs no rule of its own. */
+.drive-rows { margin: calc(var(--s-3) * -1 + var(--s-1)) 0 0; border-top: 0; }
+.drive-rows .detail-row { min-height: 44px; padding-block: 6px; }
+.drive-rows__text { color: var(--ink); overflow-wrap: anywhere; }
+.drive-rows__state { gap: var(--s-2); color: var(--ink); font-weight: var(--weight-medium); }
+.drive-rows strong { color: var(--ink); font-weight: var(--weight-semibold); }
 .drive-hint { margin: 0; color: var(--muted); font-size: var(--text-body); line-height: var(--leading-caption); }
 .drive-alert { margin: 0; padding: 11px 13px; border: 1px solid color-mix(in srgb, var(--error) 30%, transparent); border-radius: var(--r-sm); background: color-mix(in srgb, var(--error) 7%, var(--paper-raised)); color: var(--error); font-size: var(--text-body); line-height: var(--leading-caption); }
 .drive-success { margin: 0; padding: 11px 13px; border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); border-radius: var(--r-sm); background: color-mix(in srgb, var(--accent) 6%, var(--paper-raised)); color: var(--ink); font-size: var(--text-body); line-height: var(--leading-caption); }
 /* What a running action is doing right now, or that it is slow and can be left. */
 .drive-working { margin: 0; color: var(--ink-soft); font-size: var(--text-body); line-height: var(--leading-caption); }
-.drive-account__title,
 .drive-section-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
-.drive-account__title { justify-content: flex-start; gap: 10px; }
-.drive-account__title h4,
 .drive-section-heading h4 { margin-bottom: 0; }
-.drive-section-heading__actions { display: flex; align-items: center; gap: var(--s-2); }
-.drive-account__card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 10px var(--s-4); padding: 14px 10px 10px 15px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--paper-raised); }
-/* A .danger-button.button--sm: only placement is local. */
-.drive-account__card .drive-disconnect { margin-bottom: -8px; white-space: nowrap; }
-.drive-account__details { display: grid; gap: 10px; margin: 0; }
-.drive-account__details > div { display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: center; gap: 10px; font-size: var(--text-body); }
-.drive-account__details dt { display: grid; place-items: center; color: var(--muted); }
-.drive-account__details dd { margin: 0; overflow-wrap: anywhere; color: var(--ink); font-weight: var(--weight-medium); }
 .drive-account__email { color: var(--ink-soft); font-weight: var(--weight-regular); }
-.drive-account__details .drive-dot.is-ok { background: var(--success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 22%, transparent); }
+.drive-dot.is-ok { background: var(--success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 22%, transparent); }
 /* While retrying it shrinks to a circle around the spinner. */
 .drive-settings .drive-retry { flex: none; white-space: nowrap; }
-.drive-settings .drive-retry[aria-busy="true"] { width: var(--btn-h-sm); padding: 0; }
+.drive-settings .drive-retry[aria-busy="true"] { width: var(--btn-h); padding: 0; }
 .drive-actions,
 .drive-preview__choices { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); }
+/* The section's action row: what it does first, Disconnect apart on the right. */
+.drive-actions .drive-disconnect { margin-left: auto; white-space: nowrap; }
 /* Button height, disabled and busy states come from the shared buttons
    (components/buttons.css). */
 
-.drive-backup__state { display: flex; align-items: center; gap: var(--s-2); margin: 0; font-size: var(--text-body); font-weight: var(--weight-semibold); }
 .drive-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--wash-3); }
 .drive-dot.is-on { background: var(--accent); }
 .drive-dot.is-busy { background: var(--accent); animation: drive-pulse 1.4s var(--ease-out) infinite; }
@@ -57,13 +77,11 @@
 .drive-operation progress::-moz-progress-bar { background: var(--accent); border-radius: var(--r-full); }
 .drive-pending { display: flex; align-items: center; gap: 7px; margin: 0; color: var(--accent); font-size: var(--text-body); }
 .drive-pending span { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-.drive-last-backup { margin: 0; color: var(--muted); font-size: var(--text-body); line-height: var(--leading-caption); }
-.drive-last-backup strong { color: var(--ink); font-weight: var(--weight-semibold); }
-.drive-restore { grid-template-columns: 1fr auto; align-items: center; }
-.drive-restore > div > p { max-width: 340px; }
-.drive-restore > button { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.drive-restore__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--s-4); }
+.drive-restore__row > p { max-width: 340px; margin: 0; }
+.drive-restore__row > button { white-space: nowrap; }
 
-.drive-preview { padding: 17px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--paper-raised); }
+.drive-preview { padding: var(--s-4); border: 1px solid var(--line); border-radius: var(--r-md); background: var(--paper-raised); }
 .drive-preview h4 { margin-bottom: 0; }
 .drive-preview__counts { display: grid; gap: 6px; margin: 0; }
 .drive-preview__counts > div { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: var(--s-2); font-size: var(--text-body); }
@@ -105,9 +123,7 @@
 }
 
 @media (max-width: 430px) {
-  .drive-restore { grid-template-columns: 1fr; }
-  .drive-account__card { grid-template-columns: 1fr; }
-  .drive-account__card .drive-disconnect { justify-self: end; margin-bottom: 0; }
+  .drive-restore__row { grid-template-columns: 1fr; justify-items: start; }
   .drive-preview__counts > div { grid-template-columns: 96px minmax(0, 1fr); }
   .drive-settings__footer { align-items: flex-start; flex-direction: column; }
 }

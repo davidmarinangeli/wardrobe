@@ -1630,24 +1630,33 @@ button { font: inherit; }
   padding: var(--s-3) 34px 46px;
 }
 
+/* == S4 modal content: sections (variant A, eyebrow labels) ==
+   Every panel's body is a column of sections. A section opens with a
+   hairline, then its label, then its content; the same distance sits above
+   and below the hairline, and the label is close to what it names. The label
+   is the one eyebrow voice of a panel, and a count always follows it the same
+   way: "Ways to wear it · 3", "Pieces · 3", "Outfits · 1". */
+.viewer { --viewer-section-gap: var(--s-5); }
+
+.viewer-section {
+  margin-top: var(--viewer-section-gap);
+  padding-top: var(--viewer-section-gap);
+  border-top: 1px solid var(--line);
+}
+
 .details-label {
-  margin: 0 0 var(--s-5);
+  margin: 0 0 var(--s-3);
   color: var(--muted);
   font-size: var(--text-eyebrow);
   font-weight: var(--weight-medium);
   letter-spacing: var(--track-caps);
+  line-height: var(--leading-heading);
   text-transform: uppercase;
 }
 
 /* Outfits this piece is already in. Sits below the editor as part of the
    piece's detail; renders nothing at all when there are none. */
-.item-outfits {
-  margin: var(--s-1) 0 22px;
-  padding-top: 20px;
-  border-top: 1px solid var(--line);
-}
-
-.item-outfits .details-label { margin-bottom: var(--s-3); }
+.item-outfits { margin-bottom: 0; }
 
 .item-outfits__row {
   display: flex;
@@ -2356,7 +2365,6 @@ button:where(.edit-button, .primary-button, .secondary-button, .danger-button, .
   .viewer-heading { padding-top: 0; }
   .viewer-art { flex-basis: min(30vh, 260px); height: min(30vh, 260px); min-height: 190px; padding-block: 10px var(--s-2); }
   .viewer-details { padding-top: 10px; }
-  .details-label { margin-bottom: var(--s-4); }
   .detail-tags { padding-bottom: 20px; gap: var(--s-2) 22px; }
   .viewer-text-close { margin-top: 20px; }
   .viewer-actions { gap: 6px; margin-top: 18px; }
@@ -2966,18 +2974,7 @@ button:where(.edit-button, .primary-button, .secondary-button, .danger-button, .
   }
 }
 
-/* ─── Ways to wear it ─── */
-.variant-strip { margin-top: 22px; }
-
-.variant-strip__label {
-  margin: 0 0 10px;
-  color: var(--muted);
-  font-size: var(--text-eyebrow);
-  font-weight: var(--weight-medium);
-  letter-spacing: var(--track-caps);
-  text-transform: uppercase;
-}
-
+/* ─── Ways to wear it ─── (a .viewer-section; its label is a .details-label) */
 .variant-strip__row {
   display: flex;
   gap: 10px;
@@ -3048,8 +3045,22 @@ button.variant-strip__tile:active .variant-strip__art { transform: scale(.96); }
 .variant-strip__add .variant-strip__art { border: 1.5px dashed color-mix(in srgb, var(--line) 60%, var(--muted)); background: transparent; }
 .variant-strip__status { margin: 10px 0 0; }
 
-/* ─── Details, as rows you tap to edit ─── */
-.detail-rows { margin-top: 22px; border-top: 1px solid var(--line); }
+/* ─── Details, as rows you tap to edit ───
+   The same key/value row in the item sheet, the outfit viewer and Settings.
+   The section's hairline is the top of the first row, and the next section's
+   hairline the bottom of the last, so a row block never draws two lines. */
+.detail-rows { margin-bottom: 0; }
+.detail-rows.viewer-section { padding-top: 0; }
+.detail-rows > :last-child { border-bottom: 0; }
+/* A row already carries 10px of air under its value; the next hairline comes
+   that much sooner, so the gap reads the same as after any other section. */
+.detail-rows.viewer-section + .viewer-section { margin-top: calc(var(--viewer-section-gap) - 10px); }
+.detail-row > dt,
+.detail-row > dd { margin: 0; }
+
+/* A row that only shows a value (Style, Account, Status): no chevron column,
+   no pointer. */
+.detail-row--static { grid-template-columns: 92px minmax(0, 1fr); cursor: default; }
 
 .detail-row {
   /* One line of a row: every cell is centred on it, so a value that wraps
@@ -3120,58 +3131,24 @@ button.variant-strip__tile:active .variant-strip__art { transform: scale(.96); }
 
 .detail-row__editor { padding: var(--s-4) 0 20px; border-bottom: 1px solid var(--wash-2); }
 
-/* ─── The save bar: only while there is something to save ─── */
-.save-bar {
-  position: sticky;
-  bottom: 12px;
-  z-index: 7;
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-  min-height: 60px;
-  margin-top: 20px;
-  padding: var(--s-2) var(--s-2) var(--s-2) 18px;
-  border: 1px solid var(--glass-dark-border);
-  border-radius: var(--r-lg);
-  background: var(--glass-dark-solid);
-  color: var(--glass-dark-ink);
-  box-shadow: var(--shadow-lg);
-  animation: save-bar-in var(--dur-panel) var(--ease-out);
-}
+/* ─── Saving: the footer's own state while there is something to save ───
+   The item sheet's footer row (Delete far left) turns into this one: what is
+   unsaved on the left, Discard and the filled Save on the right. The same
+   light footer as every panel, not a dark bar floating over the content. */
+.item-sheet > .viewer-footer { animation: none; }
 
-.save-bar__label { flex: 1; min-width: 0; font-size: var(--text-body); font-weight: var(--weight-medium); }
-
-/* The dark register. The bar holds an ordinary .danger-button and
-   .primary-button; only their inks change here, so every state comes with
-   the variant. */
-.save-bar { --btn-h: 44px; --btn-focus-ring: 2px solid var(--glass-dark-ink); }
-
-.save-bar .primary-button {
-  --btn-bg: var(--paper);
-  --btn-fg: var(--ink);
-  --btn-border: var(--paper);
-  --btn-shadow: none;
-  --btn-bg-hover: var(--paper-raised);
-  --btn-border-hover: var(--paper-raised);
-  --btn-shadow-hover: none;
-}
-
-/* Discard is the same .danger-button as in the confirm dialogs, its error
-   ink lifted so it still reads on the dark bar. */
-.save-bar .danger-button {
-  --btn-fg: color-mix(in srgb, var(--danger) 35%, var(--glass-dark-ink));
-  --btn-border: color-mix(in srgb, var(--danger) 45%, var(--glass-dark-border));
-  --btn-bg-hover: color-mix(in srgb, var(--danger) 22%, transparent);
-  --btn-border-hover: color-mix(in srgb, var(--danger) 35%, var(--glass-dark-ink));
-}
-
+.save-bar { animation: save-bar-in var(--dur-pop) var(--ease-out); }
+.save-bar__label { flex: 1; min-width: 0; color: var(--ink-soft); font-size: var(--text-body); font-weight: var(--weight-medium); }
+.save-bar.is-blocked .save-bar__label { color: var(--error); }
 .save-bar__discard,
-.save-bar__save { font-size: var(--text-body); }
-.save-bar__discard { font-weight: var(--weight-regular); }
-.save-bar__save { font-weight: var(--weight-medium); }
+.save-bar__save { flex: none; font-size: var(--text-body); }
+
+/* The body hands its bottom padding to the footer, as in ViewerPanel. */
+.viewer-overlay .item-sheet > .item-sheet__scroll:has(+ .viewer-footer:not(:empty)) { padding-bottom: var(--s-2); }
+.item-sheet__scroll:has(+ .viewer-footer:not(:empty)) .viewer-details.editing { padding-bottom: var(--s-2); }
 
 @keyframes save-bar-in {
-  from { opacity: 0; transform: translateY(12px); }
+  from { opacity: 0; transform: translateY(6px); }
 }
 
 /* ─── Add a way to wear it: its own sheet ─── */

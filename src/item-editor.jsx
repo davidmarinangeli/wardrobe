@@ -16,6 +16,7 @@ import { galleryVariantIndex, galleryVariantPhotos, isPeekGesture } from "./gall
 import { DEFAULT_ITEM_COLOR, changedDraftFields, itemMenuActions, itemMetaLine, unsavedLabel } from "./item-sheet.js";
 import { GenerateButton, RefineComposer, StageError, StageStatus, useRememberedTier } from "./components/ModelPhotoControls.jsx";
 import { moveMenuFocus, useDismissOnOutsidePointer } from "./hooks/usePopover.js";
+import { DeleteButton } from "./components/PanelActions.jsx";
 
 function rgbToHex(red, green, blue) {
   return `#${[red, green, blue].map((value) => Math.max(0, Math.min(255, value)).toString(16).padStart(2, "0")).join("")}`;
@@ -383,7 +384,7 @@ function OutfitsWithItem({ outfits, onOpen }) {
   if (!outfits.length) return null;
 
   return (
-    <section className="item-outfits">
+    <section className="item-outfits viewer-section" aria-label="Outfits">
       <p className="details-label">Outfits · {outfits.length}</p>
       <div className="item-outfits__row">
         {outfits.map((outfit) => (
@@ -498,8 +499,8 @@ function VariantStrip({ item, selectedVariantId, onSelect, onAdd, canAdd }) {
   const several = variants.length > 1;
 
   return (
-    <section className="variant-strip" aria-label="Ways to wear it">
-      <p className="variant-strip__label">Ways to wear it{several ? ` · ${variants.length}` : ""}</p>
+    <section className="variant-strip viewer-section" aria-label="Ways to wear it">
+      <p className="details-label">Ways to wear it · {variants.length}</p>
       <div className="variant-strip__row">
         {variants.map((variant) => {
           const image = variantOwnImage(item, variant.id);
@@ -571,7 +572,7 @@ function ItemDetails({ draft, setDraft, palette, sampling, setSampling, sampleSt
   const suggestedSecondary = palette.find((color) => color.toLowerCase() !== draft.color?.toLowerCase()) || DEFAULT_ITEM_COLOR;
 
   return (
-    <section className="detail-rows" aria-label="Details">
+    <section className="detail-rows viewer-section" aria-label="Details">
       {/* A real select, styled as a row: on a phone the tap opens the native
           picker, which is the best category chooser the platform has. */}
       <label className="detail-row">
@@ -1076,10 +1077,13 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
     // Named by where it is deleted from: the same sheet opens wishlist pieces in Inspo.
     "delete-item": { label: deleteLabel, confirmLabel: "Tap again to delete the item", danger: true, icon: <Trash size={18} aria-hidden="true" /> },
   };
+  // The item's own Delete is in the footer, where every viewer keeps the
+  // object's actions (destructive far left); the menu keeps what acts on the
+  // way of wearing it that is on screen.
   const menuSections = [
     menu.variantActions.length > 0 && { id: "variant", label: menu.variantLabel, entries: menu.variantActions.map((id) => ({ id, ...menuEntries[id] })) },
-    menu.itemActions.length > 0 && { id: "item", label: menu.variantLabel ? "Item" : null, entries: menu.itemActions.map((id) => ({ id, ...menuEntries[id] })) },
   ].filter(Boolean);
+  const canDeleteItem = menu.itemActions.includes("delete-item");
 
   const discardEditing = () => {
     setDraft(draftFromItem(item));
@@ -1289,12 +1293,16 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
         />
 
         {onOpenOutfit && <OutfitsWithItem outfits={outfits} onOpen={openOutfit} />}
+      </div>
+      </div>
 
-        {/* Save and Discard exist only while there is something to save — the
-            contextual save bar of Shopify's admin. The footer they replace
-            showed Delete, Cancel and a filled Save on every item, always. */}
-        {isDirty && (
-          <div className={`save-bar${closeBlocked ? " is-blocked" : ""}`} role="region" aria-label="Unsaved changes">
+      {/* The fixed footer, as on every panel: the item's Delete far left. While
+          there is something to save it turns into the save row instead —
+          Save and Discard exist only then, and Delete steps aside, since
+          deleting an item with unsaved edits is never what was meant. */}
+      <footer className="viewer-footer">
+        {isDirty ? (
+          <div className={`viewer-actions save-bar${closeBlocked ? " is-blocked" : ""}`} role="region" aria-label="Unsaved changes">
             <span className="save-bar__label" role="status">
               {closeBlocked ? "Save or discard before closing" : unsavedLabel(changes.length)}
             </span>
@@ -1303,9 +1311,12 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
               <Check size={15} weight="bold" aria-hidden="true" /> Save
             </button>
           </div>
+        ) : canDeleteItem && (
+          <div className="viewer-actions">
+            <DeleteButton ariaLabel={deleteLabel} confirmLabel="Tap again to delete" onConfirm={() => onDelete(item.id)} />
+          </div>
         )}
-      </div>
-      </div>
+      </footer>
     </aside>
     </div>
     </div>
