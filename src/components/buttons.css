@@ -40,8 +40,8 @@
   --btn-h: 38px;
   --btn-h-sm: 32px;
   --btn-h-lg: 44px;
-  --btn-pad-x: 16px;
-  --btn-pad-x-sm: 12px;
+  --btn-pad-x: var(--s-4);
+  --btn-pad-x-sm: var(--s-3);
   --btn-gap: 7px;
   --btn-radius: var(--r-full);
   --btn-icon: 40px;

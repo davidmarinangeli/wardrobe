@@ -24,7 +24,7 @@
 .inspo-importer-entry { width: clamp(380px, 40vw, 540px); }
 
 .inspo-importer-body {
-  padding-top: 12px;
+  padding-top: var(--s-3);
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -40,7 +40,7 @@
    header's divider, and the body starts its own spacing below it. */
 .viewer.inspo-importer-panel > .viewer-header--row,
 .viewer.inspo-importer-panel[data-scrolled] > .viewer-header--row { padding-bottom: 0; border-bottom: 0; }
-.viewer-header__below > .inspo-tabs { margin-top: 12px; }
+.viewer-header__below > .inspo-tabs { margin-top: var(--s-3); }
 .viewer.inspo-importer-panel > .viewer-header--row + .viewer-body { padding-top: 20px; }
 .viewer.inspo-importer-panel .inspo-importer-body { padding-top: 0; }
 
@@ -49,7 +49,7 @@
   min-height: 38px;
   border: 0;
   border-bottom: 2px solid transparent;
-  padding: 9px 12px;
+  padding: 9px var(--s-3);
   background: transparent;
   color: var(--muted);
   font-size: var(--text-eyebrow);
@@ -118,7 +118,7 @@
   min-height: 160px;
   border: 1px dashed var(--line);
   border-radius: var(--r-lg);
-  padding: 24px;
+  padding: var(--s-5);
   background: var(--glass-card);
   cursor: pointer;
   transition: border-color var(--dur-pop) var(--ease-out), background var(--dur-pop) var(--ease-out);
@@ -181,8 +181,8 @@
 .inspo-queue-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 0;
+  gap: var(--s-2);
+  padding: var(--s-1) 0;
   font-size: var(--text-caption);
   color: var(--muted);
   border-top: 1px solid var(--line);
@@ -213,7 +213,7 @@
 .inspo-import-errors {
   margin: 0;
   border-radius: var(--r-sm);
-  padding: 9px 12px;
+  padding: 9px var(--s-3);
   border: 1px solid var(--error);
   background: rgba(138, 63, 53, .07);
   color: var(--error);

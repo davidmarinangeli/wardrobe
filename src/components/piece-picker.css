@@ -20,29 +20,29 @@
 .piece-picker__close-spacer { flex: 0 0 44px; margin-left: auto; }
 
 /* ─── Footer: the action row, like every panel's ─────────────────────────── */
-.piece-picker__actions { display: flex; flex: none; align-items: center; gap: 14px; padding: 14px 24px; border-top: 1px solid var(--line); background: var(--paper-warm); }
+.piece-picker__actions { display: flex; flex: none; align-items: center; gap: 14px; padding: 14px var(--s-5); border-top: 1px solid var(--line); background: var(--paper-warm); }
 
 /* ─── Filters ────────────────────────────────────────────────────────────── */
-.piece-picker__filters { display: grid; gap: 10px; padding: 16px 24px; border-bottom: 1px solid var(--line); }
-.piece-picker__search { width: 100%; min-width: 0; min-height: 44px; padding: 11px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--paper-raised); color: var(--ink-soft); font: inherit; font-size: var(--text-body); }
+.piece-picker__filters { display: grid; gap: 10px; padding: var(--s-4) var(--s-5); border-bottom: 1px solid var(--line); }
+.piece-picker__search { width: 100%; min-width: 0; min-height: 44px; padding: 11px var(--s-3); border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--paper-raised); color: var(--ink-soft); font: inherit; font-size: var(--text-body); }
 .piece-picker__search:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
 .piece-picker__chips { display: flex; gap: 6px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
 .piece-picker__chips::-webkit-scrollbar { display: none; }
-.piece-picker__chip { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 16px; border: 1px solid var(--line); border-radius: var(--r-full); background: var(--paper-raised); color: var(--ink-soft); font: inherit; font-size: var(--text-body); white-space: nowrap; cursor: pointer; transition: background var(--dur-pop) var(--ease-out), border-color var(--dur-pop) var(--ease-out), color var(--dur-pop) var(--ease-out); }
+.piece-picker__chip { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 var(--s-4); border: 1px solid var(--line); border-radius: var(--r-full); background: var(--paper-raised); color: var(--ink-soft); font: inherit; font-size: var(--text-body); white-space: nowrap; cursor: pointer; transition: background var(--dur-pop) var(--ease-out), border-color var(--dur-pop) var(--ease-out), color var(--dur-pop) var(--ease-out); }
 .piece-picker__chip.is-active { border-color: var(--ink); background: var(--ink); color: var(--paper-raised); }
 .piece-picker__chip-count { color: var(--muted); font-size: var(--text-caption); font-variant-numeric: tabular-nums; }
 .piece-picker__chip.is-active .piece-picker__chip-count { color: inherit; opacity: .7; }
 .piece-picker__chip:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
 
 /* ─── Notices: limit reached, pieces no longer in the wardrobe ───────────── */
-.piece-picker__notices { display: grid; gap: 8px; padding: 12px 24px 0; }
+.piece-picker__notices { display: grid; gap: var(--s-2); padding: var(--s-3) var(--s-5) 0; }
 /* Kept rendered when empty (no padding) so the live region announces the limit notice. */
 .piece-picker__notices:empty { padding: 0; }
-.piece-picker__notice { margin: 0; padding: 9px 12px; border: 1px solid color-mix(in srgb, var(--accent-warm) 35%, var(--line)); border-radius: var(--r-sm); background: color-mix(in srgb, var(--accent-warm) 7%, var(--paper-raised)); color: var(--ink-soft); font-size: var(--text-body); line-height: var(--leading-caption); }
+.piece-picker__notice { margin: 0; padding: 9px var(--s-3); border: 1px solid color-mix(in srgb, var(--accent-warm) 35%, var(--line)); border-radius: var(--r-sm); background: color-mix(in srgb, var(--accent-warm) 7%, var(--paper-raised)); color: var(--ink-soft); font-size: var(--text-body); line-height: var(--leading-caption); }
 
 /* ─── Body: grid + side panel ────────────────────────────────────────────── */
 .piece-picker__body { display: grid; grid-template-columns: minmax(0, 1fr) 340px; flex: 1; min-height: 0; }
-.piece-picker__grid-pane { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 20px 24px 32px; }
+.piece-picker__grid-pane { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 20px var(--s-5) var(--s-6); }
 .piece-picker__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 20px 14px; align-items: start; }
 .piece-picker__side { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 20px; border-left: 1px solid var(--line); }
 .piece-picker__side-content { display: flex; flex-direction: column; gap: 18px; }
@@ -50,12 +50,12 @@
 .piece-picker__footer { display: grid; gap: 10px; }
 .piece-picker__tray-toggle { display: none; }
 
-.piece-picker__empty { display: grid; justify-items: center; gap: 12px; padding: 64px 16px; color: var(--muted); text-align: center; }
+.piece-picker__empty { display: grid; justify-items: center; gap: var(--s-3); padding: var(--s-8) var(--s-4); color: var(--muted); text-align: center; }
 .piece-picker__empty p { margin: 0; font-size: var(--text-body); }
 
 /* ─── Cards: aligned with .overview-card ─────────────────────────────────── */
-.piece-picker__card { display: grid; gap: 8px; min-width: 0; }
-.piece-picker__card-button { display: grid; gap: 8px; width: 100%; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.piece-picker__card { display: grid; gap: var(--s-2); min-width: 0; }
+.piece-picker__card-button { display: grid; gap: var(--s-2); width: 100%; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .piece-picker__art {
   position: relative;
   display: grid;
@@ -123,7 +123,7 @@
 /* Variant thumbnails. They scroll rather than wrap so every card keeps the
    same height however many variants a piece has; the 44px squares meet
    Apple's touch-target floor, well over the 24px WCAG 2.5.8 minimum. */
-.piece-picker__variants { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.piece-picker__variants { display: flex; gap: var(--s-1); overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
 .piece-picker__variants::-webkit-scrollbar { display: none; }
 .piece-picker__variants button {
   display: grid;
@@ -166,29 +166,29 @@
   .viewer-overlay.piece-picker-overlay .viewer.piece-picker-panel { height: 100%; max-height: 100%; border-radius: 0 !important; overflow: hidden; touch-action: auto; }
   .piece-picker-panel .viewer-icon-close { top: max(10px, env(safe-area-inset-top)); right: 12px; }
 
-  .piece-picker__header { gap: 10px; min-height: 64px; padding: max(10px, env(safe-area-inset-top)) 12px 10px 16px; }
-  .piece-picker__actions { padding: 10px 16px max(10px, env(safe-area-inset-bottom)); }
+  .piece-picker__header { gap: 10px; min-height: 64px; padding: max(10px, env(safe-area-inset-top)) var(--s-3) 10px var(--s-4); }
+  .piece-picker__actions { padding: 10px var(--s-4) max(10px, env(safe-area-inset-bottom)); }
   .piece-picker__title { font-size: var(--text-title); }
-  .piece-picker__filters { gap: 8px; padding: 12px 16px; }
-  .piece-picker__notices { padding: 10px 16px 0; }
+  .piece-picker__filters { gap: var(--s-2); padding: var(--s-3) var(--s-4); }
+  .piece-picker__notices { padding: 10px var(--s-4) 0; }
   .piece-picker__search { font-size: var(--text-input-touch); }
 
   .piece-picker__body { display: flex; flex-direction: column; }
-  .piece-picker__grid-pane { flex: 1; padding: 14px 16px 20px; }
-  .piece-picker__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 10px; }
+  .piece-picker__grid-pane { flex: 1; padding: 14px var(--s-4) 20px; }
+  .piece-picker__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-4) 10px; }
 
-  .piece-picker__side { flex: none; display: flex; flex-direction: column; max-height: 60dvh; padding: 0 16px max(12px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); border-left: 0; background: var(--paper-warm); }
+  .piece-picker__side { flex: none; display: flex; flex-direction: column; max-height: 60dvh; padding: 0 var(--s-4) max(var(--s-3), env(safe-area-inset-bottom)); border-top: 1px solid var(--line); border-left: 0; background: var(--paper-warm); }
   .piece-picker__tray-toggle { display: flex; align-items: center; justify-content: space-between; flex: none; width: 100%; min-height: 48px; padding: 0; border: 0; background: transparent; color: var(--ink-soft); font: inherit; font-size: var(--text-body); font-weight: var(--weight-semibold); cursor: pointer; }
   .piece-picker__tray-toggle:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: -2px; }
   .piece-picker__tray-caret { transition: transform var(--dur-pop) var(--ease-out); }
   .piece-picker__side.is-open .piece-picker__tray-caret { transform: rotate(180deg); }
-  .piece-picker__side-content { gap: 14px; padding-bottom: 4px; }
+  .piece-picker__side-content { gap: 14px; padding-bottom: var(--s-1); }
   /* Expanded, the name and Save error come first: they're what the tray was opened for. */
   .piece-picker__footer { order: -1; }
   /* The tray's bar is the picker's only bottom bar: count (it opens the tray)
      on the left, Save rightmost. It stays at the foot of the tray, which opens
      upward above it. */
-  .piece-picker__tray-bar { order: 1; position: sticky; bottom: 0; z-index: 1; display: flex; flex: none; align-items: center; gap: 12px; background: var(--paper-warm); }
+  .piece-picker__tray-bar { order: 1; position: sticky; bottom: 0; z-index: 1; display: flex; flex: none; align-items: center; gap: var(--s-3); background: var(--paper-warm); }
   .piece-picker__tray-bar .piece-picker__tray-toggle { flex: 1 1 auto; width: auto; min-width: 0; justify-content: flex-start; gap: 6px; }
   .piece-picker__side.is-open .piece-picker__side-content { padding-top: 14px; }
 }

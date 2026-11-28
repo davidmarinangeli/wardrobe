@@ -22,7 +22,7 @@
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 16px;
+    gap: var(--s-4);
     padding: max(18px, env(safe-area-inset-top)) var(--page-x) 0;
   }
 
@@ -37,7 +37,7 @@
   }
 
   .mobile-subtitle {
-    margin: 4px 0 0;
+    margin: var(--s-1) 0 0;
     padding: 0 var(--page-x);
     font-size: var(--text-eyebrow);
     letter-spacing: var(--track-caps);
@@ -122,7 +122,7 @@
     /* Primary last (rightmost). With row-reverse, flex-start packs to the right
        edge so the CTAs sit on the right above the bottom nav.
        Reversing here keeps the desktop markup untouched. */
-    gap: 8px;
+    gap: var(--s-2);
     justify-content: flex-end;
     padding: 0;
     border: none;
@@ -151,7 +151,7 @@
   .app-top-bar .top-actions .top-action {
     width: auto;
     min-height: 44px;
-    padding: 0 16px;
+    padding: 0 var(--s-4);
     border-radius: var(--r-full);
   }
 

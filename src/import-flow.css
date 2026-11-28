@@ -29,8 +29,8 @@
   display: grid;
   place-items: center;
   align-content: center;
-  gap: 12px;
-  padding: 48px;
+  gap: var(--s-3);
+  padding: var(--s-7);
   text-align: center;
   border: 1px dashed var(--muted);
   border-radius: var(--r-xl);
@@ -62,7 +62,7 @@
   z-index: 75;
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: var(--s-5);
   background: var(--scrim);
   -webkit-backdrop-filter: var(--glass-blur-sm);
   backdrop-filter: var(--glass-blur-sm);
@@ -80,8 +80,8 @@
   max-height: min(760px, calc(100dvh - 48px));
   /* A frame, like every panel: fixed header, scrolling body, fixed footer.
      The padding lives on the three parts, through these two variables. */
-  --popover-pad: 24px;
-  --popover-pad-bottom: 24px;
+  --popover-pad: var(--s-5);
+  --popover-pad-bottom: var(--s-5);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -104,7 +104,7 @@
 
 .import-popover-backdrop.is-open .import-popover,
 .import-popover-backdrop[data-open="true"] .import-popover { transform: none; opacity: 1; }
-.import-popover__header { display: flex; flex: none; align-items: flex-start; justify-content: space-between; gap: 20px; padding: var(--popover-close-inset, 24px) var(--popover-close-inset, 24px) 18px var(--popover-pad); border-bottom: 1px solid transparent; transition: border-color var(--dur-pop) var(--ease-out); }
+.import-popover__header { display: flex; flex: none; align-items: flex-start; justify-content: space-between; gap: 20px; padding: var(--popover-close-inset, var(--s-5)) var(--popover-close-inset, var(--s-5)) 18px var(--popover-pad); border-bottom: 1px solid transparent; transition: border-color var(--dur-pop) var(--ease-out); }
 .import-popover__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 6px var(--popover-pad) var(--popover-pad-bottom); scrollbar-width: thin; scrollbar-color: var(--wash-3) transparent; }
 .import-popover__body:has(+ .import-popover__footer) { padding-bottom: 18px; }
 .import-popover__footer { flex: none; padding: 14px var(--popover-pad) var(--popover-pad-bottom); border-top: 1px solid transparent; transition: border-color var(--dur-pop) var(--ease-out); }
@@ -116,8 +116,8 @@
 .import-popover__title { margin: 0; font: inherit; font-size: var(--text-title); font-weight: var(--weight-medium); line-height: var(--leading-title); letter-spacing: var(--track-title); }
 
 .import-progress { display: grid; gap: 10px; margin: 20px 0; }
-.import-progress.is-reviewing { margin-bottom: 24px; }
-.import-progress__meta { display: flex; justify-content: space-between; gap: 16px; color: var(--muted); font-size: var(--text-caption); }
+.import-progress.is-reviewing { margin-bottom: var(--s-5); }
+.import-progress__meta { display: flex; justify-content: space-between; gap: var(--s-4); color: var(--muted); font-size: var(--text-caption); }
 .import-progress__track { height: 3px; overflow: hidden; background: var(--wash-2); border-radius: var(--r-full); }
 .import-progress__bar { width: var(--import-progress, 0%); height: 100%; background: var(--ink-soft); border-radius: inherit; transition: width 500ms var(--ease-out); }
 .import-progress.is-indeterminate .import-progress__bar { width: 36%; animation: import-progress 1.2s var(--ease-out) infinite; }
@@ -153,14 +153,14 @@
 }
 .import-card__image { width: 88px; aspect-ratio: 4 / 5; object-fit: contain; background: var(--paper); border-radius: var(--r-sm); filter: var(--shadow-contact); }
 .import-card__body { min-width: 0; }
-.import-card__title { margin: 0 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-subsection); font-weight: var(--weight-medium); line-height: var(--leading-heading); letter-spacing: var(--track-tight); }
+.import-card__title { margin: 0 0 var(--s-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-subsection); font-weight: var(--weight-medium); line-height: var(--leading-heading); letter-spacing: var(--track-tight); }
 .import-card__detail { margin: 0; color: var(--muted); font-size: var(--text-caption); }
-.import-card__detail--status { display: flex; align-items: center; gap: 8px; }
+.import-card__detail--status { display: flex; align-items: center; gap: var(--s-2); }
 .import-card__detail--status::before { content: ""; flex: 0 0 6px; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .42; }
 .import-card__detail--status[data-tone="processing"]::before { animation: import-pulse 1.2s ease-in-out infinite; }
 .import-card__detail--status[data-tone="error"] { color: var(--error); }
 .import-card__detail--status[data-tone="complete"] { color: var(--success); }
-.import-card__actions { display: flex; gap: 4px; }
+.import-card__actions { display: flex; gap: var(--s-1); }
 
 /* Icon-only buttons in the popover (close, review, delete) are plain
    .icon-button / .icon-button--danger; the card row uses .button--sm. */
@@ -173,20 +173,20 @@
 .import-editor__preview { width: 100%; max-height: 360px; object-fit: contain; background: var(--paper); border-radius: var(--r-md); filter: var(--shadow-contact); }
 .import-cleanup-editor { display: grid; gap: 14px; }
 .import-cleanup-editor > .import-card__detail { max-width: 680px; line-height: var(--leading-caption); }
-.import-cleanup-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.import-cleanup-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); }
 .import-cleanup-comparison figure { margin: 0; overflow: hidden; border: 1px solid var(--line); border-radius: var(--r-md); background-color: var(--paper); background-image: linear-gradient(45deg, var(--wash-1) 25%, transparent 25%), linear-gradient(-45deg, var(--wash-1) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, var(--wash-1) 75%), linear-gradient(-45deg, transparent 75%, var(--wash-1) 75%); background-position: 0 0, 0 7px, 7px -7px, -7px 0; background-size: 14px 14px; }
 .import-cleanup-comparison img { display: block; width: 100%; aspect-ratio: 1; object-fit: contain; }
 .import-cleanup-comparison figcaption { padding: 9px 11px; border-top: 1px solid var(--line); color: var(--muted); background: color-mix(in srgb, var(--paper) 92%, transparent); font-size: var(--text-eyebrow); letter-spacing: var(--track-caps); font-weight: var(--weight-medium); text-transform: uppercase; }
-.import-cleanup-strength label { display: flex; justify-content: space-between; gap: 16px; }
+.import-cleanup-strength label { display: flex; justify-content: space-between; gap: var(--s-4); }
 .import-cleanup-strength label strong { color: var(--ink-soft); font-weight: var(--weight-semibold); }
 .import-cleanup-strength input[type="range"] { padding-inline: 0; border: 0; accent-color: var(--ink-soft); }
-.import-cleanup-scale { display: flex; justify-content: space-between; gap: 16px; color: var(--muted); font-size: var(--text-caption); }
+.import-cleanup-scale { display: flex; justify-content: space-between; gap: var(--s-4); color: var(--muted); font-size: var(--text-caption); }
 .import-fields { display: grid; gap: 14px; align-content: start; }
 .import-field { display: grid; gap: 6px; }
 .import-field label { color: var(--muted); font-size: var(--text-caption); }
 .import-field input,
 .import-field select,
-.import-field textarea { width: 100%; box-sizing: border-box; padding: 11px 12px; color: var(--ink-soft); background: transparent; border: 1px solid var(--line); border-radius: var(--r-sm); font: inherit; font-size: var(--text-body); }
+.import-field textarea { width: 100%; box-sizing: border-box; padding: 11px var(--s-3); color: var(--ink-soft); background: transparent; border: 1px solid var(--line); border-radius: var(--r-sm); font: inherit; font-size: var(--text-body); }
 /* Body-size text in the 11px padding comes out ~4px shorter than the old
    inherited 16px; keep the field at its earlier 44px. */
 .import-field input:not([type="color"]),
@@ -194,7 +194,7 @@
 .import-field input:focus,
 .import-field select:focus,
 .import-field textarea:focus { outline: 1px solid var(--ink-soft); outline-offset: 1px; }
-.import-color-row { display: grid; grid-template-columns: 52px 1fr; gap: 8px; }
+.import-color-row { display: grid; grid-template-columns: 52px 1fr; gap: var(--s-2); }
 .import-color-row input[type="color"] { height: 44px; padding: 5px; cursor: pointer; }
 .import-field-error { color: var(--error); font-size: var(--text-caption); line-height: var(--leading-caption); }
 /* Layout only. The buttons themselves are the app's shared .primary-button /
@@ -202,7 +202,7 @@
    parallel family filled with --ink-soft instead of --accent, which is why its
    confirm never matched any other confirm in the app. Destructive sits apart
    from the confirms here for the same reason it does in .viewer-actions. */
-.import-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+.import-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: var(--s-2); margin-top: 22px; }
 .import-actions .danger-button { margin-right: auto; }
 
 @keyframes import-progress { from { transform: translateX(-110%); } to { transform: translateX(300%); } }
@@ -214,8 +214,8 @@
   .import-popover-backdrop { align-items: end; padding: 0; }
   /* A full-width sheet belongs to the bottom edge it slides off, not to the
      chip — it ignores the measured origin on purpose. */
-  .import-popover { width: 100%; max-height: min(88dvh, 760px); --popover-pad: 16px; --popover-close-inset: 18px; --popover-pad-bottom: calc(18px + env(safe-area-inset-bottom)); border-radius: var(--r-xl) var(--r-xl) 0 0; transform: translateY(100%) scale(0.96); transform-origin: bottom center; }
-  .import-drop-overlay { padding: 12px; }
+  .import-popover { width: 100%; max-height: min(88dvh, 760px); --popover-pad: var(--s-4); --popover-close-inset: 18px; --popover-pad-bottom: calc(18px + env(safe-area-inset-bottom)); border-radius: var(--r-xl) var(--r-xl) 0 0; transform: translateY(100%) scale(0.96); transform-origin: bottom center; }
+  .import-drop-overlay { padding: var(--s-3); }
   .import-drop-target { min-height: 50vh; padding: 28px 20px; border-radius: var(--r-lg); }
   .import-card { grid-template-columns: 68px minmax(0, 1fr); }
   .import-card__image { width: 68px; }

@@ -6,7 +6,7 @@
   /* Clear of the category pills above and hard against the grid below, which
      opens with its own 40px of padding. The offsets absorb the rail's shadow
      gutter (below) so the visible gaps stay 24px and 40px. */
-  margin: calc(var(--s-5) - 8px) 0 -30px;
+  margin: calc(var(--s-5) - var(--s-2)) 0 -30px;
 }
 
 /* Scrolls inside itself so the page never scrolls sideways. The gutter lives on
@@ -21,7 +21,7 @@
 .hot-cards__rail {
   display: flex;
   gap: var(--s-3);
-  padding: 8px var(--page-x) 30px;
+  padding: var(--s-2) var(--page-x) 30px;
   overflow-x: auto;
   scroll-snap-type: x proximity;
   /* Snapping aligns a card to the SCROLLPORT edge, which ignores padding unless

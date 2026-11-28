@@ -20,7 +20,7 @@
      whole outfit and seeing the top half of one. */
   --viewer-pad-top: 30px;
   --viewer-pad-x: 26px;
-  --viewer-pad-bottom: 24px;
+  --viewer-pad-bottom: var(--s-5);
   --viewer-gutter: 26px;
 }
 
@@ -87,7 +87,7 @@
 /* ─── Occasion picker ─────────────────────────────────────────────────────── */
 .occasion-picker {
   display: flex;
-  gap: 8px;
+  gap: var(--s-2);
   overflow-x: auto;
   padding-bottom: 6px;
   scrollbar-width: none;
@@ -101,7 +101,7 @@
   align-items: center;
   gap: 7px;
   min-height: 38px;
-  padding: 8px 15px;
+  padding: var(--s-2) 15px;
   border: 1px solid var(--line);
   background: var(--paper-raised);
   border-radius: var(--r-full);
@@ -213,14 +213,14 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--s-3);
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: var(--wash-3) transparent;
   -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
   mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
-  padding-bottom: 8px;
+  padding-bottom: var(--s-2);
 }
 
 .deck-card-lead {
@@ -240,7 +240,7 @@
   color: var(--muted);
 }
 
-.deck-card-note { display: flex; gap: 8px; }
+.deck-card-note { display: flex; gap: var(--s-2); }
 
 .deck-card-note dt {
   flex: none;
@@ -267,7 +267,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
+  padding: 6px var(--s-3);
   border-radius: var(--r-full);
   font-size: var(--text-eyebrow);
   font-weight: var(--weight-medium);
@@ -286,7 +286,7 @@
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   justify-items: center;
-  gap: 16px;
+  gap: var(--s-4);
 }
 
 .deck-action {
@@ -378,7 +378,7 @@
   justify-content: center;
   gap: 14px;
   min-height: 260px;
-  padding: 32px;
+  padding: var(--s-6);
   border: 1px dashed var(--line);
   border-radius: var(--r-lg);
   text-align: center;

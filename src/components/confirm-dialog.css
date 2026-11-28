@@ -4,11 +4,11 @@
 .confirm-dialog { width: min(100%, 380px); padding: 28px; border: 1px solid var(--glass-border); border-radius: var(--r-lg); background: var(--paper-raised); box-shadow: var(--shadow-lg); }
 .confirm-dialog__eyebrow { display: block; margin-bottom: 5px; color: var(--muted); font-size: var(--text-eyebrow); font-weight: var(--weight-medium); letter-spacing: var(--track-caps); text-transform: uppercase; }
 .confirm-dialog h2 { margin: 0; font-size: var(--text-title); font-weight: var(--weight-medium); letter-spacing: var(--track-title); line-height: var(--leading-title); }
-.confirm-dialog p { margin: 12px 0 24px; color: var(--muted); font-size: var(--text-body); line-height: var(--leading-body); }
-.confirm-dialog__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.confirm-dialog p { margin: var(--s-3) 0 var(--s-5); color: var(--muted); font-size: var(--text-body); line-height: var(--leading-body); }
+.confirm-dialog__actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
 /* Keep is a .secondary-button and Discard a .danger-button (buttons.css). */
 .confirm-dialog__actions button { flex: 1 0 auto; font: inherit; font-size: var(--text-body); }
 
 @media (max-width: 860px) {
-  .confirm-dialog { padding: 24px 20px; }
+  .confirm-dialog { padding: var(--s-5) 20px; }
 }

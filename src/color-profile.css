@@ -67,8 +67,8 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  margin: 6px 0 12px;
+  gap: var(--s-3);
+  margin: 6px 0 var(--s-3);
 }
 
 .color-season-title {
@@ -100,7 +100,7 @@
 .color-pigments-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--s-2);
 }
 
 .color-pigment-chip {
@@ -110,7 +110,7 @@
   background: var(--paper-raised);
   border: 1px solid var(--line);
   border-radius: var(--r-full);
-  padding: 4px 10px 4px 8px;
+  padding: var(--s-1) 10px var(--s-1) var(--s-2);
   font-size: var(--text-caption);
   color: var(--ink-soft);
   box-shadow: var(--shadow-sm);
@@ -154,7 +154,7 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--s-3);
   margin-bottom: 10px;
 }
 
@@ -172,7 +172,7 @@
 .palette-swatches {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-  gap: 4px;
+  gap: var(--s-1);
   border-radius: var(--r-md);
   overflow: hidden;
 }
@@ -217,7 +217,7 @@
 }
 
 .palette-edit-body {
-  margin-top: 12px;
+  margin-top: var(--s-3);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -340,10 +340,10 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0 4px;
+  gap: 0 var(--s-1);
   margin-left: calc(-1 * var(--btn-pad-x-sm));
-  padding-top: 4px;
-  margin-bottom: 4px;
+  padding-top: var(--s-1);
+  margin-bottom: var(--s-1);
 }
 
 /* Text links in the panel's quiet register: .ghost-button.button--sm, muted
@@ -365,7 +365,7 @@
   align-items: center;
   justify-content: center;
   gap: 14px;
-  padding: 64px 32px;
+  padding: var(--s-8) var(--s-6);
   text-align: center;
 }
 
@@ -411,7 +411,7 @@
 .color-quiz-body {
   display: flex;
   flex-direction: column;
-  padding: 22px 24px 24px;
+  padding: 22px var(--s-5) var(--s-5);
 }
 
 .color-quiz-header-banner { margin-bottom: 18px; }
@@ -425,7 +425,7 @@
 
 .color-quiz-alert {
   margin-bottom: 14px;
-  padding: 10px 12px;
+  padding: 10px var(--s-3);
   border-radius: var(--r-sm);
   background: var(--paper-raised);
   border: 1px solid var(--line);
@@ -450,11 +450,11 @@
 .color-quiz-options {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: var(--s-2);
 }
 
 .color-quiz-options button {
-  padding: 11px 12px;
+  padding: 11px var(--s-3);
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   background: var(--paper-raised);
@@ -491,7 +491,7 @@
 .drape-test {
   display: flex;
   flex-direction: column;
-  padding: 4px 24px 24px;
+  padding: var(--s-1) var(--s-5) var(--s-5);
 }
 
 .drape-loading,
@@ -501,13 +501,13 @@
   align-items: center;
   justify-content: center;
   gap: 14px;
-  padding: 72px 32px;
+  padding: 72px var(--s-6);
   text-align: center;
   color: var(--muted);
   font-size: var(--text-body);
 }
 
-.drape-test-header { margin-bottom: 16px; }
+.drape-test-header { margin-bottom: var(--s-4); }
 
 .drape-test-header h3 {
   margin: 0 0 5px;
@@ -528,7 +528,7 @@
 .drape-grid {
   display: grid;
   gap: 10px;
-  margin-bottom: 16px;
+  margin-bottom: var(--s-4);
 }
 
 .drape-grid.is-pair { grid-template-columns: 1fr 1fr; }
@@ -537,7 +537,7 @@
 .drape-option {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--s-2);
   min-width: 0;
 }
 
@@ -697,15 +697,15 @@
 }
 
 .drape-hint {
-  margin: 0 0 16px;
+  margin: 0 0 var(--s-4);
   font-size: var(--text-body);
   line-height: var(--leading-body);
   color: var(--muted);
 }
 
 .drape-verdict {
-  padding: 12px 14px;
-  margin-bottom: 16px;
+  padding: var(--s-3) 14px;
+  margin-bottom: var(--s-4);
   border-radius: var(--r-md);
   background: var(--paper-raised);
   border: 1px solid var(--line);
@@ -770,8 +770,8 @@
 
 .drape-other-tests {
   border-top: 1px solid var(--line);
-  padding-top: 12px;
-  margin-bottom: 16px;
+  padding-top: var(--s-3);
+  margin-bottom: var(--s-4);
 }
 
 /* .ghost-button.button--sm, flush with the text above it. */
@@ -805,7 +805,7 @@
   justify-content: space-between;
   gap: 10px;
   width: 100%;
-  padding: 9px 12px;
+  padding: 9px var(--s-3);
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
   background: var(--paper-raised);
@@ -827,7 +827,7 @@
    CERTIFIED SEASON PICKER
    ========================================================================== */
 
-.certified-picker { padding: 4px 24px 24px; }
+.certified-picker { padding: var(--s-1) var(--s-5) var(--s-5); }
 
 .certified-picker-header { margin-bottom: 20px; }
 
@@ -863,7 +863,7 @@
 .certified-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: var(--s-2);
 }
 
 .certified-card {

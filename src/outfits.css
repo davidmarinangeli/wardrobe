@@ -2,7 +2,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 30px 34px;
-  padding: 8px 0 40px;
+  padding: var(--s-2) 0 40px;
 }
 
 /* Wraps the card button so the wear control can be a sibling rather than a
@@ -201,7 +201,7 @@
   border: 0;
   background: none;
   justify-content: center;
-  padding: 24px;
+  padding: var(--s-5);
 }
 
 .outfit-card-processing {
@@ -230,7 +230,7 @@
 .outfit-style-summary {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--s-2);
   margin: 0 0 18px;
   padding-bottom: 18px;
   border-bottom: 1px solid var(--line);
@@ -239,7 +239,7 @@
 /* Same look as the picker's .piece-picker__notice, which repeats it on Edit. */
 .outfit-outdated {
   margin: 0 0 18px;
-  padding: 9px 12px;
+  padding: 9px var(--s-3);
   border: 1px solid color-mix(in srgb, var(--accent-warm) 35%, var(--line));
   border-radius: var(--r-sm);
   background: color-mix(in srgb, var(--accent-warm) 7%, var(--paper-raised));
@@ -264,7 +264,7 @@
 
 .outfit-style-tag {
   border-radius: var(--r-full);
-  padding: 4px 10px;
+  padding: var(--s-1) 10px;
   background: var(--wash-1);
   color: var(--muted);
   font-size: var(--text-eyebrow);
@@ -290,7 +290,7 @@
   z-index: 2;
   display: flex;
   justify-content: center;
-  padding: 64px 18px 18px;
+  padding: var(--s-8) 18px 18px;
   background: linear-gradient(to top, color-mix(in srgb, var(--paper-warm) 94%, transparent) 28%, transparent);
   pointer-events: none;
 }
@@ -400,7 +400,7 @@
 }
 
 .outfit-stack.compact {
-  gap: 4px;
+  gap: var(--s-1);
   padding: 0;
   border: 0;
   background: none;
@@ -430,7 +430,7 @@
   background: var(--surface-stage);
   box-shadow: var(--glass-edge), var(--shadow-sm);
   overflow: hidden;
-  margin-bottom: 24px;
+  margin-bottom: var(--s-5);
   padding: 0;
 }
 
@@ -443,7 +443,7 @@
 /* Holds the flat-lay and the photo action on it. The flat-lay clips its pieces
    to its rounded square; this wrapper does not, so the quality menu can open
    upward past that clip. */
-.outfit-viewer-stage { position: relative; margin-bottom: 24px; }
+.outfit-viewer-stage { position: relative; margin-bottom: var(--s-5); }
 .outfit-viewer-stage .viewer-art.outfit-viewer-art { margin-bottom: 0; }
 
 /* A band along the bottom for the action, the way the item stage keeps one —
@@ -455,7 +455,7 @@
   border: 0;
   background: none;
   justify-content: center;
-  padding: 24px;
+  padding: var(--s-5);
   box-shadow: none;
 }
 
@@ -468,7 +468,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
   gap: 10px;
-  margin: 4px 0 22px;
+  margin: var(--s-1) 0 22px;
 }
 
 .outfit-viewer-piece-tile {
@@ -477,7 +477,7 @@
   place-items: center;
   border: 1px solid var(--line);
   border-radius: var(--r-md);
-  padding: 8px;
+  padding: var(--s-2);
   /* Was --paper-raised on a --paper-warm panel: four points apart, which is not
      a card sitting on a panel, it is a panel with faint rectangles drawn on it.
      Stacking a near-white surface on a near-white one is the specific thing the
@@ -509,7 +509,7 @@
   align-items: center;
   gap: 14px;
   margin: 0 0 20px;
-  padding: 12px 14px 12px 16px;
+  padding: var(--s-3) 14px var(--s-3) var(--s-4);
   border: 1px solid var(--glass-border);
   border-radius: var(--r-lg);
   background: var(--glass-card);
@@ -559,7 +559,7 @@
 @media (max-width: 640px) {
   .outfits-grid {
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 18px 16px;
+    gap: 18px var(--s-4);
   }
 }
 

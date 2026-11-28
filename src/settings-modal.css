@@ -12,7 +12,7 @@
 
 .settings-tabs {
   display: flex;
-  gap: 4px;
+  gap: var(--s-1);
   margin-top: 10px;
   border-bottom: 1px solid var(--line);
 }
@@ -48,9 +48,9 @@
 .settings-tab .setup-trigger__badge { position: static; }
 
 .settings-ai { display: grid; gap: 22px; }
-.settings-ai__photos { display: grid; gap: 4px; }
+.settings-ai__photos { display: grid; gap: var(--s-1); }
 
-.settings-archive-off h3 { margin: 0 0 8px; font-size: var(--text-section); font-weight: var(--weight-medium); line-height: var(--leading-heading); letter-spacing: var(--track-tight); }
+.settings-archive-off h3 { margin: 0 0 var(--s-2); font-size: var(--text-section); font-weight: var(--weight-medium); line-height: var(--leading-heading); letter-spacing: var(--track-tight); }
 .settings-archive-off p:last-child { margin: 0; color: var(--ink-soft); font-size: var(--text-body); line-height: var(--leading-body); }
 .settings-archive-off code { font-size: var(--text-caption); }
 

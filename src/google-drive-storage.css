@@ -1,9 +1,9 @@
-.drive-settings { display: grid; gap: 24px; padding-top: 12px; }
+.drive-settings { display: grid; gap: var(--s-5); padding-top: var(--s-3); }
 .drive-settings h3,
 .drive-settings h4,
 .drive-settings p { margin-top: 0; }
-.drive-settings h3 { margin-bottom: 8px; font-size: var(--text-section); line-height: var(--leading-heading); letter-spacing: var(--track-tight); font-weight: var(--weight-medium); }
-.drive-settings h4 { margin-bottom: 8px; font-size: var(--text-subsection); line-height: var(--leading-heading); letter-spacing: var(--track-tight); font-weight: var(--weight-medium); }
+.drive-settings h3 { margin-bottom: var(--s-2); font-size: var(--text-section); line-height: var(--leading-heading); letter-spacing: var(--track-tight); font-weight: var(--weight-medium); }
+.drive-settings h4 { margin-bottom: var(--s-2); font-size: var(--text-subsection); line-height: var(--leading-heading); letter-spacing: var(--track-tight); font-weight: var(--weight-medium); }
 .drive-settings__intro { display: grid; gap: 6px; }
 .drive-settings__intro > p,
 .drive-restore > div > p { margin-bottom: 0; color: var(--muted); font-size: var(--text-body); line-height: var(--leading-body); }
@@ -11,19 +11,19 @@
 .drive-backup,
 .drive-restore,
 .drive-preview,
-.drive-operation { display: grid; gap: 12px; padding-top: 19px; border-top: 1px solid var(--line); }
+.drive-operation { display: grid; gap: var(--s-3); padding-top: 19px; border-top: 1px solid var(--line); }
 .drive-hint { margin: 0; color: var(--muted); font-size: var(--text-body); line-height: var(--leading-caption); }
 .drive-alert { margin: 0; padding: 11px 13px; border: 1px solid color-mix(in srgb, var(--error) 30%, transparent); border-radius: var(--r-sm); background: color-mix(in srgb, var(--error) 7%, var(--paper-raised)); color: var(--error); font-size: var(--text-body); line-height: var(--leading-caption); }
 .drive-success { margin: 0; padding: 11px 13px; border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); border-radius: var(--r-sm); background: color-mix(in srgb, var(--accent) 6%, var(--paper-raised)); color: var(--ink); font-size: var(--text-body); line-height: var(--leading-caption); }
 /* What a running action is doing right now, or that it is slow and can be left. */
 .drive-working { margin: 0; color: var(--ink-soft); font-size: var(--text-body); line-height: var(--leading-caption); }
 .drive-account__title,
-.drive-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.drive-section-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
 .drive-account__title { justify-content: flex-start; gap: 10px; }
 .drive-account__title h4,
 .drive-section-heading h4 { margin-bottom: 0; }
-.drive-section-heading__actions { display: flex; align-items: center; gap: 8px; }
-.drive-account__card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 10px 16px; padding: 14px 10px 10px 15px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--paper-raised); }
+.drive-section-heading__actions { display: flex; align-items: center; gap: var(--s-2); }
+.drive-account__card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 10px var(--s-4); padding: 14px 10px 10px 15px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--paper-raised); }
 /* A .danger-button.button--sm: only placement is local. */
 .drive-account__card .drive-disconnect { margin-bottom: -8px; white-space: nowrap; }
 .drive-account__details { display: grid; gap: 10px; margin: 0; }
@@ -36,11 +36,11 @@
 .drive-settings .drive-retry { flex: none; white-space: nowrap; }
 .drive-settings .drive-retry[aria-busy="true"] { width: var(--btn-h-sm); padding: 0; }
 .drive-actions,
-.drive-preview__choices { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.drive-preview__choices { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); }
 /* Button height, disabled and busy states come from the shared buttons
    (components/buttons.css). */
 
-.drive-backup__state { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--text-body); font-weight: var(--weight-semibold); }
+.drive-backup__state { display: flex; align-items: center; gap: var(--s-2); margin: 0; font-size: var(--text-body); font-weight: var(--weight-semibold); }
 .drive-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--wash-3); }
 .drive-dot.is-on { background: var(--accent); }
 .drive-dot.is-busy { background: var(--accent); animation: drive-pulse 1.4s var(--ease-out) infinite; }
@@ -66,13 +66,13 @@
 .drive-preview { padding: 17px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--paper-raised); }
 .drive-preview h4 { margin-bottom: 0; }
 .drive-preview__counts { display: grid; gap: 6px; margin: 0; }
-.drive-preview__counts > div { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 8px; font-size: var(--text-body); }
+.drive-preview__counts > div { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: var(--s-2); font-size: var(--text-body); }
 .drive-preview__counts dt { color: var(--muted); }
 .drive-preview__counts dd { margin: 0; color: var(--ink); font-weight: var(--weight-medium); }
 .drive-preview__body { margin: 0; color: var(--ink-soft); font-size: var(--text-body); line-height: var(--leading-body); }
-.drive-preview__options { display: grid; gap: 8px; }
+.drive-preview__options { display: grid; gap: var(--s-2); }
 .drive-preview__options label {
-  display: flex; align-items: flex-start; gap: 10px; padding: 12px 13px;
+  display: flex; align-items: flex-start; gap: 10px; padding: var(--s-3) 13px;
   border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--paper); cursor: pointer;
 }
 .drive-preview__options label.is-picked { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
@@ -87,7 +87,7 @@
 .drive-operation { padding: 15px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--paper-raised); }
 .drive-operation > p { margin: 0; color: var(--ink-soft); font-size: var(--text-body); line-height: var(--leading-caption); }
 .drive-operation.is-error { border-color: color-mix(in srgb, var(--error) 45%, var(--line)); }
-.drive-settings__footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 5px; }
+.drive-settings__footer { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); padding-top: 5px; }
 .drive-settings__footer a { color: var(--ink); font-size: var(--text-body); text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .drive-spinner { flex: none; animation: drive-spinner 1s linear infinite; }
 @keyframes drive-spinner { to { transform: rotate(360deg); } }
