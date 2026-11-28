@@ -75,12 +75,16 @@ async function decodePreviewBands(bands, signal) {
 function SheetCard({ sheet, onOpen, onEdit, opening }) {
   return (
     <article className="cheat-card">
-      <button id={`cheat-sheet-card-${sheet.id}`} type="button" className="cheat-card__open" onClick={onOpen} aria-label={`View cheat sheet fullscreen: ${sheet.title || "Untitled"}`} aria-haspopup="dialog" aria-busy={opening || undefined}>
-        <span className="cheat-card__cover"><OptimizedImage src={sheet.aiThumbnailImage || sheet.thumbnailImage} alt="" loading="lazy" /></span>
-        <span className="cheat-card__title">{sheet.title}</span>
-        <span className="cheat-card__meta">{opening ? "Opening…" : <>{sheet.pieces?.length || 0} {(sheet.pieces?.length || 0) === 1 ? "piece" : "pieces"}{sheet.beautifyStatus === "processing" ? " · Beautifying…" : sheet.aiImage ? " · AI finish" : ""}</>}</span>
+      <button id={`cheat-sheet-card-${sheet.id}`} type="button" className="cheat-card__open card card--sheet" onClick={onOpen} aria-label={`View cheat sheet fullscreen: ${sheet.title || "Untitled"}`} aria-haspopup="dialog" aria-busy={opening || undefined}>
+        {/* The sheet is white paper laid on the stage, like a flat lay: the white
+            is the content, the card around it is the same stage as an outfit's. */}
+        <span className="card__art card__art--stage"><OptimizedImage src={sheet.aiThumbnailImage || sheet.thumbnailImage} alt="" loading="lazy" /></span>
+        <span className="card__caption">
+          <span className="card__name">{sheet.title}</span>
+          <span className="card__meta">{opening ? "Opening…" : <>{sheet.pieces?.length || 0} {(sheet.pieces?.length || 0) === 1 ? "piece" : "pieces"}{sheet.beautifyStatus === "processing" ? " · Beautifying…" : sheet.aiImage ? " · AI finish" : ""}</>}</span>
+        </span>
       </button>
-      <button type="button" className="icon-button button--on-media cheat-card__edit" onClick={onEdit} aria-label={`Edit cheat sheet: ${sheet.title || "Untitled"}`} aria-haspopup="dialog" title={`Edit ${sheet.title || "cheat sheet"}`}>
+      <button type="button" className="icon-button button--on-media card__corner cheat-card__edit" onClick={onEdit} aria-label={`Edit cheat sheet: ${sheet.title || "Untitled"}`} aria-haspopup="dialog" title={`Edit ${sheet.title || "cheat sheet"}`}>
         <PencilSimple size={19} weight="regular" aria-hidden="true" />
       </button>
     </article>

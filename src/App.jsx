@@ -327,9 +327,8 @@ export function App() {
       return {
         id: "colors",
         icon: <Palette size={15} weight="regular" />,
-        eyebrow: "My colours",
-        title: "Find your colours",
-        body: "Match every suggestion to your skin tone.",
+        title: "My colours",
+        body: "Find your colours. Match every suggestion to your skin tone.",
         onOpen: () => setShowColorQuiz(true),
       };
     }
@@ -338,8 +337,8 @@ export function App() {
       id: "colors",
       icon: <Palette size={15} weight="regular" />,
       accent: season.accent,
-      eyebrow: "My colours",
-      title: season.label,
+      title: "My colours",
+      body: season.label,
       swatches: colorProfile.palette?.length ? colorProfile.palette : season.palette,
       onOpen: () => setShowColorQuiz(true),
     };
@@ -358,18 +357,16 @@ export function App() {
         return retired ? {
           id: "declutter",
           icon: <Broom size={15} weight="regular" />,
-          eyebrow: "Declutter",
-          title: `${retired} ${retired === 1 ? "piece" : "pieces"} set aside`,
-          body: "Nothing else is going unworn right now.",
+          title: "Declutter",
+          body: `${retired} ${retired === 1 ? "piece" : "pieces"} set aside. Nothing else is going unworn right now.`,
           onOpen: () => setShowDeclutter(true),
         } : null;
       }
       return {
         id: "declutter",
         icon: <Broom size={15} weight="regular" />,
-        eyebrow: "Declutter",
-        title: `${wear.candidates.length} ${wear.candidates.length === 1 ? "piece you haven't" : "pieces you haven't"} worn`,
-        body: "Decide what to keep, sell, or give away.",
+        title: "Declutter",
+        body: `${wear.candidates.length} ${wear.candidates.length === 1 ? "piece you haven't" : "pieces you haven't"} worn. Decide what to keep, sell, or give away.`,
         onOpen: () => setShowDeclutter(true),
       };
     }
@@ -381,9 +378,8 @@ export function App() {
     return {
       id: "declutter",
       icon: <Broom size={15} weight="regular" />,
-      eyebrow: "Declutter",
-      title: "Learning what you actually wear",
-      body: "Log what you wear and I can tell you what's worth letting go.",
+      title: "Declutter",
+      body: "Learning what you actually wear. Log what you wear and I can tell you what's worth letting go.",
       progress: { value: wear.loggedDays, total: wear.daysNeeded },
       onOpen: () => setShowDeclutter(true),
     };

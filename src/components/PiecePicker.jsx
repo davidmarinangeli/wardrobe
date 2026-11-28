@@ -303,19 +303,21 @@ export function PiecePicker({
                     <div key={item.id} className={`piece-picker__card${isSelected ? " is-selected" : ""}${blocked ? " is-blocked" : ""}`}>
                       <button
                         type="button"
-                        className="piece-picker__card-button"
+                        className="card card--tile"
+                        data-part={item.part}
                         aria-pressed={isSelected}
                         aria-disabled={blocked || undefined}
                         title={blocked ? `${item.name} — ${reason}` : item.name}
                         onClick={() => !blocked && toggle(item)}
                       >
-                        <span className="piece-picker__art" data-part={item.part}>
+                        <span className="card__art">
                           <OptimizedImage src={variantImage(item, variantId)} alt="" sizes="(max-width: 860px) 33vw, 160px" />
-                          <span className="piece-picker__check" aria-hidden="true"><Check size={13} weight="bold" /></span>
+                          <span className="card__check" aria-hidden="true"><Check size={13} weight="bold" /></span>
                         </span>
-                        <span className="piece-picker__label">
-                          <span className="piece-picker__name">{item.name || "Untitled piece"}</span>
-                          <span className="piece-picker__type">{CATEGORY_LABEL[item.part] || "Other"}</span>
+                        {/* Singular, like every other card's meta ("Top", not "Tops"). */}
+                        <span className="card__caption">
+                          <span className="card__name">{item.name || "Untitled piece"}</span>
+                          <span className="card__meta">{WARDROBE_TYPES.find((type) => type.id === item.part)?.singular || "Other"}</span>
                         </span>
                       </button>
                       {/* Outside the card button: nested buttons are invalid. */}

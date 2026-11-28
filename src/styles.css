@@ -895,40 +895,78 @@ button { font: inherit; }
   background: var(--wash-3);
 }
 
+/* == S2 cards and grids ==================================================
+   One card, five declared variants. Every object in a grid (a garment, an
+   outfit, a cheat sheet, a picker tile) is the same three parts:
+
+     .card            the interactive root: a reset button, never a surface
+     .card__art       the picture box. Glass for cut-outs; --surface-stage
+                      (.card__art--stage) for photos and flat lays, the one
+                      surface that goes darker so a white cut-out still reads
+     .card__caption   name, then one meta line, OUTSIDE below the art, at a
+                      fixed height so a row of cards keeps one caption line
+
+   and three marks that only ever sit INSIDE the art, so nothing moves the
+   caption: .card__check (top left, selection), .card__corner (top right,
+   status and actions: "Wore it", Retry, Edit), .card__dots (bottom, the
+   ways-to-wear-it peek).
+
+   Variants: .card--garment (Wardrobe, Inspo, Overview › Pieces),
+   .card--outfit, .card--sheet, .card--tile (piece picker) and the hot card,
+   which has no art and takes the art's surface itself (hot-cards.css).
+
+   The caption has one rule everywhere: name in --text-body 500, meta in
+   --text-caption, sentence case, singular category. Colour comes from the
+   garment, never from the caption, except the warm "in N looks" count. */
+
 .gallery-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-  gap: 30px var(--s-5);
+  gap: var(--s-6) var(--s-5);
   /* Pad so the CARD edge lands on the page gutter, not the button box. */
   padding: 40px var(--page-x) 96px;
 }
 
-/* ─── Gallery item ─────────────────────────────────────────────────────────
-   The card is what makes a white cutout visible: a bounded, tinted surface
-   with a lit top edge, plus a contact shadow on the garment so it sits ON
-   something rather than floating in the page. */
-.gallery-item {
+/* Component stylesheets load BEFORE this file (App.jsx is imported ahead of
+   styles.css in main.jsx), so per-variant values are declared here rather
+   than in outfits.css or cheat-sheets.css, where this block would win. */
+.card {
+  /* Exactly one name line plus one meta line: the caption never grows, so a
+     long name truncates instead of pushing its row out of line. */
+  --card-caption-h: calc(var(--text-body) * var(--leading-heading) + 2px + var(--text-caption) * var(--leading-caption));
   position: relative;
   appearance: none;
-  width: 100%;
   display: flex;
   flex-direction: column;
   gap: var(--s-3);
+  width: 100%;
+  min-width: 0;
   border: 0;
   padding: 0;
   background: transparent;
   color: inherit;
+  font: inherit;
   text-align: left;
   cursor: zoom-in;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.gallery-item__art {
+/* One proportion per kind and per breakpoint: Wardrobe, Overview › Pieces and
+   the picker share the garment shape; outfits and sheets are 3:4 pages. */
+.card--garment,
+.card--tile { --card-ratio: .84; }
+.card--outfit,
+.card--sheet { --card-ratio: 3 / 4; }
+
+/* The card is what makes a white cutout visible: a bounded, tinted surface
+   with a lit top edge, plus a contact shadow on the garment so it sits ON
+   something rather than floating in the page. */
+.card__art {
   position: relative;
   width: 100%;
-  aspect-ratio: .84;
+  aspect-ratio: var(--card-ratio, .84);
   display: grid;
   place-items: center;
-  padding: var(--item-pad);
   border: 1px solid var(--glass-border);
   border-radius: var(--r-lg);
   background: var(--glass-card);
@@ -941,10 +979,135 @@ button { font: inherit; }
     border-color var(--dur-pop) var(--ease-out);
 }
 
+.card__art--stage {
+  border-color: var(--line);
+  background: var(--surface-stage);
+}
+
+.card__caption {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  height: var(--card-caption-h);
+  min-width: 0;
+  padding: 0 2px;
+}
+
+.card__name,
+.card__meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card__name {
+  color: var(--ink-soft);
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--track-body);
+  line-height: var(--leading-heading);
+}
+
+.card__meta {
+  color: var(--muted);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-regular);
+  line-height: var(--leading-caption);
+}
+
+/* "in 3 looks": the count rides the meta line instead of becoming the grid's
+   first badge. Warm ink rather than muted so it is scannable down a column of
+   cards without adding a mark on the cutout. */
+.card__meta-accent { color: var(--accent-warm); }
+
+.card__check {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  /* --muted, not a wash: the ring is the control's only boundary, so it needs
+     3:1 against the card (WCAG 1.4.11) at rest, not just once it is ticked. */
+  border: 1px solid var(--muted);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--paper-raised) 94%, transparent);
+  box-shadow: var(--shadow-xs);
+  color: transparent;
+  transition:
+    background var(--dur-pop) var(--ease-out),
+    color var(--dur-pop) var(--ease-out),
+    border-color var(--dur-pop) var(--ease-out);
+}
+
+.card__art > .card__check {
+  position: absolute;
+  z-index: 2;
+  top: var(--s-2);
+  left: var(--s-2);
+}
+
+.is-selected .card__check {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--paper-raised);
+}
+
+/* Positioned against the card's wrapper (the wear button and the edit button
+   are siblings of the card button, since buttons cannot nest), which starts
+   where the art starts, so top/right land inside the art either way. */
+.card__corner {
+  position: absolute;
+  z-index: 2;
+  top: var(--s-2);
+  right: var(--s-2);
+}
+
+.card__dots {
+  position: absolute;
+  z-index: 1;
+  right: 0;
+  bottom: var(--s-2);
+  left: 0;
+  display: flex;
+  justify-content: center;
+  gap: var(--s-1);
+  pointer-events: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .card:hover .card__art {
+    transform: translateY(-3px);
+    box-shadow: var(--glass-edge), var(--shadow-md);
+  }
+
+  .card:hover .card__art:not(.card__art--stage) {
+    background: var(--glass-card-hover);
+    border-color: var(--glass-border-hover);
+  }
+}
+
+.card:focus-visible { outline: none; }
+
+.card:focus-visible .card__art {
+  outline: 2px solid var(--accent-warm);
+  outline-offset: 3px;
+}
+
+.card:active .card__art { transform: scale(.97); }
+
+/* Selected (open in the viewer, ticked in Overview, picked in the picker):
+   one warm hairline ring, the same everywhere. */
+.card.is-selected .card__art,
+.is-selected > .card .card__art {
+  border-color: var(--accent-warm);
+  box-shadow: var(--glass-edge), 0 0 0 1px var(--accent-warm), var(--shadow-md);
+}
+
+/* ── Garment variant ─────────────────────────────────────────────────────── */
+.card--garment .card__art { padding: var(--item-pad); }
 
 /* A faint warm pool inside the card, so pure white still has something to
    read against near the centre where garments sit. */
-.gallery-item__art::before {
+.card--garment .card__art::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -961,7 +1124,7 @@ button { font: inherit; }
   place-items: center;
 }
 
-.gallery-item img.gallery-item__variant-image {
+.card--garment img.gallery-item__variant-image {
   grid-area: 1 / 1;
 }
 
@@ -970,11 +1133,11 @@ button { font: inherit; }
    contain. The contact-shadow filter that sells a cutout as "sitting on" the
    card would just draw an ugly rectangle around a photo that already fills
    the frame, so it's dropped too. */
-.gallery-item__art--photo { padding: 0; }
-.gallery-item__art--photo::before { display: none; }
-.gallery-item__art--photo img { object-fit: cover; filter: none; }
+.card--garment .card__art--photo { padding: 0; }
+.card--garment .card__art--photo::before { display: none; }
+.card--garment .card__art--photo img { object-fit: cover; filter: none; }
 
-.gallery-item img {
+.card--garment img {
   position: relative;
   width: 100%;
   height: 100%;
@@ -987,73 +1150,19 @@ button { font: inherit; }
   -webkit-user-drag: none;
 }
 
-.gallery-item img[data-loaded]:not(.gallery-item__variant-image),
-.gallery-item img.gallery-item__variant-image.is-active[data-loaded] { opacity: 1; }
+.card--garment img[data-loaded]:not(.gallery-item__variant-image),
+.card--garment img.gallery-item__variant-image.is-active[data-loaded] { opacity: 1; }
 
 /* Optical size normalisation — object-fit: contain would otherwise render a
-   sock at the same footprint as a coat. Caps are relative to the card. */
-.gallery-item[data-part="shoes"] img,
-.gallery-item[data-part="socks"] img { max-height: 62%; }
-.gallery-item[data-part="accessories_up"] img { max-height: 68%; }
-.gallery-item[data-part="lowerbody"] img { max-height: 94%; }
-
-.gallery-item__label {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 0 2px;
-  min-width: 0;
-}
-
-.gallery-item__name {
-  overflow: hidden;
-  color: var(--ink-soft);
-  font-size: var(--text-body);
-  font-weight: var(--weight-medium);
-  letter-spacing: var(--track-body);
-  line-height: var(--leading-heading);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.gallery-item__type {
-  color: var(--muted);
-  font-size: var(--text-eyebrow);
-  font-weight: var(--weight-medium);
-  letter-spacing: var(--track-caps);
-  text-transform: uppercase;
-}
-
-/* "in 3 looks" — the count rides the type line instead of becoming the grid's
-   first badge. Warm ink rather than muted so it is scannable down a column of
-   cards without adding a mark on the cutout. */
-.gallery-item__outfits { color: var(--accent-warm); }
+   sock at the same footprint as a coat. Caps are relative to the card. The
+   picker tile carries the same data-part, so it gets the same caps. */
+.card[data-part="shoes"] .card__art img,
+.card[data-part="socks"] .card__art img { max-height: 62%; }
+.card[data-part="accessories_up"] .card__art img { max-height: 68%; }
+.card--garment[data-part="lowerbody"] img { max-height: 94%; }
 
 @media (hover: hover) and (pointer: fine) {
-  .gallery-item:hover .gallery-item__art {
-    transform: translateY(-3px);
-    background: var(--glass-card-hover);
-    border-color: var(--glass-border-hover);
-    box-shadow: var(--glass-edge), var(--shadow-md);
-  }
-
-  .gallery-item:hover img { transform: scale(1.04); }
-}
-
-.gallery-item:focus-visible { outline: none; }
-
-.gallery-item:focus-visible .gallery-item__art {
-  transform: translateY(-3px);
-  box-shadow: var(--glass-edge), var(--shadow-md);
-  outline: 2px solid var(--accent-warm);
-  outline-offset: 3px;
-}
-
-.gallery-item:active .gallery-item__art { transform: scale(.97); }
-
-.gallery-item.selected .gallery-item__art {
-  border-color: var(--accent-warm);
-  box-shadow: var(--glass-edge), 0 0 0 1px var(--accent-warm), var(--shadow-md);
+  .card--garment:hover img { transform: scale(1.04); }
 }
 
 /* Staggered entry. Decorative only — never blocks interaction, and capped so
@@ -1062,10 +1171,52 @@ button { font: inherit; }
   from { opacity: 0; transform: translateY(10px); }
 }
 
-.gallery-item {
+.card--garment {
   animation: item-in 380ms var(--ease-out) both;
   animation-delay: calc(var(--stagger-index, 0) * 40ms);
 }
+
+/* Two columns on a phone: a long name ("Double-Breasted Camel Coat") may take
+   a second line instead of an ellipsis, so the caption reserves two. */
+@media (max-width: 520px) {
+  .card--garment,
+  .card--tile { --card-ratio: .8; }
+
+  .card {
+    --card-caption-h: calc(2 * var(--text-body) * var(--leading-heading) + 2px + var(--text-caption) * var(--leading-caption));
+  }
+
+  .card__name {
+    display: -webkit-box;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card--garment { animation: none; opacity: 1; }
+  .card__art,
+  .card--garment img { transition-property: opacity, background, border-color, box-shadow; }
+  .card:hover .card__art,
+  .card:focus-visible .card__art,
+  .card:active .card__art,
+  .card--garment:hover img { transform: none; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .card__art:not(.card__art--stage) { background: var(--paper-raised); }
+}
+
+/* High contrast: solid surfaces with a defined edge. A stage keeps its ground
+   and only sharpens its edge: raising it to --paper-raised would flatten a
+   white garment into a white card. */
+@media (prefers-contrast: more) {
+  .card__art { border-color: var(--muted); }
+  .card__art:not(.card__art--stage) { background: var(--paper-raised); }
+  .card__meta { color: var(--ink-soft); }
+}
+/* == /S2 cards and grids == */
 
 .status {
   margin: 70px var(--page-x);
@@ -3353,22 +3504,16 @@ button.variant-strip__tile:active .variant-strip__art { transform: scale(.96); }
    either scrolls the grid or does nothing, depending on the browser. Only
    applied to cards that actually have something to peek at, so a single-variant
    card keeps the browser's default touch behaviour. */
-.gallery-item__art[data-peekable] { touch-action: pan-y; }
+.card__art[data-peekable] { touch-action: pan-y; }
 
-/* Same vocabulary as .onboarding-dots — short bars, --line at rest, --ink when
-   current — at the smaller scale a card can carry. */
-.gallery-item__peek-dots {
-  display: flex;
-  gap: var(--s-1);
-  justify-content: center;
-  padding: 7px 0 1px;
-}
-
+/* Same vocabulary as .onboarding-dots — short bars, a wash at rest, ink when
+   current — at the smaller scale a card can carry. .card__dots places them
+   inside the art, so a card with variants keeps its caption in line. */
 .gallery-item__peek-dot {
   width: 14px;
   height: 3px;
   border-radius: var(--r-xs);
-  background: var(--line);
+  background: var(--wash-3);
   transition: background var(--dur-pop) var(--ease-out);
 }
 

@@ -204,7 +204,7 @@ export const GalleryItem = memo(function GalleryItem({ item, index, selected, on
 
   return (
     <button
-      className={`gallery-item${selected ? " selected" : ""}`}
+      className={`card card--garment${selected ? " is-selected" : ""}`}
       type="button"
       onClick={(event) => {
         // The release of a swipe is not a tap. Without this, every peek on a
@@ -227,7 +227,7 @@ export const GalleryItem = memo(function GalleryItem({ item, index, selected, on
       data-testid={`wardrobe-item-${item.id}`}
     >
       <span
-        className="gallery-item__art"
+        className="card__art"
         // Only the art takes the gesture. The label below stays an ordinary tap
         // target, and `touch-action: pan-y` in CSS keeps the page scrollable
         // vertically through the card.
@@ -251,21 +251,22 @@ export const GalleryItem = memo(function GalleryItem({ item, index, selected, on
             />
           ))}
         </span>
+        {/* The dots are what make the gesture discoverable, and they carry the
+            count the meta line used to spell out in words. Inside the art, so
+            they never push this card's caption below its neighbours'. */}
+        {canPeek && (
+          <span className="card__dots" aria-hidden="true">
+            {variantPhotos.map((photo, photoIndex) => (
+              <span key={photo.variantId} className={`gallery-item__peek-dot${photoIndex === activePhotoIndex ? " is-active" : ""}`} />
+            ))}
+          </span>
+        )}
       </span>
-      {/* The dots are what make the gesture discoverable, and they carry the
-          count the type line used to spell out in words. */}
-      {canPeek && (
-        <span className="gallery-item__peek-dots" aria-hidden="true">
-          {variantPhotos.map((photo, photoIndex) => (
-            <span key={photo.variantId} className={`gallery-item__peek-dot${photoIndex === activePhotoIndex ? " is-active" : ""}`} />
-          ))}
-        </span>
-      )}
-      <span className="gallery-item__label">
-        <span className="gallery-item__name">{item.name || type}</span>
-        <span className="gallery-item__type">
+      <span className="card__caption">
+        <span className="card__name">{item.name || type}</span>
+        <span className="card__meta">
           {type}
-          {outfitLabel && <span className="gallery-item__outfits"> · {outfitLabel}</span>}
+          {outfitLabel && <span className="card__meta-accent"> · {outfitLabel}</span>}
         </span>
       </span>
     </button>

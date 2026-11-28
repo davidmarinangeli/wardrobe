@@ -197,25 +197,27 @@ function InspoImporter({ onClose, onImported }) {
 }
 
 // ─── PinCard ──────────────────────────────────────────────────────────────────
-// Styled identically to GalleryItem (title outside the card, no inline
+// The same .card--garment as GalleryItem (caption outside the card, no inline
 // actions) so a pin and a wardrobe/wishlist piece read as the same family in
-// one mixed grid — the only difference is a cover-fit photo instead of a
-// contain-fit cutout. Detect/re-detect and editing live in PinViewer now,
-// not as buttons sitting in the grid.
+// one mixed grid — the only difference is a cover-fit photo on the stage
+// instead of a contain-fit cutout on glass. Detect/re-detect and editing live
+// in PinViewer, not as buttons sitting in the grid. The category is singular,
+// like every other card's ("Jacket", not "Jackets").
 function PinCard({ pin, index, wishlistCount, onOpen }) {
-  const categoryLabel = pin.category ? (CATEGORY_LABEL[pin.category] || pin.category) : "Unclassified";
+  const singular = BASE_GARMENT_CATEGORIES.find((category) => category.id === pin.category)?.singular;
+  const categoryLabel = pin.category ? (singular || CATEGORY_LABEL[pin.category] || pin.category) : "Unclassified";
   const isProcessing = pin.detectStatus === "processing";
 
   return (
     <button
-      className="gallery-item"
+      className="card card--garment"
       type="button"
       onClick={(event) => onOpen(pin.id, event.currentTarget)}
       aria-label={`View ${pin.name || "inspo pin"}`}
       style={{ "--stagger-index": Math.min(index, 11) }}
       data-testid={`inspo-pin-${pin.id}`}
     >
-      <span className="gallery-item__art gallery-item__art--photo">
+      <span className="card__art card__art--stage card__art--photo">
         <OptimizedImage
           src={pin.image}
           alt=""
@@ -223,9 +225,9 @@ function PinCard({ pin, index, wishlistCount, onOpen }) {
           breakpoints={[220, 320, 440]}
         />
       </span>
-      <span className="gallery-item__label">
-        <span className="gallery-item__name">{pin.name || (pin.category ? "Unnamed" : "Tap to identify")}</span>
-        <span className="gallery-item__type">
+      <span className="card__caption">
+        <span className="card__name">{pin.name || (pin.category ? "Unnamed" : "Tap to identify")}</span>
+        <span className="card__meta">
           {isProcessing ? "Detecting…" : categoryLabel}
           {!!wishlistCount && !isProcessing && ` · ${wishlistCount} saved`}
         </span>

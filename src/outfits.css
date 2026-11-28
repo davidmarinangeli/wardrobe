@@ -1,7 +1,9 @@
+/* == S2 outfit cards: .card.card--outfit with a --surface-stage art box and the
+   shared caption under it (styles.css, S2 block). == */
 .outfits-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 30px 34px;
+  gap: var(--s-6) var(--s-5);
   padding: var(--s-2) 0 40px;
 }
 
@@ -11,17 +13,14 @@
   position: relative;
 }
 
-/* Sits over the art, not the name, and stays out of the way until the card is
-   hovered — on a grid of outfits a permanently visible row of buttons competes
-   with the clothes, which are the reason anyone is looking at this page.
-   Touch has no hover, so there it is simply always visible (see below). */
-/* A .secondary-button.button--sm.button--on-media; local: placement, type and
-   the hover reveal. */
+/* Sits in the card's corner slot (.card__corner) over the art, and stays out
+   of the way until the card is hovered — on a grid of outfits a permanently
+   visible row of buttons competes with the clothes, which are the reason
+   anyone is looking at this page. Touch has no hover, so there it is simply
+   always visible (see below). */
+/* A .secondary-button.button--sm.button--on-media; local: type and the hover
+   reveal. */
 .outfit-worn-btn {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 2;
   --btn-fg: var(--ink);
   font: inherit;
   font-size: var(--text-body);
@@ -57,47 +56,11 @@
   .outfit-worn-btn { transition: none; }
 }
 
-.outfit-card {
-  display: block;
-  width: 100%;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  cursor: zoom-in;
-}
-
-.outfit-card:focus-visible { outline: none; }
-
-.outfit-card:focus-visible .outfit-card-art {
-  outline: 1px solid var(--ink);
-  outline-offset: 3px;
-}
-
-/* The card carries a warm placeholder from first paint, so it never reads as
-   an empty box while a large modeled photo streams in. */
-.outfit-card-art {
-  position: relative;
-  aspect-ratio: 3 / 4;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  background: var(--surface-stage);
-  box-shadow: var(--glass-edge), var(--shadow-sm);
-  transition:
-    transform var(--dur-panel) var(--ease-out),
-    box-shadow var(--dur-panel) var(--ease-out);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .outfit-card:hover .outfit-card-art {
-    transform: translateY(-3px);
-    box-shadow: var(--glass-edge), var(--shadow-md);
-  }
-}
-
-.outfit-card:active .outfit-card-art { transform: scale(.98); }
+/* The art box (.card__art--stage) carries a warm placeholder from first paint,
+   so it never reads as an empty box while a large modeled photo streams in.
+   Shape, border, shadow, hover lift, focus ring and press all come from .card:
+   the outfit card used to have its own (a 1px ink focus outline, a .98 press). */
+.card--outfit .card__art { display: block; }
 
 .outfit-card-hero,
 .outfit-card-hero img {
@@ -271,96 +234,6 @@
   font-weight: var(--weight-medium);
   letter-spacing: var(--track-caps);
   text-transform: uppercase;
-}
-
-/* The outfit's name, set on the card like a lookbook caption: centred in the
-   lower third over a fade to paper — the same floor the modeled hero stands on
-   in the viewer. Not in the vertical middle: that is where the scattered pieces
-   meet (tops fill the upper half, bottoms rise from below), so a title there
-   would sit on the clothes the hover exists to show.
-
-   Where the pointer can hover it waits for the hover: the floor fades in with
-   the photo's fade, and the name rises onto it a beat later. On touch there is
-   no hover, so it is simply there. */
-.outfit-card-caption {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 2;
-  display: flex;
-  justify-content: center;
-  padding: var(--s-8) 18px 18px;
-  background: linear-gradient(to top, color-mix(in srgb, var(--paper-warm) 94%, transparent) 28%, transparent);
-  pointer-events: none;
-}
-
-.outfit-card-name {
-  display: -webkit-box;
-  overflow: hidden;
-  max-width: 100%;
-  color: var(--ink);
-  font-size: var(--text-subsection);
-  font-weight: var(--weight-medium);
-  line-height: var(--leading-heading);
-  letter-spacing: var(--track-tight);
-  text-align: center;
-  text-wrap: balance;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-/* Above the "Generating model photo…" band along the bottom. */
-.outfit-card-art.is-processing .outfit-card-caption { bottom: 36px; }
-
-/* Two cards across a phone: the same caption (card titles are --text-subsection
-   everywhere), with tighter padding so the column can carry it. */
-@media (max-width: 520px) {
-  .outfit-card-caption { padding: 44px 10px 11px; }
-}
-
-@media (hover: hover) and (pointer: fine) {
-  /* Rest, and the way out: no delay and quicker than the way in, so leaving a
-     card never leaves its name trailing behind the pointer. */
-  .outfit-card-caption {
-    opacity: 0;
-    transition: opacity var(--dur-press) var(--ease-out);
-  }
-
-  .outfit-card-name {
-    opacity: 0;
-    transform: translateY(40%);
-    transition:
-      opacity var(--dur-press) var(--ease-out),
-      transform var(--dur-press) var(--ease-out);
-  }
-
-  .outfit-card:hover .outfit-card-caption,
-  .outfit-card:focus-visible .outfit-card-caption {
-    opacity: 1;
-    transition-duration: var(--dur-panel);
-  }
-
-  /* 40% of its own height: a two-line title travels further than a one-line
-     one, so both read as the same rise. */
-  .outfit-card:hover .outfit-card-name,
-  .outfit-card:focus-visible .outfit-card-name {
-    opacity: 1;
-    transform: none;
-    transition-duration: var(--dur-panel);
-    transition-delay: 30ms;
-  }
-}
-
-/* Fewer and gentler: it fades in with the hover, nothing rises. */
-@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: reduce) {
-  .outfit-card-name,
-  .outfit-card:hover .outfit-card-name,
-  .outfit-card:focus-visible .outfit-card-name {
-    transform: none;
-    transition-property: opacity;
-    transition-delay: 0ms;
-  }
 }
 
 /* Standalone stage — the suggestion deck and the piece picker's outfit

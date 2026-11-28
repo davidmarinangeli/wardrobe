@@ -1,6 +1,9 @@
 /* A strip of doors between a page header and its grid.
-   Same material as .nudge-banner — glass card, warm border, lit top edge — so
-   the two never read as two different kinds of object stacked on one page. */
+   Same material as a garment card's art (.card__art in styles.css: glass card,
+   glass border, lit top edge, --r-lg, the same lift and focus ring) and as
+   .nudge-banner, so none of them reads as a different kind of object on one
+   page. The text is the card caption's grammar: the feature's name, then what
+   it has to say, with no kicker above the title (S2). */
 
 .hot-cards {
   /* Clear of the category pills above and hard against the grid below, which
@@ -61,18 +64,22 @@
     transform var(--dur-press) var(--ease-out);
 }
 
-.hot-card:hover {
-  transform: translateY(-1px);
-  border-color: var(--glass-border-hover);
-  background: var(--glass-card-hover);
-  box-shadow: var(--glass-edge), var(--shadow-md);
+@media (hover: hover) and (pointer: fine) {
+  .hot-card:hover {
+    transform: translateY(-3px);
+    border-color: var(--glass-border-hover);
+    background: var(--glass-card-hover);
+    box-shadow: var(--glass-edge), var(--shadow-md);
+  }
 }
 
-.hot-card:active { transform: translateY(0); }
+.hot-card:active { transform: scale(.97); }
 
+/* The card focus ring, not the season's colour: focus looks the same on
+   every card whatever it is wearing. */
 .hot-card:focus-visible {
-  outline: 2px solid var(--hot-card-accent);
-  outline-offset: 2px;
+  outline: 2px solid var(--accent-warm);
+  outline-offset: 3px;
 }
 
 /* The card's one piece of colour, in the same accent-on-wash treatment the
@@ -92,29 +99,24 @@
   grid-area: body;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   min-inline-size: 0;
-}
-
-.hot-card__eyebrow {
-  color: var(--hot-card-accent);
-  font-size: var(--text-eyebrow);
-  font-weight: var(--weight-medium);
-  letter-spacing: var(--track-caps);
-  text-transform: uppercase;
+  /* The title centres on the 30px icon. */
+  padding-block-start: calc((30px - var(--text-body) * var(--leading-heading)) / 2);
 }
 
 .hot-card__title {
-  font-size: var(--text-subsection);
+  color: var(--ink-soft);
+  font-size: var(--text-body);
   font-weight: var(--weight-medium);
-  letter-spacing: var(--track-tight);
-  color: var(--ink);
+  letter-spacing: var(--track-body);
+  line-height: var(--leading-heading);
 }
 
 .hot-card__desc {
-  font-size: var(--text-body);
-  line-height: var(--leading-caption);
   color: var(--muted);
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
 }
 
 /* The palette itself, not a description of it: the season card's whole job is
@@ -129,7 +131,7 @@
   inline-size: 15px;
   block-size: 15px;
   border-radius: 50%;
-  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 8%);
+  box-shadow: inset 0 0 0 1px var(--wash-2);
 }
 
 .hot-card__progress {
@@ -170,16 +172,19 @@
   transition: color var(--dur-pop) var(--ease-out), transform var(--dur-pop) var(--ease-out);
 }
 
-.hot-card:hover .hot-card__go {
-  color: var(--hot-card-accent);
-  transform: translateY(-50%) translateX(2px);
+@media (hover: hover) and (pointer: fine) {
+  .hot-card:hover .hot-card__go {
+    color: var(--hot-card-accent);
+    transform: translateY(-50%) translateX(2px);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .hot-card,
   .hot-card__fill,
   .hot-card__go { transition: none; }
-  .hot-card:hover { transform: none; }
+  .hot-card:hover,
+  .hot-card:active { transform: none; }
 }
 
 /* The card is chrome-adjacent on a phone: it sits under the large title with

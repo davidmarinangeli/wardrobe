@@ -53,70 +53,34 @@
 .piece-picker__empty { display: grid; justify-items: center; gap: var(--s-3); padding: var(--s-8) var(--s-4); color: var(--muted); text-align: center; }
 .piece-picker__empty p { margin: 0; font-size: var(--text-body); }
 
-/* ─── Cards: aligned with .overview-card ─────────────────────────────────── */
+/* == S2 picker tiles: .card.card--tile (styles.css, S2 block) carries the
+   art, caption, round check, hover, focus and selection, so a tile here is the
+   same object as a card in Wardrobe or Overview › Pieces. Only what is
+   picker-specific stays: the toggle cursor, the blocked state and the
+   variant row under a picked piece. == */
 .piece-picker__card { display: grid; gap: var(--s-2); min-width: 0; }
-.piece-picker__card-button { display: grid; gap: var(--s-2); width: 100%; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-.piece-picker__art {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 100%;
-  aspect-ratio: .9;
-  padding: var(--item-pad);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--r-md);
-  background: var(--glass-card);
-  box-shadow: var(--glass-edge), var(--shadow-sm);
-  overflow: hidden;
-  transition:
-    transform var(--dur-panel) var(--ease-out),
-    box-shadow var(--dur-panel) var(--ease-out),
-    background var(--dur-panel) var(--ease-out),
-    border-color var(--dur-pop) var(--ease-out);
-}
-.piece-picker__art img { width: 100%; height: 100%; object-fit: contain; filter: var(--shadow-contact); -webkit-user-drag: none; }
-.piece-picker__art[data-part="shoes"] img,
-.piece-picker__art[data-part="socks"] img { max-height: 62%; }
-.piece-picker__art[data-part="accessories_up"] img { max-height: 68%; }
-.piece-picker__check {
-  position: absolute;
-  z-index: 2;
-  top: 9px;
-  left: 9px;
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  border: 1px solid rgba(46, 42, 38, .19);
-  border-radius: var(--r-full);
-  background: rgba(251, 247, 240, .95);
-  box-shadow: var(--shadow-xs);
-  color: transparent;
-  transition: background var(--dur-pop) var(--ease-out), color var(--dur-pop) var(--ease-out), border-color var(--dur-pop) var(--ease-out);
-}
-.piece-picker__card.is-selected .piece-picker__check { border-color: var(--accent); background: var(--accent); color: var(--paper-raised); }
-.piece-picker__card.is-selected .piece-picker__art { border-color: var(--accent-warm); box-shadow: var(--glass-edge), 0 0 0 1px var(--accent-warm), var(--shadow-sm); }
-.piece-picker__label { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 0 1px; }
-.piece-picker__name { overflow: hidden; color: var(--ink-soft); font-size: var(--text-body); font-weight: var(--weight-medium); line-height: var(--leading-heading); text-overflow: ellipsis; white-space: nowrap; }
-.piece-picker__type { color: var(--muted); font-size: var(--text-eyebrow); font-weight: var(--weight-medium); letter-spacing: var(--track-caps); text-transform: uppercase; }
-.piece-picker__card-button:focus-visible { outline: none; }
-.piece-picker__card-button:focus-visible .piece-picker__art { outline: 2px solid var(--accent-warm); outline-offset: 3px; }
-.piece-picker__card:not(.is-blocked) .piece-picker__card-button:active .piece-picker__art { transform: scale(.97); }
+.card--tile { cursor: pointer; }
+.card--tile .card__art { padding: var(--item-pad); }
+.card--tile .card__art img { width: 100%; height: 100%; object-fit: contain; filter: var(--shadow-contact); -webkit-user-drag: none; }
 
 /* Greyed rather than hidden: the piece is still in the wardrobe, it just can't
    join this selection. The title says why. */
-.piece-picker__card.is-blocked .piece-picker__card-button { cursor: not-allowed; }
-.piece-picker__card.is-blocked .piece-picker__art,
-.piece-picker__card.is-blocked .piece-picker__label { opacity: .32; filter: grayscale(1); }
+.piece-picker__card.is-blocked .card--tile { cursor: not-allowed; }
+.piece-picker__card.is-blocked .card__art,
+.piece-picker__card.is-blocked .card__caption { opacity: .32; filter: grayscale(1); }
+.piece-picker__card.is-blocked .card--tile:active .card__art { transform: none; }
 
 @media (hover: hover) and (pointer: fine) {
-  .piece-picker__card:not(.is-blocked) .piece-picker__card-button:hover .piece-picker__art {
-    transform: translateY(-3px);
-    background: var(--glass-card-hover);
-    border-color: var(--glass-border-hover);
-    box-shadow: var(--glass-edge), var(--shadow-md);
+  .piece-picker__card.is-blocked .card--tile:hover .card__art {
+    transform: none;
+    background: var(--glass-card);
+    border-color: var(--glass-border);
+    box-shadow: var(--glass-edge), var(--shadow-sm);
   }
-  .piece-picker__card.is-selected:not(.is-blocked) .piece-picker__card-button:hover .piece-picker__art { border-color: var(--accent-warm); }
+}
+/* == /S2 == */
+
+@media (hover: hover) and (pointer: fine) {
   .piece-picker__chip:not(.is-active):hover { border-color: var(--accent-warm); }
 }
 
@@ -150,13 +114,8 @@
 .piece-picker__variant-pending { color: var(--muted); font-size: var(--text-body); font-weight: var(--weight-medium); }
 
 @media (prefers-reduced-motion: reduce) {
-  .piece-picker__art,
   .piece-picker__variants button { transition: none; }
-  .piece-picker__card .piece-picker__card-button:active .piece-picker__art,
   .piece-picker__variants button:active { transform: none; }
-}
-@media (prefers-reduced-motion: reduce) and (hover: hover) and (pointer: fine) {
-  .piece-picker__card:not(.is-blocked) .piece-picker__card-button:hover .piece-picker__art { transform: none; }
 }
 
 /* ─── Phone: full-screen page with a bottom tray ─────────────────────────── */

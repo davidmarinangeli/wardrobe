@@ -11,7 +11,10 @@ import { ArrowRight, Sparkle } from "@phosphor-icons/react";
  *
  * Props
  * ─────
- * cards  array – [{ id, eyebrow, title, body, icon?, accent?, swatches?, progress?, onOpen }]
+ * cards  array – [{ id, title, body, icon?, accent?, swatches?, progress?, onOpen }]
+ *                `title` is the feature's name ("Declutter"), `body` what it has
+ *                to say right now: no kicker above the title, the same name +
+ *                meta grammar as every card in the grid.
  *                `accent` recolours the icon badge for a card with its own identity
  *                (the season card wears its season); the rest use the app accent.
  */
@@ -34,7 +37,6 @@ export function HotCards({ cards = [], label = "Suggestions" }) {
             </span>
 
             <span className="hot-card__body">
-            {card.eyebrow && <span className="hot-card__eyebrow">{card.eyebrow}</span>}
             <span className="hot-card__title">{card.title}</span>
             {card.body && <span className="hot-card__desc">{card.body}</span>}
 

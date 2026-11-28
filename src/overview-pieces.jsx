@@ -237,8 +237,8 @@ export function OverviewPieces({ items, loading = false, error = "", selectedIte
                   const indexForCard = cardIndex++;
                   const checked = selectedIds.has(item.id);
                   return (
-                    <article className={`overview-card${checked ? " is-checked" : ""}`} key={item.id}>
-                      <label className="overview-card__select">
+                    <article className={`overview-card${checked ? " is-selected" : ""}`} key={item.id}>
+                      <label className="overview-card__hit">
                         <input
                           type="checkbox"
                           checked={checked}
@@ -249,7 +249,7 @@ export function OverviewPieces({ items, loading = false, error = "", selectedIte
                             return next;
                           })}
                         />
-                        <span className="overview-card__check" aria-hidden="true"><Check size={13} weight="bold" /></span>
+                        <span className="card__check" aria-hidden="true"><Check size={13} weight="bold" /></span>
                       </label>
                       <GalleryItem
                         item={item}
