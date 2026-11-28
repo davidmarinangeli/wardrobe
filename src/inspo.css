@@ -13,7 +13,7 @@
   background: var(--paper-raised);
   color: var(--ink-soft);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--text-body);
   resize: vertical;
 }
 
@@ -44,9 +44,9 @@
   padding: 9px 12px;
   background: transparent;
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: .06em;
+  font-size: var(--text-eyebrow);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--track-caps);
   text-transform: uppercase;
   cursor: pointer;
   margin-bottom: -1px;
@@ -72,9 +72,9 @@
 
 .inspo-url-field label {
   color: var(--muted);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: .1em;
+  font-size: var(--text-eyebrow);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--track-caps);
   text-transform: uppercase;
 }
 
@@ -87,7 +87,7 @@
   background: var(--paper-raised);
   color: var(--ink-soft);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-body);
   resize: vertical;
 }
 
@@ -96,8 +96,8 @@
 .inspo-url-hint {
   margin: 0;
   color: var(--muted);
-  font-size: 10px;
-  line-height: 1.5;
+  font-size: var(--text-caption);
+  line-height: var(--leading-body);
 }
 
 /* Drop zone */
@@ -132,15 +132,15 @@
 
 .inspo-dropzone-label {
   color: var(--muted);
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
 }
 
 .inspo-dropzone-label strong {
   display: block;
   color: var(--ink-soft);
-  font-size: 13px;
-  font-weight: 500;
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
 }
 
 .inspo-drop-btn {
@@ -150,8 +150,8 @@
   padding: 6px 14px;
   background: var(--paper-raised);
   color: var(--ink-soft);
-  font-size: 11px;
-  font-weight: 500;
+  font-size: var(--text-caption);
+  font-weight: var(--weight-medium);
   cursor: pointer;
 }
 
@@ -175,7 +175,7 @@
   align-items: center;
   gap: 8px;
   padding: 4px 0;
-  font-size: 11px;
+  font-size: var(--text-caption);
   color: var(--muted);
   border-top: 1px solid var(--line);
 }
@@ -228,8 +228,8 @@
   border: 1px solid var(--error);
   background: rgba(138, 63, 53, .07);
   color: var(--error);
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: var(--text-caption);
+  line-height: var(--leading-body);
 }
 
 /* ─── Responsive ────────────────────────────────────────────────────────────── */

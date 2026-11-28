@@ -117,7 +117,7 @@ function PreviewContent({ preview, busy, slow, onChoose }) {
 
   return (
     <section ref={sectionRef} className="drive-preview" aria-labelledby="drive-preview-title" aria-busy={choosing}>
-      <h3 id="drive-preview-title" ref={titleRef} tabIndex={-1}>{plan.title}</h3>
+      <h4 id="drive-preview-title" ref={titleRef} tabIndex={-1}>{plan.title}</h4>
       <dl className="drive-preview__counts">
         <div><dt>Sul computer</dt><dd>{sizeOf(preview.local)}</dd></div>
         <div><dt>Su Google Drive</dt><dd>{sizeOf(preview.remote, { remote: true })}</dd></div>
@@ -280,7 +280,7 @@ export function ArchiveSettings({ controller, snapshot, open }) {
   return (
     <div className="drive-settings" lang="it">
       <header className="drive-settings__intro">
-        <h2>Il tuo archivio</h2>
+        <h3>Il tuo archivio</h3>
         <p>Wardrobe salva tutto su questo computer. Con il backup attivo, Google Drive ne tiene una copia completa e aggiornata.</p>
         <p>Puoi aprire Wardrobe da più browser e vedrai sempre gli stessi dati. Un’altra installazione di Wardrobe ha invece un archivio separato, che non si sincronizza con questo.</p>
       </header>
@@ -295,7 +295,7 @@ export function ArchiveSettings({ controller, snapshot, open }) {
 
       {otherOperation && (
         <section className="drive-operation" aria-labelledby="drive-other-operation-heading" aria-live="polite">
-          <div className="drive-section-heading"><h3 id="drive-other-operation-heading">Operazione in corso</h3>{spinner}</div>
+          <div className="drive-section-heading"><h4 id="drive-other-operation-heading">Operazione in corso</h4>{spinner}</div>
           <p>{status.maintenance.activation
             ? "Sto attivando il backup su Google Drive. Le modifiche al guardaroba riprendono appena finisce."
             : "È in corso un’operazione sull’archivio, per esempio avviata da un altro tab. Le modifiche al guardaroba riprendono appena finisce."}</p>
@@ -305,9 +305,9 @@ export function ArchiveSettings({ controller, snapshot, open }) {
       {restore && (
         <section ref={operationSectionRef} className={`drive-operation${restore.stage === "recovery_required" ? " is-error" : ""}`} aria-labelledby="drive-operation-heading" aria-live="polite" aria-atomic="true">
           <div className="drive-section-heading">
-            <h3 id="drive-operation-heading" ref={operationHeadingRef} tabIndex={-1}>
+            <h4 id="drive-operation-heading" ref={operationHeadingRef} tabIndex={-1}>
               {restore.active ? "Ripristino in corso" : restore.stage === "complete" ? "Ripristino completato" : "Ripristino non riuscito"}
-            </h3>
+            </h4>
             {restore.active && spinner}
           </div>
           <p role={restore.stage === "failed" || restore.stage === "recovery_required" ? "alert" : "status"}>
@@ -323,7 +323,7 @@ export function ArchiveSettings({ controller, snapshot, open }) {
       <section className="drive-account" aria-labelledby="drive-account-heading">
         <div className="drive-account__title">
           <img src="/google-drive.svg" alt="" width="24" height="24" />
-          <h3 id="drive-account-heading">Account Google Drive</h3>
+          <h4 id="drive-account-heading">Account Google Drive</h4>
         </div>
         {status?.account ? (
           <div className="drive-account__card">
@@ -389,7 +389,7 @@ export function ArchiveSettings({ controller, snapshot, open }) {
 
       <section className="drive-backup" aria-labelledby="drive-backup-heading">
         <div className="drive-section-heading">
-          <h3 id="drive-backup-heading" ref={backupHeadingRef} tabIndex={-1}>Backup su Google Drive</h3>
+          <h4 id="drive-backup-heading" ref={backupHeadingRef} tabIndex={-1}>Backup su Google Drive</h4>
           <div className="drive-section-heading__actions">
             {status?.backupEnabled && status.retryAt && !status.syncPaused && (
               <button className="secondary-button drive-retry" type="button" disabled={blocked} aria-busy={busy === "retry"} aria-label={busy === "retry" ? "Riprovo…" : undefined} onClick={() => void controller.retrySync()}>
@@ -453,7 +453,7 @@ export function ArchiveSettings({ controller, snapshot, open }) {
 
       <section className="drive-restore" aria-labelledby="drive-restore-heading">
         <div>
-          <h3 id="drive-restore-heading">Ripristina da Google Drive</h3>
+          <h4 id="drive-restore-heading">Ripristina da Google Drive</h4>
           <p>Sostituisce tutti i dati sul computer con la copia su Drive. Quello che c’è solo sul computer va perso.</p>
         </div>
         <button className="secondary-button" type="button" disabled={!hasVerifiedFolder || blocked || Boolean(snapshot.preview)} aria-busy={busy === "restore-preview"} onClick={() => void controller.openPreview("restore")}>

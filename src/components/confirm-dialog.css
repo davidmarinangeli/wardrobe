@@ -3,11 +3,11 @@
    layer covers the whole panel, including its close button (z 8). */
 .confirm-layer { position: absolute; inset: 0; z-index: 10; display: grid; place-items: center; padding: 20px; background: var(--scrim); }
 .confirm-dialog { width: min(100%, 380px); padding: 28px; border: 1px solid var(--glass-border); border-radius: var(--r-lg); background: var(--paper-raised); box-shadow: var(--shadow-lg); }
-.confirm-dialog__eyebrow { display: block; margin-bottom: 5px; color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; }
-.confirm-dialog h2 { margin: 0; font-size: 22px; font-weight: 500; letter-spacing: -.03em; }
-.confirm-dialog p { margin: 12px 0 24px; color: var(--muted); font-size: 14px; line-height: 1.6; }
+.confirm-dialog__eyebrow { display: block; margin-bottom: 5px; color: var(--muted); font-size: var(--text-eyebrow); font-weight: var(--weight-medium); letter-spacing: var(--track-caps); text-transform: uppercase; }
+.confirm-dialog h2 { margin: 0; font-size: var(--text-title); font-weight: var(--weight-medium); letter-spacing: var(--track-title); line-height: var(--leading-title); }
+.confirm-dialog p { margin: 12px 0 24px; color: var(--muted); font-size: var(--text-body); line-height: var(--leading-body); }
 .confirm-dialog__actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.confirm-dialog__actions button { flex: 1 0 auto; min-height: 44px; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--r-full); background: transparent; color: var(--ink-soft); font: inherit; font-size: 12px; cursor: pointer; }
+.confirm-dialog__actions button { flex: 1 0 auto; min-height: 44px; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--r-full); background: transparent; color: var(--ink-soft); font: inherit; font-size: var(--text-body); cursor: pointer; }
 .confirm-dialog__actions .confirm-dialog__keep { border-color: var(--accent); background: var(--accent); color: var(--paper-raised); }
 .confirm-dialog__actions button:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 3px; }
 

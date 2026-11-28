@@ -267,7 +267,7 @@ export function Mirror({ items }) {
           {!photo && !prototypeVariant ? (
             <div className="mirror-dropzone">
               <UploadSimple size={28} />
-              <h2>What do you think of my outfit?</h2>
+              <h3>What do you think of my outfit?</h3>
               <p>Upload a photo of yourself wearing the outfit and get a fit and color critique, plus swap suggestions from your own wardrobe.</p>
               <button type="button" className="primary-button" onClick={() => inputRef.current?.click()}>Choose a photo</button>
             </div>

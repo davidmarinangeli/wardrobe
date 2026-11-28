@@ -52,8 +52,8 @@
 
 .mirror-popover__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 22px; }
 .mirror-popover__heading { min-width: 0; }
-.mirror-popover__eyebrow { margin: 0 0 6px; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.13em; }
-.mirror-popover__title { margin: 0; font: 500 clamp(22px, 4vw, 32px)/1.06 "Instrument Sans", sans-serif; letter-spacing: -0.035em; }
+.mirror-popover__eyebrow { margin: 0 0 6px; color: var(--muted); font-size: var(--text-eyebrow); text-transform: uppercase; letter-spacing: var(--track-caps); font-weight: var(--weight-medium); }
+.mirror-popover__title { margin: 0; font: inherit; font-size: var(--text-title); font-weight: var(--weight-medium); line-height: var(--leading-title); letter-spacing: var(--track-title); }
 
 .mirror-close {
   flex: 0 0 40px;
@@ -84,15 +84,18 @@
   color: var(--muted);
 }
 
-.mirror-dropzone h2 {
+.mirror-dropzone h3 {
   margin: 4px 0 0;
   color: var(--ink);
-  font-size: 18px;
+  font-size: var(--text-section);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-heading);
+  letter-spacing: var(--track-tight);
 }
 
 .mirror-dropzone p {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--text-body);
 }
 
 .mirror-dropzone .primary-button {
@@ -154,26 +157,30 @@
 .mirror-verdict-dot.is-attention { background: var(--accent); }
 
 .mirror-verdict-label {
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.06em;
+  font-size: var(--text-eyebrow);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--track-caps);
   text-transform: uppercase;
   color: var(--muted);
 }
 
 .mirror-critique-overall {
+  /* A statement line: --text-section at regular weight (see styles.css). */
   margin: 0;
-  font-size: 19px;
-  line-height: 1.3;
+  font-size: var(--text-section);
+  font-weight: var(--weight-regular);
+  line-height: var(--leading-heading);
+  letter-spacing: var(--track-tight);
   color: var(--ink);
 }
 
 .mirror-critique-section h3 {
   margin: 0 0 10px;
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: .04em;
-  color: var(--muted);
+  font-size: var(--text-section);
+  letter-spacing: var(--track-tight);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-heading);
+  color: var(--ink);
 }
 
 .mirror-works-list {
@@ -189,7 +196,8 @@
   position: relative;
   padding-left: 18px;
   color: var(--ink);
-  line-height: 1.5;
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
 }
 
 .mirror-works-list li::before {
@@ -223,15 +231,18 @@
 
 .mirror-issue-label {
   margin: 0 0 4px;
-  font-weight: 600;
+  /* Card title; used to inherit the browser 16px. */
+  font-size: var(--text-subsection);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-heading);
   color: var(--ink);
 }
 
 .mirror-issue-summary {
   margin: 0;
   color: var(--muted);
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
 }
 
 .mirror-issue-fix {
@@ -270,7 +281,7 @@
   margin: 12px 0 0;
   padding-top: 12px;
   border-top: 1px solid var(--line);
-  font-size: 12px;
+  font-size: var(--text-body);
   color: var(--muted);
 }
 
@@ -284,21 +295,22 @@
 .mirror-issue-fix-eyebrow {
   margin: 0 0 2px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--text-eyebrow);
   text-transform: uppercase;
-  letter-spacing: 0.13em;
+  letter-spacing: var(--track-caps);
+  font-weight: var(--weight-medium);
 }
 
 .mirror-issue-fix-name {
   margin: 0;
-  font-weight: 600;
-  font-size: 13px;
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-body);
   color: var(--ink);
 }
 
 .mirror-issue-fix-reason {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--text-body);
   color: var(--muted);
 }
 
@@ -310,7 +322,7 @@
   margin: 0 0 20px;
   min-height: 26px;
   color: var(--ink);
-  font-size: 15px;
+  font-size: var(--text-body);
 }
 
 .mirror-status__line {

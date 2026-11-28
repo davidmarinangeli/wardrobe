@@ -249,6 +249,7 @@ function ManagedProviderStep({ providers, onNext, onBack }) {
 
 function KeysStep({ provider, onSaved, onBack, fromSettings = false }) {
   const option = PROVIDERS.find((item) => item.id === provider);
+  const Heading = fromSettings ? "h3" : "h2";
   const [openaiKey, setOpenaiKey] = useState("");
   const [openrouterKey, setOpenrouterKey] = useState("");
   const [geminiTestKey, setGeminiTestKey] = useState("");
@@ -316,7 +317,8 @@ function KeysStep({ provider, onSaved, onBack, fromSettings = false }) {
   return (
     <div className="onboarding-step">
       <p className="onboarding-eyebrow">{fromSettings ? "Switch provider" : "Step 2 of 3"}</p>
-      <h2>Add your {option.label} key</h2>
+      {/* In Settings this form is a section under the "Settings" title, not a dialog title of its own. */}
+      <Heading>Add your {option.label} key</Heading>
       <p className="onboarding-lede">
         Saved straight into <code>.env</code> on your machine — it never leaves this computer. Get a key at{" "}
         <a href={option.getKeyUrl} target="_blank" rel="noreferrer">{option.getKeyLabel}</a>.

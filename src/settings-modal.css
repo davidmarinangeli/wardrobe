@@ -25,8 +25,8 @@
   background: none;
   color: var(--muted);
   font: inherit;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
   cursor: pointer;
 }
 
@@ -46,9 +46,9 @@
 .settings-ai { display: grid; gap: 22px; }
 .settings-ai__photos { display: grid; gap: 4px; }
 
-.settings-archive-off h3 { margin: 0 0 8px; font-size: 17px; }
-.settings-archive-off p:last-child { margin: 0; color: var(--ink-soft); font-size: 13px; line-height: 1.55; }
-.settings-archive-off code { font-size: 11.5px; }
+.settings-archive-off h3 { margin: 0 0 8px; font-size: var(--text-section); font-weight: var(--weight-medium); line-height: var(--leading-heading); letter-spacing: var(--track-tight); }
+.settings-archive-off p:last-child { margin: 0; color: var(--ink-soft); font-size: var(--text-body); line-height: var(--leading-body); }
+.settings-archive-off code { font-size: var(--text-caption); }
 
 /* The Archive tab's own intro already says where the archive lives; inside the
    modal it no longer needs the panel's top padding. */

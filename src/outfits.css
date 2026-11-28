@@ -32,8 +32,8 @@
   box-shadow: 0 1px 3px rgb(0 0 0 / 12%);
   color: var(--ink);
   font: inherit;
-  font-size: 12px;
-  line-height: 1;
+  font-size: var(--text-body);
+  line-height: var(--leading-none);
   cursor: pointer;
   opacity: 0;
   transform: translateY(-4px);
@@ -237,7 +237,7 @@
   gap: 7px;
   margin: 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-caption);
 }
 
 .outfit-card-spinner { animation: spin 900ms linear infinite; }
@@ -260,16 +260,16 @@
   border-radius: var(--r-sm);
   background: color-mix(in srgb, var(--accent-warm) 7%, var(--paper-raised));
   color: var(--ink-soft);
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
 }
 
 .outfit-style-description {
   margin: 0;
   color: var(--ink);
-  font-size: 13px;
+  font-size: var(--text-body);
   font-style: italic;
-  line-height: 1.45;
+  line-height: var(--leading-caption);
 }
 
 .outfit-style-tags {
@@ -283,9 +283,9 @@
   padding: 4px 10px;
   background: var(--wash-1);
   color: var(--muted);
-  font-size: 10px;
-  font-weight: 450;
-  letter-spacing: .04em;
+  font-size: var(--text-eyebrow);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--track-caps);
   text-transform: uppercase;
 }
 
@@ -316,9 +316,9 @@
   overflow: hidden;
   max-width: 100%;
   color: var(--ink);
-  font-size: 20px;
-  font-weight: 500;
-  line-height: 1.15;
+  font-size: var(--text-subsection);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-heading);
   letter-spacing: var(--track-tight);
   text-align: center;
   text-wrap: balance;
@@ -329,10 +329,10 @@
 /* Above the "Generating model photo…" band along the bottom. */
 .outfit-card-art.is-processing .outfit-card-caption { bottom: 36px; }
 
-/* Two cards across a phone: the same caption at a size the column can carry. */
+/* Two cards across a phone: the same caption (card titles are --text-subsection
+   everywhere), with tighter padding so the column can carry it. */
 @media (max-width: 520px) {
   .outfit-card-caption { padding: 44px 10px 11px; }
-  .outfit-card-name { font-size: 14px; }
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -549,8 +549,8 @@
   flex: 1;
   min-width: 0;
   margin: 0;
-  font-size: 13px;
-  line-height: 1.4;
+  font-size: var(--text-body);
+  line-height: var(--leading-caption);
 }
 
 .nudge-banner__action { flex: 0 0 auto; }

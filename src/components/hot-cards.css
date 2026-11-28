@@ -98,22 +98,22 @@
 
 .hot-card__eyebrow {
   color: var(--hot-card-accent);
-  font-size: 10px;
-  font-weight: 500;
+  font-size: var(--text-eyebrow);
+  font-weight: var(--weight-medium);
   letter-spacing: var(--track-caps);
   text-transform: uppercase;
 }
 
 .hot-card__title {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--text-subsection);
+  font-weight: var(--weight-medium);
   letter-spacing: var(--track-tight);
   color: var(--ink);
 }
 
 .hot-card__desc {
-  font-size: 12.5px;
-  line-height: 1.4;
+  font-size: var(--text-body);
+  line-height: var(--leading-caption);
   color: var(--muted);
 }
 
@@ -157,7 +157,7 @@
 
 .hot-card__progress-label {
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-caption);
   font-variant-numeric: tabular-nums;
 }
 
