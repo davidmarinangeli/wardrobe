@@ -134,35 +134,65 @@
   padding-block: 4px;
 }
 
-/* Edge fade. A row that scrolls says so by dissolving at the edge with more
-   behind it: none at rest on a wide screen (nothing overflows, the timeline
-   is inactive), the right edge before any scroll, both mid-way, the left at
-   the end. Scroll-driven, so it costs nothing per frame; a browser without
-   scroll timelines shows the plain row. The mask colours are alpha only. */
-@property --chip-fade-start { syntax: "<length>"; inherits: false; initial-value: 0px; }
-@property --chip-fade-end { syntax: "<length>"; inherits: false; initial-value: 0px; }
-
-@keyframes chip-row-fade {
-  from { --chip-fade-start: 0px; --chip-fade-end: 40px; }
-  12% { --chip-fade-start: 40px; }
-  88% { --chip-fade-end: 40px; }
-  to { --chip-fade-start: 40px; --chip-fade-end: 0px; }
+/* Edge fade. A row that scrolls says so by dissolving into the page at the
+   edge with more behind it: nothing at rest on a wide screen (nothing
+   overflows), the right edge before any scroll, both mid-way, the left at
+   the end. Two sticky pseudo-elements, shown by scroll-state queries on the
+   row itself: no script, no animation. A browser without scroll-state
+   queries shows the plain row. --chip-row-bg is what the row sits on. */
+.chip-row,
+.category-nav,
+.piece-picker__chips {
+  --chip-row-bg: var(--paper);
+  --chip-row-gap: 6px;
+  container-type: scroll-state;
 }
 
-@supports (animation-timeline: scroll()) {
-  .chip-row,
-  .category-nav,
-  .piece-picker__chips {
-    mask-image: linear-gradient(
-      to right,
-      transparent,
-      #000 var(--chip-fade-start),
-      #000 calc(100% - var(--chip-fade-end)),
-      transparent
-    );
-    animation: chip-row-fade linear both;
-    animation-timeline: scroll(self inline);
-  }
+.piece-picker__chips { --chip-row-bg: var(--paper-warm); }
+
+.chip-row::before,
+.category-nav::before,
+.piece-picker__chips::before,
+.chip-row::after,
+.category-nav::after,
+.piece-picker__chips::after {
+  position: sticky;
+  z-index: 3;
+  flex: none;
+  align-self: stretch;
+  width: 40px;
+  opacity: 0;
+  pointer-events: none;
+  content: "";
+  transition: opacity var(--dur-pop) var(--ease-out);
+}
+
+.chip-row::before,
+.category-nav::before,
+.piece-picker__chips::before {
+  left: 0;
+  margin-right: calc(-40px - var(--chip-row-gap));
+  background: linear-gradient(to right, var(--chip-row-bg), transparent);
+}
+
+.chip-row::after,
+.category-nav::after,
+.piece-picker__chips::after {
+  right: 0;
+  margin-left: calc(-40px - var(--chip-row-gap));
+  background: linear-gradient(to left, var(--chip-row-bg), transparent);
+}
+
+@container scroll-state(scrollable: left) {
+  .chip-row::before,
+  .category-nav::before,
+  .piece-picker__chips::before { opacity: 1; }
+}
+
+@container scroll-state(scrollable: right) {
+  .chip-row::after,
+  .category-nav::after,
+  .piece-picker__chips::after { opacity: 1; }
 }
 
 /* ─── Toggle at the end of a chip row ───────────────────────────────────── */
