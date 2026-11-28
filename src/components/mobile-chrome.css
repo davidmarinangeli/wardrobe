@@ -19,13 +19,13 @@
      repeating it would be a third copy. The first row is the page's own
      navigation (section tabs, or Wardrobe's count and filters) with the gear
      beside it. */
-  .app-shell__page { --page-head-top: max(18px, env(safe-area-inset-top)); --page-tabs-h: 44px; }
+  .app-shell .app-shell__page { --page-head-top: max(18px, env(safe-area-inset-top)); --page-tabs-h: 44px; }
 
-  .page-head { gap: var(--s-3); }
+  .app-shell .page-head { gap: var(--s-3); }
 
   /* No tabs (Wardrobe): the gear floats at the end of the page's first row,
      which leaves it room (below). */
-  .page-head:not(.has-nav) {
+  .app-shell .page-head:not(.has-nav) {
     position: absolute;
     top: 0;
     right: 0;
@@ -37,9 +37,9 @@
   }
 
   /* Phone tabs: one step down so three fit beside the gear at 390px. */
-  .page-tabs { gap: var(--s-4); }
-  .page-tabs button { font-size: var(--text-subsection); }
-  .page-tabs__count { font-size: var(--text-body); }
+  .app-shell .page-tabs { gap: var(--s-4); }
+  .app-shell .page-tabs button { font-size: var(--text-subsection); }
+  .app-shell .page-tabs__count { font-size: var(--text-body); }
 
   /* ─── The desktop top bar yields to the page head on mobile ──────────────── */
   .app-shell .app-top-bar {
