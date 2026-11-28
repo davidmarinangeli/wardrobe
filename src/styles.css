@@ -862,8 +862,8 @@ button { font: inherit; }
      cut flat, so the clipped ones read as "scroll for more". The fade covers
      the trailing padding, so a row that fits ends before it. */
   padding-inline-end: var(--s-7);
-  -webkit-mask-image: linear-gradient(to left, transparent, #000 var(--s-7));
-  mask-image: linear-gradient(to left, transparent, #000 var(--s-7));
+  -webkit-mask-image: linear-gradient(to left, transparent, var(--ink) var(--s-7));
+  mask-image: linear-gradient(to left, transparent, var(--ink) var(--s-7));
 }
 
 .piece-count {
