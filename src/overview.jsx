@@ -56,7 +56,7 @@ export function Overview({
   return (
     <main className="overview-page">
       <header className="overview-header">
-        <h1 className="overview-title">Overview</h1>
+        {/* The page h1 is the shared large title (MobileHeadRow), on desktop too. */}
         <div className="overview-subnav" role="tablist" aria-label="Overview sections" onKeyDown={handleTabKeyDown}>
           {SECTIONS.map(({ id, label }) => {
             const active = id === section;

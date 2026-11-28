@@ -14,8 +14,8 @@
   border-radius: var(--r-full);
   background: var(--paper-raised);
   color: var(--ink-soft);
-  font-size: 11px;
-  letter-spacing: .02em;
+  font-size: var(--text-caption);
+  letter-spacing: var(--track-body);
   cursor: pointer;
   box-shadow: var(--shadow-sm);
   transition:

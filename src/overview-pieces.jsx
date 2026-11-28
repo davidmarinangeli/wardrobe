@@ -165,7 +165,11 @@ export function OverviewPieces({ items, loading = false, error = "", selectedIte
 
   let cardIndex = 0;
   return (
-    <section className="overview-pieces" aria-label="Pieces">
+    <section className="overview-pieces" aria-labelledby="overview-pieces-title">
+      {/* Outfits and Cheat sheets title their panel with a visible h2; Pieces shows the
+          search instead, so its h2 is for the outline only and the category h3s below
+          don't skip a level. */}
+      <h2 id="overview-pieces-title" className="sr-only">Pieces</h2>
       <div className="overview-toolbar">
         <div className="overview-search" role="search">
           <MagnifyingGlass size={19} weight="regular" aria-hidden="true" />

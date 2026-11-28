@@ -38,18 +38,6 @@
 .occasion-picker,
 .deck-controls { flex: none; }
 
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-  border: 0;
-}
-
 /* ─── Style memo ──────────────────────────────────────────────────────────────
    What the inspo board says about this user, in their own suggestions panel.
    A pin is the strongest taste statement in the app; this is the receipt that
@@ -61,8 +49,8 @@
   border-radius: var(--r-sm);
   background: var(--glass-card);
   color: var(--muted);
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
 }
 
 .style-memo-label {
@@ -71,9 +59,9 @@
   gap: 6px;
   margin-bottom: 5px;
   color: var(--ink-soft);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: .06em;
+  font-size: var(--text-eyebrow);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--track-caps);
   text-transform: uppercase;
 }
 
@@ -112,7 +100,7 @@
   background: var(--paper-raised);
   border-radius: var(--r-full);
   color: var(--ink-soft);
-  font-size: 14px;
+  font-size: var(--text-body);
   cursor: pointer;
   transition:
     background var(--dur-pop) var(--ease-out),
@@ -197,8 +185,10 @@
 .deck-card-name {
   margin: 0;
   padding-right: 34px;
-  font-size: 18px;
-  font-weight: 600;
+  font-size: var(--text-section);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-heading);
+  letter-spacing: var(--track-tight);
   color: var(--ink);
 }
 
@@ -229,8 +219,8 @@
 
 .deck-card-lead {
   margin: 0;
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
   color: var(--ink-soft);
 }
 
@@ -239,8 +229,8 @@
   flex-direction: column;
   gap: 6px;
   margin: 0;
-  font-size: 12.5px;
-  line-height: 1.45;
+  font-size: var(--text-body);
+  line-height: var(--leading-caption);
   color: var(--muted);
 }
 
@@ -250,7 +240,7 @@
   flex: none;
   width: 62px;
   color: var(--ink-soft);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 
 .deck-card-note dd { margin: 0; }
@@ -273,9 +263,9 @@
   gap: 6px;
   padding: 6px 12px;
   border-radius: var(--r-full);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: .02em;
+  font-size: var(--text-eyebrow);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--track-caps);
   text-transform: uppercase;
   pointer-events: none;
   z-index: 3;
@@ -340,7 +330,7 @@
 
 .deck-count {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--text-body);
   font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
@@ -385,8 +375,8 @@
   border-radius: var(--r-lg);
   text-align: center;
   color: var(--muted);
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
 }
 
 .deck-placeholder p { margin: 0; max-width: 34ch; }
@@ -394,12 +384,15 @@
 .deck-done svg { color: var(--accent-warm); }
 
 .deck-done-tally {
-  font-size: 17px;
-  font-weight: 600;
+  /* A statement line: --text-section at regular weight (see styles.css). */
+  font-size: var(--text-section);
+  font-weight: var(--weight-regular);
+  line-height: var(--leading-heading);
+  letter-spacing: var(--track-tight);
   color: var(--ink);
 }
 
-.deck-done-sub { font-size: 13px; }
+.deck-done-sub { font-size: var(--text-body); }
 
 .deck-done { animation: deck-done-in 320ms var(--ease-out) both; }
 
@@ -428,7 +421,7 @@
   background: var(--paper-raised);
   box-shadow: var(--shadow-md);
   color: var(--ink-soft);
-  font-size: 13px;
+  font-size: var(--text-body);
   cursor: pointer;
   animation: deck-undo-in 220ms var(--ease-out) both;
 }

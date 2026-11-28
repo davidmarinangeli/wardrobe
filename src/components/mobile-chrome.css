@@ -28,10 +28,10 @@
 
   .mobile-largetitle {
     margin: 0;
-    font-size: 34px;
-    font-weight: 500;
+    font-size: var(--text-display);
+    font-weight: var(--weight-medium);
     letter-spacing: var(--track-display);
-    line-height: 1.05;
+    line-height: var(--leading-display);
     color: var(--ink);
     transform-origin: left center;
   }
@@ -39,7 +39,7 @@
   .mobile-subtitle {
     margin: 4px 0 0;
     padding: 0 var(--page-x);
-    font-size: 11px;
+    font-size: var(--text-eyebrow);
     letter-spacing: var(--track-caps);
     text-transform: uppercase;
     color: var(--muted);
@@ -72,8 +72,8 @@
   }
 
   .mobile-compactbar__title {
-    font-size: 15px;
-    font-weight: 500;
+    font-size: var(--text-subsection);
+    font-weight: var(--weight-medium);
     color: var(--ink);
     letter-spacing: var(--track-tight);
   }
@@ -173,7 +173,7 @@
 
   .app-top-bar .top-actions .top-action__label {
     display: inline;
-    font-size: 13px;
+    font-size: var(--text-body);
     letter-spacing: var(--track-tight);
   }
 
@@ -269,8 +269,8 @@
 
   .bottom-nav__label {
     overflow: hidden;
-    font-size: 9px;
-    font-weight: 600;
+    font-size: var(--text-eyebrow);
+    font-weight: var(--weight-medium);
     letter-spacing: var(--track-caps);
     text-transform: uppercase;
   }

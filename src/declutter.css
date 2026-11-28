@@ -28,8 +28,8 @@
   background: transparent;
   color: var(--muted);
   font: inherit;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
   cursor: pointer;
   transition: background var(--dur-pop) var(--ease-out), color var(--dur-pop) var(--ease-out);
 }
@@ -50,12 +50,14 @@
   gap: var(--s-5);
 }
 
+/* A statement line: --text-section at regular weight (see styles.css). */
 .declutter-lede {
   margin: 0;
   color: var(--ink);
-  font-size: 22px;
-  line-height: 1.25;
-  letter-spacing: var(--track-display);
+  font-weight: var(--weight-regular);
+  font-size: var(--text-section);
+  line-height: var(--leading-heading);
+  letter-spacing: var(--track-tight);
 }
 
 .declutter-lede em { font-style: italic; }
@@ -85,7 +87,7 @@
 .declutter-progress__label {
   margin: 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-caption);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -93,11 +95,11 @@
 .declutter-hint {
   margin: 0;
   color: var(--muted);
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: var(--text-body);
+  line-height: var(--leading-caption);
 }
 
-.declutter-hint strong { color: var(--ink-soft); font-weight: 500; }
+.declutter-hint strong { color: var(--ink-soft); font-weight: var(--weight-medium); }
 
 .declutter-cta { align-self: flex-start; }
 
@@ -111,16 +113,17 @@
 .declutter-provisional__heading {
   margin: 0;
   color: var(--ink-soft);
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: var(--track-body);
+  font-size: var(--text-section);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--track-tight);
+  line-height: var(--leading-heading);
 }
 
 .declutter-provisional__caveat {
   margin: 2px 0 var(--s-3);
   color: var(--muted);
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: var(--text-body);
+  line-height: var(--leading-caption);
 }
 
 .declutter-provisional__list {
@@ -142,7 +145,7 @@
   border: 1px solid var(--line);
   border-radius: var(--r-full);
   color: var(--ink-soft);
-  font-size: 13px;
+  font-size: var(--text-body);
 }
 
 /* Small enough that several chips share a row. At the pile's 40px the names
@@ -166,8 +169,8 @@
 .declutter-deck__count {
   margin: 0;
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 450;
+  font-size: var(--text-eyebrow);
+  font-weight: var(--weight-medium);
   letter-spacing: var(--track-caps);
   text-transform: uppercase;
 }
@@ -194,12 +197,13 @@
 .declutter-card__name {
   margin: 0;
   color: var(--ink);
-  font-size: 17px;
-  font-weight: 500;
+  font-size: var(--text-section);
+  font-weight: var(--weight-medium);
   letter-spacing: var(--track-tight);
+  line-height: var(--leading-heading);
 }
 
-.declutter-card__reason { margin: 0; color: var(--muted); font-size: 13px; }
+.declutter-card__reason { margin: 0; color: var(--muted); font-size: var(--text-body); }
 
 .declutter-actions {
   display: grid;
@@ -213,10 +217,10 @@
   text-align: center;
 }
 
-.declutter-empty p { margin: 0; font-size: 13px; }
+.declutter-empty p { margin: 0; font-size: var(--text-body); }
 
 /* Quiet one-liners: an empty pile, a profile still loading. */
-.declutter-note { margin: 0; color: var(--muted); font-size: 12.5px; }
+.declutter-note { margin: 0; color: var(--muted); font-size: var(--text-body); }
 
 /* ─── Piles ──────────────────────────────────────────────────────────────── */
 
@@ -235,11 +239,11 @@
   align-items: center;
   gap: var(--s-2);
   margin: 0;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 450;
-  letter-spacing: var(--track-caps);
-  text-transform: uppercase;
+  color: var(--ink);
+  font-size: var(--text-section);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--track-tight);
+  line-height: var(--leading-heading);
 }
 
 .declutter-pile__count {
@@ -250,7 +254,7 @@
   border-radius: var(--r-full);
   background: var(--wash-2);
   color: var(--ink-soft);
-  font-size: 10px;
+  font-size: var(--text-caption);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
 }
@@ -272,8 +276,8 @@
 }
 
 .declutter-pile__text { display: flex; flex-direction: column; min-width: 0; }
-.declutter-pile__name { color: var(--ink-soft); font-size: 13px; }
-.declutter-pile__meta { color: var(--muted); font-size: 11px; }
+.declutter-pile__name { color: var(--ink-soft); font-size: var(--text-body); }
+.declutter-pile__meta { color: var(--muted); font-size: var(--text-caption); }
 
 .declutter-thumb {
   width: 40px;
@@ -308,10 +312,10 @@
   .declutter-card__art { aspect-ratio: 1 / 1; }
   /* A sheet is read further from the eye and with a thumb in the way, so it
      gets the larger step of the type scale and a little more air. */
-  .declutter-lede { font-size: 24px; }
+  .declutter-lede { font-size: var(--text-section); }
   .declutter-hint,
-  .declutter-provisional__caveat { font-size: 14px; }
-  .declutter-provisional__item { font-size: 13.5px; padding: 5px 14px 5px 5px; }
+  .declutter-provisional__caveat { font-size: var(--text-body); }
+  .declutter-provisional__item { font-size: var(--text-body); padding: 5px 14px 5px 5px; }
   .declutter-provisional__item .declutter-thumb { width: 28px; height: 28px; }
 }
 

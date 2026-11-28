@@ -81,17 +81,18 @@
 .color-season-title {
   margin: 0;
   white-space: nowrap;
-  font-size: 22px;
-  font-weight: 580;
-  letter-spacing: -0.015em;
+  font-size: var(--text-title);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--track-title);
+  line-height: var(--leading-title);
   color: var(--ink);
 }
 
 .color-season-description {
   margin: 0 0 20px;
   color: var(--muted);
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
 }
 
 .color-details-section {
@@ -117,7 +118,7 @@
   border: 1px solid var(--line);
   border-radius: var(--r-full);
   padding: 4px 10px 4px 8px;
-  font-size: 11.5px;
+  font-size: var(--text-caption);
   color: var(--ink-soft);
   box-shadow: var(--shadow-sm);
 }
@@ -140,9 +141,9 @@
 }
 
 .color-season-alt {
-  font-size: 12px;
+  font-size: var(--text-caption);
   color: var(--muted);
-  letter-spacing: 0.01em;
+  letter-spacing: var(--track-body);
   white-space: nowrap;
 }
 
@@ -173,7 +174,7 @@
   background: none;
   padding: 0;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-body);
   color: var(--muted);
   cursor: pointer;
   border-bottom: 1px solid transparent;
@@ -228,7 +229,7 @@
 .palette-empty {
   grid-column: 1 / -1;
   margin: 0;
-  font-size: 12px;
+  font-size: var(--text-body);
   color: var(--muted);
 }
 
@@ -246,7 +247,7 @@
   border-radius: var(--r-full);
   padding: 6px 14px;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-body);
   color: var(--ink-soft);
   cursor: pointer;
   transition: border-color var(--dur-pop) var(--ease-out), color var(--dur-pop) var(--ease-out);
@@ -262,7 +263,7 @@
 
 .palette-candidates-label {
   margin: 0 0 6px;
-  font-size: 11.5px;
+  font-size: var(--text-caption);
   color: var(--muted);
 }
 
@@ -321,16 +322,16 @@
 }
 
 .color-open-question-label {
-  font-size: 10.5px;
+  font-size: var(--text-eyebrow);
   text-transform: uppercase;
-  letter-spacing: .09em;
+  letter-spacing: var(--track-caps);
   color: var(--accent-warm);
-  font-weight: 600;
+  font-weight: var(--weight-medium);
 }
 
 .color-open-question-text {
-  font-size: 12.5px;
-  line-height: 1.45;
+  font-size: var(--text-body);
+  line-height: var(--leading-caption);
   color: var(--ink-soft);
 }
 
@@ -339,8 +340,8 @@
   align-items: center;
   gap: 5px;
   flex: none;
-  font-size: 12.5px;
-  font-weight: 560;
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
   color: var(--accent);
   white-space: nowrap;
 }
@@ -369,7 +370,7 @@
   background: none;
   padding: 2px 0;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-body);
   color: var(--muted);
   cursor: pointer;
   border-bottom: 1px solid transparent;
@@ -417,16 +418,18 @@
 
 .color-analyzing-state h3 {
   margin: 0;
-  font-size: 17px;
-  font-weight: 560;
+  font-size: var(--text-section);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-heading);
+  letter-spacing: var(--track-tight);
   color: var(--ink);
 }
 
 .color-analyzing-state p {
   margin: 0;
   max-width: 30ch;
-  font-size: 12.5px;
-  line-height: 1.55;
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
   color: var(--muted);
 }
 
@@ -444,8 +447,8 @@
 
 .color-quiz-intro {
   margin: 0;
-  font-size: 12.5px;
-  line-height: 1.55;
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
   color: var(--muted);
 }
 
@@ -455,7 +458,7 @@
   border-radius: var(--r-sm);
   background: var(--paper-raised);
   border: 1px solid var(--line);
-  font-size: 12px;
+  font-size: var(--text-body);
   color: var(--ink-soft);
 }
 
@@ -468,8 +471,8 @@
 .color-quiz-step legend {
   padding: 0;
   margin-bottom: 9px;
-  font-size: 13px;
-  font-weight: 540;
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
   color: var(--ink);
 }
 
@@ -485,8 +488,8 @@
   border-radius: var(--r-md);
   background: var(--paper-raised);
   font: inherit;
-  font-size: 12.5px;
-  line-height: 1.4;
+  font-size: var(--text-body);
+  line-height: var(--leading-caption);
   color: var(--ink-soft);
   cursor: pointer;
   text-align: left;
@@ -530,23 +533,24 @@
   padding: 72px 32px;
   text-align: center;
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: var(--text-body);
 }
 
 .drape-test-header { margin-bottom: 16px; }
 
 .drape-test-header h3 {
   margin: 0 0 5px;
-  font-size: 17px;
-  font-weight: 560;
-  letter-spacing: -0.012em;
+  font-size: var(--text-section);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--track-tight);
+  line-height: var(--leading-heading);
   color: var(--ink);
 }
 
 .drape-question {
   margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
   color: var(--ink-soft);
 }
 
@@ -639,22 +643,22 @@
 }
 
 .drape-option-name {
-  font-size: 13px;
-  font-weight: 550;
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
   color: var(--ink);
 }
 
 .drape-option-sub {
-  font-size: 11px;
+  font-size: var(--text-caption);
   color: var(--muted);
-  letter-spacing: .01em;
+  letter-spacing: var(--track-body);
 }
 
 .drape-option-note {
   margin: 0;
   padding: 0 2px;
-  font-size: 11.5px;
-  line-height: 1.45;
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
   color: var(--muted);
 }
 
@@ -670,9 +674,10 @@
 }
 
 .drape-fabric-label {
-  font-size: 10.5px;
+  font-size: var(--text-eyebrow);
   text-transform: uppercase;
-  letter-spacing: .09em;
+  letter-spacing: var(--track-caps);
+  font-weight: var(--weight-medium);
   color: var(--muted);
   flex: none;
 }
@@ -705,7 +710,7 @@
 }
 
 .drape-fabric-names {
-  font-size: 11px;
+  font-size: var(--text-caption);
   color: var(--muted);
   margin-left: auto;
   text-align: right;
@@ -714,8 +719,8 @@
 
 .drape-hint {
   margin: 0 0 16px;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
   color: var(--muted);
 }
 
@@ -732,17 +737,17 @@
   align-items: center;
   gap: 5px;
   margin-bottom: 6px;
-  font-size: 10.5px;
+  font-size: var(--text-eyebrow);
   text-transform: uppercase;
-  letter-spacing: .09em;
-  font-weight: 600;
+  letter-spacing: var(--track-caps);
+  font-weight: var(--weight-medium);
   color: var(--accent-warm);
 }
 
 .drape-verdict p {
   margin: 0;
-  font-size: 12.5px;
-  line-height: 1.55;
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
   color: var(--ink-soft);
 }
 
@@ -757,7 +762,7 @@
 
 .drape-decide-prompt {
   margin: 0;
-  font-size: 12.5px;
+  font-size: var(--text-body);
   color: var(--muted);
   text-align: center;
 }
@@ -777,8 +782,8 @@
 
 .drape-narrowed p {
   margin: 0;
-  font-size: 12.5px;
-  line-height: 1.5;
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
   color: var(--ink-soft);
 }
 
@@ -798,7 +803,7 @@
   background: none;
   padding: 0;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-body);
   color: var(--muted);
   cursor: pointer;
 }
@@ -834,7 +839,7 @@
   border-radius: var(--r-sm);
   background: var(--paper-raised);
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--text-body);
   color: var(--ink-soft);
   cursor: pointer;
   text-align: left;
@@ -857,15 +862,17 @@
 
 .certified-picker-header h3 {
   margin: 0 0 5px;
-  font-size: 17px;
-  font-weight: 560;
+  font-size: var(--text-section);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-heading);
+  letter-spacing: var(--track-tight);
   color: var(--ink);
 }
 
 .certified-picker-header p {
   margin: 0;
-  font-size: 12.5px;
-  line-height: 1.5;
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
   color: var(--muted);
 }
 
@@ -878,17 +885,17 @@
 
 .certified-group-title {
   margin: 0 0 9px;
-  font-size: 11px;
-  font-weight: 620;
-  text-transform: uppercase;
-  letter-spacing: .1em;
+  font-size: var(--text-subsection);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--track-tight);
+  line-height: var(--leading-heading);
 }
 
 .certified-group-alt {
-  font-weight: 450;
+  font-weight: var(--weight-regular);
   color: var(--muted);
   text-transform: none;
-  letter-spacing: .01em;
+  letter-spacing: var(--track-body);
 }
 
 .certified-grid {
@@ -918,13 +925,13 @@
 .certified-card:active { transform: scale(.97); }
 
 .certified-card-name {
-  font-size: 12.5px;
-  font-weight: 550;
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
   color: var(--ink);
 }
 
 .certified-card-sub {
-  font-size: 10.5px;
+  font-size: var(--text-caption);
   color: var(--muted);
 }
 
