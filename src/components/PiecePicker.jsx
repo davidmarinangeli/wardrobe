@@ -398,7 +398,6 @@ export function PiecePicker({
 
       {confirmOpen && (
         <ConfirmDialog
-          eyebrow="Unsaved changes"
           title="Discard this selection?"
           description="Your changes to the selected pieces haven’t been saved."
           keepLabel="Keep editing"

@@ -279,8 +279,8 @@ export function ArchiveSettings({ controller, snapshot, open }) {
 
   return (
     <div className="drive-settings">
+      {/* No heading of its own: the Cloud backup tab already names the section. */}
       <header className="drive-settings__intro">
-        <h3>Your archive</h3>
         <p>Wardrobe saves everything on this computer. With backup on, Google Drive keeps a complete, up-to-date copy.</p>
         <p>You can open Wardrobe in more than one browser and always see the same data. Another Wardrobe installation has its own separate archive, which doesn't sync with this one.</p>
       </header>

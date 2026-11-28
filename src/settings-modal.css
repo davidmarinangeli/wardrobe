@@ -50,7 +50,13 @@
 .settings-ai { display: grid; gap: 22px; }
 .settings-ai__photos { display: grid; gap: var(--s-1); }
 
-.settings-archive-off h3 { margin: 0 0 var(--s-2); font-size: var(--text-section); font-weight: var(--weight-medium); line-height: var(--leading-heading); letter-spacing: var(--track-tight); }
+/* One divider under the tabs: their own underline. The provider list is the
+   first thing in the AI tab, so the rule and the extra space it brings from
+   the setup wizard (onboarding.css, where it follows the wizard's copy) are
+   dropped here rather than in the wizard's stylesheet. */
+.settings-panel .provider-switch { margin: 0; padding-top: 0; border-top: 0; }
+
+.settings-archive-off h3 { margin: 0 0 var(--s-2); color: var(--ink); font-size: var(--text-section); font-weight: var(--weight-medium); line-height: var(--leading-heading); letter-spacing: var(--track-tight); }
 .settings-archive-off p:last-child { margin: 0; color: var(--ink-soft); font-size: var(--text-body); line-height: var(--leading-body); }
 .settings-archive-off code { font-size: var(--text-caption); }
 

@@ -119,8 +119,8 @@ export function SettingsModal({ open, tab, onTabChange, onClose, aiSetup, aiBadg
           <div id="settings-panel-archive" role="tabpanel" aria-labelledby="settings-tab-archive" hidden={tab !== "archive"}>
             {archiveDisabled ? (
               <div className="settings-archive-off">
-                <p className="onboarding-eyebrow">Archive</p>
-                <h3>Google Drive isn't configured</h3>
+                {/* The tab already says where you are: one title, no kicker over it. */}
+                <h3>Cloud backup isn't set up</h3>
                 {managed ? (
                   <p>
                     The archive stays on this computer. To keep a copy on Google Drive, enter the Client ID,
