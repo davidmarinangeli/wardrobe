@@ -850,7 +850,9 @@ button { font: inherit; }
   font-variant-numeric: tabular-nums;
 }
 
-.gallery-header {
+/* Qualified so the older per-breakpoint paddings further down do not apply:
+   the first row starts at --page-head-top at every width. */
+.app-shell .gallery-header {
   padding: var(--page-head-top) var(--page-x) 0;
 }
 
@@ -860,7 +862,7 @@ button { font: inherit; }
 
 /* Count and filters, one row. The count leads in muted body text, the pills
    follow and scroll sideways when they run out of room. */
-.gallery-meta-row {
+.gallery-header > .gallery-meta-row {
   display: flex;
   align-items: center;
   gap: var(--s-4);
@@ -886,6 +888,10 @@ button { font: inherit; }
   flex: none;
   margin: 0;
   color: var(--muted);
+  font-size: var(--text-body);
+}
+
+.gallery-meta-row > .piece-count {
   font-size: var(--text-body);
   font-variant-numeric: tabular-nums;
   line-height: var(--leading-none);
@@ -2364,6 +2370,7 @@ button:where(.edit-button, .primary-button, .secondary-button, .danger-button, .
 
 @media (max-width: 860px) {
   :root { --page-x: 24px; --item-pad: 12px; }
+  .gallery-header { padding-top: 28px; }
   .category-nav { width: 100%; margin: 22px 0 0; }
   .category-nav button { min-height: 40px; padding: 9px 15px; }
   .gallery-grid {
@@ -2432,6 +2439,8 @@ button:where(.edit-button, .primary-button, .secondary-button, .danger-button, .
   :root { --page-x: 16px; --item-pad: 10px; }
   .app-top-bar { padding-top: max(10px, env(safe-area-inset-top)); gap: var(--s-2) var(--s-3); }
   .app-view-switch button { padding: 7px var(--s-3); }
+  .gallery-header { padding-top: 22px; }
+  .piece-count { font-size: var(--text-eyebrow); }
   .category-nav { margin: 18px 0 0; }
   /* 44px minimum hit target on touch. */
   .category-nav button { min-height: 44px; padding: 11px 15px; font-size: var(--text-eyebrow); }
@@ -2471,6 +2480,7 @@ button:where(.edit-button, .primary-button, .secondary-button, .danger-button, .
   .viewer-actions > button { min-height: 44px; padding-inline: var(--s-2); font-size: var(--text-caption); }
   .color-controls { align-items: flex-start; flex-direction: column; }
   .sample-button { width: 100%; }
+  .gallery-meta-row { align-items: flex-start; }
 }
 
 /* ─── Accessibility ────────────────────────────────────────────────────────
