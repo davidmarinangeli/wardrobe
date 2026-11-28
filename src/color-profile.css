@@ -831,15 +831,6 @@
 
 .certified-picker-header { margin-bottom: 20px; }
 
-.certified-picker-header h3 {
-  margin: 0 0 5px;
-  font-size: var(--text-section);
-  font-weight: var(--weight-medium);
-  line-height: var(--leading-heading);
-  letter-spacing: var(--track-tight);
-  color: var(--ink);
-}
-
 .certified-picker-header p {
   margin: 0;
   font-size: var(--text-body);
