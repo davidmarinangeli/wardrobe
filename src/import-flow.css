@@ -73,8 +73,14 @@
 .import-popover {
   width: min(620px, 100%);
   max-height: min(760px, calc(100dvh - 48px));
-  overflow: auto;
-  padding: 24px;
+  /* A frame, like every panel: fixed header, scrolling body, fixed footer.
+     The padding lives on the three parts, through these two variables. */
+  --popover-pad: 24px;
+  --popover-pad-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
   color: var(--ink-soft);
   background: var(--paper-raised);
   border: 1px solid var(--line);
@@ -93,7 +99,13 @@
 
 .import-popover-backdrop.is-open .import-popover,
 .import-popover-backdrop[data-open="true"] .import-popover { transform: none; opacity: 1; }
-.import-popover__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 24px; }
+.import-popover__header { display: flex; flex: none; align-items: flex-start; justify-content: space-between; gap: 20px; padding: var(--popover-close-inset, 24px) var(--popover-close-inset, 24px) 18px var(--popover-pad); border-bottom: 1px solid transparent; transition: border-color var(--dur-pop) var(--ease-out); }
+.import-popover__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 6px var(--popover-pad) var(--popover-pad-bottom); scrollbar-width: thin; scrollbar-color: var(--wash-3) transparent; }
+.import-popover__body:has(+ .import-popover__footer) { padding-bottom: 18px; }
+.import-popover__footer { flex: none; padding: 14px var(--popover-pad) var(--popover-pad-bottom); border-top: 1px solid transparent; transition: border-color var(--dur-pop) var(--ease-out); }
+.import-popover__footer > .import-actions { margin-top: 0; }
+.import-popover[data-scrolled] > .import-popover__header { border-bottom-color: var(--line); }
+.import-popover[data-more-below] > .import-popover__footer { border-top-color: var(--line); }
 .import-popover__heading { min-width: 0; }
 .import-popover__eyebrow { margin: 0 0 6px; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.13em; }
 .import-popover__title { margin: 0; font: 500 clamp(24px, 4vw, 36px)/1.06 "Instrument Sans", sans-serif; letter-spacing: -0.035em; }
@@ -209,7 +221,7 @@
   .import-popover-backdrop { align-items: end; padding: 0; }
   /* A full-width sheet belongs to the bottom edge it slides off, not to the
      chip — it ignores the measured origin on purpose. */
-  .import-popover { width: 100%; max-height: min(88dvh, 760px); padding: 20px 16px calc(18px + env(safe-area-inset-bottom)); border-radius: var(--r-xl) var(--r-xl) 0 0; transform: translateY(100%) scale(0.96); transform-origin: bottom center; }
+  .import-popover { width: 100%; max-height: min(88dvh, 760px); --popover-pad: 16px; --popover-close-inset: 18px; --popover-pad-bottom: calc(18px + env(safe-area-inset-bottom)); border-radius: var(--r-xl) var(--r-xl) 0 0; transform: translateY(100%) scale(0.96); transform-origin: bottom center; }
   .import-drop-overlay { padding: 12px; }
   .import-drop-target { min-height: 50vh; padding: 28px 20px; border-radius: var(--r-lg); }
   .import-card { grid-template-columns: 68px minmax(0, 1fr); }
@@ -217,7 +229,6 @@
   .import-card__actions { grid-column: 2; }
   .import-editor + .import-card-list,
   .import-cleanup-editor + .import-card-list { margin-top: 22px; }
-  .import-card-list + .import-actions { margin-top: 22px; }
   .import-editor { grid-template-columns: 1fr; }
   .import-editor__preview { max-height: 240px; }
 }
@@ -237,4 +248,14 @@
   .import-progress.is-indeterminate .import-progress__bar,
   .import-status.is-processing::before,
   .import-spinner { animation: none !important; }
+}
+
+/* An open popover is a modal like any panel. The panels are portalled above the
+   bottom nav; this popover lives inside the top bar's stacking context, so the
+   nav would otherwise sit over its fixed footer on a phone. Shared with Mirror. */
+@media (max-width: 860px) {
+  body:has(.import-popover-backdrop[data-open="true"], .mirror-popover-backdrop[data-open="true"]) .bottom-nav {
+    opacity: 0;
+    pointer-events: none;
+  }
 }

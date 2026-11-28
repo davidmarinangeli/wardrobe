@@ -4,6 +4,7 @@ import { OptimizedImage } from "./OptimizedImage.jsx";
 import { api } from "./api.js";
 import { useViewerKeyboard } from "./hooks/useViewerKeyboard.js";
 import { usePopoverOrigin } from "./hooks/usePopoverOrigin.js";
+import { useScrollEdges } from "./hooks/useScrollEdges.js";
 import { MirrorVariantHost, useMirrorVariant } from "./prototypes/mirror/MirrorVariantHost.jsx";
 import "./mirror.css";
 
@@ -184,6 +185,8 @@ export function Mirror({ items }) {
   // than out of a corner. See usePopoverOrigin for why it can't be measured
   // from the panel's own rect while it's closed.
   const anchorToTrigger = usePopoverOrigin(triggerRef, panelRef, identityRef);
+  const bodyRef = useRef(null);
+  useScrollEdges(bodyRef, panelRef, { enabled: open });
   const status = useStatusLine(loading);
   // PROTOTYPE hook — null unless ?mirrorVariant= is in the URL, and always null
   // in a production build. Remove with src/prototypes/mirror.
@@ -264,6 +267,8 @@ export function Mirror({ items }) {
             </button>
           </header>
 
+          {/* The only scroller: the header above stays put. */}
+          <div ref={bodyRef} className="mirror-popover__body">
           {!photo && !prototypeVariant ? (
             <div className="mirror-dropzone">
               <UploadSimple size={28} />
@@ -346,6 +351,7 @@ export function Mirror({ items }) {
               </div>
             </div>
           )}
+          </div>
         </section>
       </div>
     </>

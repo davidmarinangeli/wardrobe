@@ -14,31 +14,27 @@
   animation: viewer-in 240ms var(--ease-out) both;
 }
 
+/* The frame; its body scrolls (with the same slim, trackless thumb as every
+   panel — see .viewer-body in styles.css). */
 .viewer.onboarding {
+  --viewer-pad-top: 40px;
+  --viewer-pad-x: 38px;
+  --viewer-pad-bottom: 32px;
+  --viewer-gutter: 38px;
   position: relative;
   width: 100%;
   max-height: min(88vh, 760px);
-  overflow: auto;
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
-  padding: 40px 38px 32px;
   background: var(--paper);
   box-shadow: var(--shadow-lg);
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--wash-3) transparent;
 }
 
-/* Same slim, trackless thumb as the item sheet, inset from the rounded corners. */
-.viewer.onboarding::-webkit-scrollbar { width: 8px; }
-.viewer.onboarding::-webkit-scrollbar-track { background: transparent; margin-block: 16px; }
-.viewer.onboarding::-webkit-scrollbar-thumb {
-  border: 2px solid transparent;
-  border-radius: var(--r-full);
-  background: var(--wash-3);
-  background-clip: padding-box;
-}
-.viewer.onboarding::-webkit-scrollbar-corner { background: transparent; }
+/* The footer sits on the panel's own paper, not the sheet default. */
+.viewer.onboarding > .viewer-footer { background: inherit; }
+
+/* The wizard's progress is its header: dots left, close right. */
+.viewer-header__content > .onboarding-dots { margin: 0; }
 
 .onboarding-dots {
   display: flex;
@@ -500,10 +496,13 @@
   }
 
   .viewer.onboarding {
+    --viewer-pad-top: 24px;
+    --viewer-pad-x: 22px;
+    --viewer-pad-bottom: calc(24px + env(safe-area-inset-bottom));
+    --viewer-gutter: 22px;
     max-height: 92dvh;
     border: 0;
     border-radius: var(--r-xl) var(--r-xl) 0 0;
-    padding: 24px 22px calc(24px + env(safe-area-inset-bottom));
     background: var(--paper-warm);
   }
 }
@@ -605,3 +604,14 @@
 .onboarding-managed-provider .is-ready { display: inline-flex; align-items: center; gap: 4px; color: var(--success); }
 .onboarding-managed-provider .is-missing { color: var(--muted); }
 .onboarding-managed-provider p.onboarding-managed-provider__others { color: var(--muted); font-size: 12px; }
+
+/* First thing under the header row now, so it no longer tucks up under the
+   dots it used to follow. */
+.viewer.onboarding > .viewer-body > .onboarding-storage-shortcut { margin-top: 0; }
+
+/* The step's action row now lives in the fixed footer, so whatever is last in
+   the step no longer needs the gap it kept above that row; and the dots row
+   is compact enough to need no extra space under it. Without these a step
+   that used to fit would scroll by a few pixels. */
+.viewer.onboarding .onboarding-step > :last-child { margin-bottom: 0; }
+.viewer.onboarding:not(.settings-panel) > .viewer-header--row { padding-bottom: 0; }

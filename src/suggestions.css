@@ -14,13 +14,19 @@
 /* The deck sizes itself to the panel rather than the panel scrolling to fit the
    deck: the two answers must always be on screen, or the surface stops being a
    one-tap surface. */
-.suggestion-panel {
-  overflow: hidden;
+.viewer.suggestion-panel {
   /* Tighter than the standard viewer. Every pixel the chrome gives back goes to
      the card, and on a short window that is the difference between seeing a
      whole outfit and seeing the top half of one. */
-  padding: 30px 26px 24px;
+  --viewer-pad-top: 30px;
+  --viewer-pad-x: 26px;
+  --viewer-pad-bottom: 24px;
+  --viewer-gutter: 26px;
 }
+
+.suggestion-panel > .viewer-body { overflow: hidden; }
+/* The body's own top inset (.suggestion-body) is enough under the header. */
+.suggestion-panel > .viewer-header--row + .viewer-body { padding-top: 0; }
 
 .suggestion-body {
   flex: 1;
@@ -448,7 +454,7 @@
   /* The clamp floor is wider than a phone once the overlay's gutter is taken
      out, so hand the drawer the whole width instead of overflowing it. */
   .viewer-entry.suggestion-panel-entry { width: 100%; }
-  .suggestion-panel { padding: 26px 18px 20px; }
+  .viewer.suggestion-panel { --viewer-pad-top: 26px; --viewer-pad-x: 18px; --viewer-pad-bottom: 20px; --viewer-gutter: 18px; }
   .deck, .deck-placeholder { min-height: 220px; }
   .deck-card { padding: 18px; }
 }

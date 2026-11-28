@@ -12,7 +12,7 @@ import {
   X,
 } from "@phosphor-icons/react";
 import "./color-profile.css";
-import { ViewerPanel } from "./components/ViewerPanel.jsx";
+import { ViewerFooter, ViewerPanel } from "./components/ViewerPanel.jsx";
 import { ModeledHero } from "./components/ModeledHero.jsx";
 import { PanelActions } from "./components/PanelActions.jsx";
 import { buildDrapePath, drapeDefs } from "../shared/draping.mjs";
@@ -471,11 +471,13 @@ function DrapeTest({ initialSetId = "sisterDeep", onApply, onBack }) {
         )}
       </div>
 
-      <div className="drape-footer">
-        <button className="secondary-button" type="button" onClick={onBack}>
-          <ArrowLeft size={14} aria-hidden="true" /> Back to my colours
-        </button>
-      </div>
+      <ViewerFooter>
+        <div className="drape-footer">
+          <button className="secondary-button" type="button" onClick={onBack}>
+            <ArrowLeft size={14} aria-hidden="true" /> Back to my colours
+          </button>
+        </div>
+      </ViewerFooter>
     </div>
   );
 }
@@ -531,11 +533,13 @@ function CertifiedSeasonPicker({ onSelect, onCancel }) {
         ))}
       </div>
 
-      <div className="certified-footer">
-        <button className="secondary-button" type="button" onClick={onCancel}>
-          <ArrowLeft size={14} aria-hidden="true" /> Back
-        </button>
-      </div>
+      <ViewerFooter>
+        <div className="certified-footer">
+          <button className="secondary-button" type="button" onClick={onCancel}>
+            <ArrowLeft size={14} aria-hidden="true" /> Back
+          </button>
+        </div>
+      </ViewerFooter>
     </div>
   );
 }
@@ -873,6 +877,8 @@ export function ColorProfileModal({ onClose, onSave, initialProfile }) {
       panelClassName={
         mode === "result" ? "has-modeled-image color-viewer-panel" : "color-viewer-panel"
       }
+      compactTitle={mode === "result" ? titlePrimary : undefined}
+      compactTitleSelector=".color-season-title"
     >
       {!browserState.ready && (
         <p
@@ -924,13 +930,15 @@ export function ColorProfileModal({ onClose, onSave, initialProfile }) {
               onAnswer={(value) => answerQuestion(question.id, value)}
             />
           ))}
-          <PanelActions
-            onCancel={onClose}
-            cancelLabel="Cancel"
-            onConfirm={applyResult}
-            confirmDisabled={colorProfileSaveDisabled({ browserStateReady: browserState.ready, saving, resultSeason })}
-            confirmLabel={saving ? "Saving…" : "Save"}
-          />
+          <ViewerFooter>
+            <PanelActions
+              onCancel={onClose}
+              cancelLabel="Cancel"
+              onConfirm={applyResult}
+              confirmDisabled={colorProfileSaveDisabled({ browserStateReady: browserState.ready, saving, resultSeason })}
+              confirmLabel={saving ? "Saving…" : "Save"}
+            />
+          </ViewerFooter>
         </div>
       ) : (
         <>
@@ -1057,14 +1065,16 @@ export function ColorProfileModal({ onClose, onSave, initialProfile }) {
               </button>
             </div>
 
-            <PanelActions
-              onCancel={onClose}
-              cancelLabel="Cancel"
-              onConfirm={applyResult}
-              confirmIcon={<Check size={15} weight="bold" aria-hidden="true" />}
-              confirmDisabled={colorProfileSaveDisabled({ browserStateReady: browserState.ready, saving, resultSeason })}
-              confirmLabel={saving ? "Saving…" : "Save"}
-            />
+            <ViewerFooter>
+              <PanelActions
+                onCancel={onClose}
+                cancelLabel="Cancel"
+                onConfirm={applyResult}
+                confirmIcon={<Check size={15} weight="bold" aria-hidden="true" />}
+                confirmDisabled={colorProfileSaveDisabled({ browserStateReady: browserState.ready, saving, resultSeason })}
+                confirmLabel={saving ? "Saving…" : "Save"}
+              />
+            </ViewerFooter>
           </div>
         </>
       )}

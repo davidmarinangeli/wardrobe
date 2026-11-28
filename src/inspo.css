@@ -36,6 +36,14 @@
   gap: 0;
 }
 
+/* In the header's second row (as in Settings): the tabs' underline is the
+   header's divider, and the body starts its own spacing below it. */
+.viewer.inspo-importer-panel > .viewer-header--row,
+.viewer.inspo-importer-panel[data-scrolled] > .viewer-header--row { padding-bottom: 0; border-bottom: 0; }
+.viewer-header__below > .inspo-tabs { margin-top: 12px; }
+.viewer.inspo-importer-panel > .viewer-header--row + .viewer-body { padding-top: 20px; }
+.viewer.inspo-importer-panel .inspo-importer-body { padding-top: 0; }
+
 .inspo-tabs button {
   flex: 1;
   min-height: 38px;

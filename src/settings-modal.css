@@ -4,12 +4,16 @@
 .viewer-overlay.settings-overlay { z-index: 42; }
 .viewer-entry.settings-entry { width: min(620px, 100%); }
 
-.viewer.settings-panel .viewer-heading { margin-bottom: 14px; }
+/* The tabs are the header's second row, so they stay with the title while the
+   section scrolls; their underline is the header's divider. */
+.viewer.settings-panel > .viewer-header--row,
+.viewer.settings-panel[data-scrolled] > .viewer-header--row { padding-bottom: 0; border-bottom: 0; }
+.viewer.settings-panel > .viewer-header--row + .viewer-body { padding-top: 22px; }
 
 .settings-tabs {
   display: flex;
   gap: 4px;
-  margin-bottom: 22px;
+  margin-top: 10px;
   border-bottom: 1px solid var(--line);
 }
 

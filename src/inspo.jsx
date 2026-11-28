@@ -4,7 +4,7 @@ import { OptimizedImage } from "./OptimizedImage.jsx";
 import { api } from "./api.js";
 import { BASE_GARMENT_CATEGORIES, INSPO_CATEGORIES as CATEGORIES, CATEGORY_LABEL } from "./categories.js";
 import { GalleryItem, ItemViewer } from "./item-editor.jsx";
-import { ViewerPanel } from "./components/ViewerPanel.jsx";
+import { ViewerFooter, ViewerPanel } from "./components/ViewerPanel.jsx";
 import { PanelActions } from "./components/PanelActions.jsx";
 import { PageShell } from "./components/PageShell.jsx";
 import { PageStatus } from "./components/PageStatus.jsx";
@@ -100,12 +100,22 @@ function InspoImporter({ onClose, onImported }) {
   const canSubmit = tab === "url" ? urlText.trim().length > 0 : dropQueue.length > 0;
 
   return (
-    <ViewerPanel title="Add Inspo" ariaLabel="Add inspiration" onClose={onClose} closeRef={closeButtonRef} entryClassName="inspo-importer-entry">
-      <div className="inspo-importer-body">
+    <ViewerPanel
+      title="Add Inspo"
+      ariaLabel="Add inspiration"
+      onClose={onClose}
+      closeRef={closeButtonRef}
+      entryClassName="inspo-importer-entry"
+      panelClassName="inspo-importer-panel"
+      // Header's second row, like the Settings tabs: they stay put.
+      headerBelow={(
         <nav className="inspo-tabs">
           <button type="button" className={tab === "url" ? "active" : ""} onClick={() => setTab("url")}>From URLs</button>
           <button type="button" className={tab === "drop" ? "active" : ""} onClick={() => setTab("drop")}>Drop images</button>
         </nav>
+      )}
+    >
+      <div className="inspo-importer-body">
 
         {tab === "url" && (
           <div className="inspo-url-field">
@@ -171,11 +181,16 @@ function InspoImporter({ onClose, onImported }) {
           </p>
         )}
 
-        <PanelActions onCancel={onClose}>
-          <button className="primary-button" type="button" onClick={submit} disabled={importing || !canSubmit}>
-            {importing ? <><SpinnerGap size={14} className="top-action__spinner" aria-hidden="true" /> Importing…</> : <><Check size={14} weight="bold" aria-hidden="true" /> Import</>}
-          </button>
-        </PanelActions>
+        <ViewerFooter>
+          {/* Through onConfirm, so Import sits rightmost like every primary. */}
+          <PanelActions
+            onCancel={onClose}
+            onConfirm={submit}
+            confirmDisabled={importing || !canSubmit}
+            confirmIcon={importing ? <SpinnerGap size={14} className="top-action__spinner" aria-hidden="true" /> : <Check size={14} weight="bold" aria-hidden="true" />}
+            confirmLabel={importing ? "Importing…" : "Import"}
+          />
+        </ViewerFooter>
       </div>
     </ViewerPanel>
   );
@@ -280,7 +295,7 @@ function PinViewer({ pin, wishlistCount, onClose, onSave, onDelete, onDetect, op
   );
 
   return (
-    <ViewerPanel ariaLabel={`Inspo pin: ${pin.name || "untitled"}`} onClose={onClose} closeRef={closeButtonRef} openedFrom={openedFrom}>
+    <ViewerPanel ariaLabel={`Inspo pin: ${pin.name || "untitled"}`} onClose={onClose} closeRef={closeButtonRef} openedFrom={openedFrom} compactTitle={pin.name || "Unnamed"}>
       <ModeledHero src={pin.image} alt={pin.name || "Inspiration photo"} showHeading={false}>
         <div className="stage-action">{detectAction}</div>
       </ModeledHero>
@@ -320,7 +335,9 @@ function PinViewer({ pin, wishlistCount, onClose, onSave, onDelete, onDetect, op
 
         {error && <p className="status error" role="alert">{error}</p>}
 
-        <PanelActions onDelete={() => onDelete(pin.id)} onCancel={onClose} cancelLabel="Close" />
+        <ViewerFooter>
+          <PanelActions onDelete={() => onDelete(pin.id)} onCancel={onClose} cancelLabel="Close" />
+        </ViewerFooter>
       </div>
     </ViewerPanel>
   );

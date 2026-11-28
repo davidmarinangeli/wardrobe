@@ -7,6 +7,7 @@ import { useDismiss } from "./hooks/useDismiss.js";
 import { useSheetGesture } from "./hooks/useSheetGesture.js";
 import { useIsPhone } from "./hooks/useIsPhone.js";
 import { useExpandOrigin } from "./hooks/useExpandOrigin.js";
+import { useScrollEdges } from "./hooks/useScrollEdges.js";
 import { ModeledHero } from "./components/ModeledHero.jsx";
 import { EditableTitle } from "./components/EditableTitle.jsx";
 import { WARDROBE_TYPES as TYPES, TYPE_MAP } from "./categories.js";
@@ -673,6 +674,8 @@ function AddVariantSheet({ item, sourceVariantId, tier, tiers, onTierChange, tie
   const [error, setError] = useState("");
   const photoInputRef = useRef(null);
   const dialogRef = useRef(null);
+  const bodyRef = useRef(null);
+  useScrollEdges(bodyRef, dialogRef);
   // A described variant is nothing without the words that generate it, and a
   // photo variant is nothing without the photo.
   const canSubmit = tierReady && (method === "photo" ? Boolean(photo) : Boolean(name.trim() || description.trim()));
@@ -747,86 +750,93 @@ function AddVariantSheet({ item, sourceVariantId, tier, tiers, onTierChange, tie
           if (!busy) onClose();
         }}
       >
-        <span className="add-variant-sheet__grabber" aria-hidden="true" />
-        <div className="add-variant-sheet__head">
-          <div>
-            <h2 id="add-variant-title">Add a way to wear it</h2>
-            <p>{item.name || "This item"}</p>
-          </div>
-          <button type="button" className="add-variant-sheet__close" aria-label="Close" onClick={onClose} disabled={busy}>
-            <X size={18} weight="bold" aria-hidden="true" />
-          </button>
-        </div>
-
-        <div className="variant-method-picker" role="group" aria-label="How to make it">
-          {methods.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              className={method === option.id ? "active" : ""}
-              aria-pressed={method === option.id}
-              disabled={busy}
-              onClick={() => setMethod(option.id)}
-            >
-              {option.icon}
-              <span>{option.label}</span>
-              <small>{option.detail}</small>
-            </button>
-          ))}
-        </div>
-
-        {method === "photo" && (
-          <div className="add-variant-sheet__photo">
-            <input ref={photoInputRef} type="file" accept="image/*" hidden disabled={busy} onChange={choosePhoto} />
-            <button
-              type="button"
-              className={`variant-photo-upload${photo ? " has-photo" : ""}`}
-              disabled={busy}
-              onClick={() => photoInputRef.current?.click()}
-              aria-label={photo ? `Replace photo: ${photo.name}` : "Choose a photo of it worn this way"}
-            >
-              <span className="variant-photo-upload__art" aria-hidden="true">
-                {photo ? <img src={photo.dataUrl} alt="" /> : <ImageSquare size={30} weight="regular" />}
-                <span className="variant-photo-upload__plus"><Plus size={11} weight="bold" /></span>
-              </span>
-              <span className="variant-photo-upload__text">{photo ? photo.name : "Choose a photo of it worn this way"}</span>
+        <header className="add-variant-sheet__header">
+          <span className="add-variant-sheet__grabber" aria-hidden="true" />
+          <div className="add-variant-sheet__head">
+            <div>
+              <h2 id="add-variant-title">Add a way to wear it</h2>
+              <p>{item.name || "This item"}</p>
+            </div>
+            <button type="button" className="add-variant-sheet__close" aria-label="Close" onClick={onClose} disabled={busy}>
+              <X size={18} weight="bold" aria-hidden="true" />
             </button>
           </div>
-        )}
+        </header>
 
-        <label className="sheet-field">
-          <span>Name</span>
-          <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Sleeves rolled" disabled={busy} />
-          <small>Shown under the thumbnail.</small>
-        </label>
+        <div ref={bodyRef} className="add-variant-sheet__body">
+          <div className="variant-method-picker" role="group" aria-label="How to make it">
+            {methods.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className={method === option.id ? "active" : ""}
+                aria-pressed={method === option.id}
+                disabled={busy}
+                onClick={() => setMethod(option.id)}
+              >
+                {option.icon}
+                <span>{option.label}</span>
+                <small>{option.detail}</small>
+              </button>
+            ))}
+          </div>
 
-        <label className="sheet-field">
-          <span>Detail <em>— optional</em></span>
-          <input value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Folded twice, above the elbow" disabled={busy} />
-          <small>{method === "describe" ? "Guides both the garment image and the model photo." : "Guides the model photo."}</small>
-        </label>
+          {method === "photo" && (
+            <div className="add-variant-sheet__photo">
+              <input ref={photoInputRef} type="file" accept="image/*" hidden disabled={busy} onChange={choosePhoto} />
+              <button
+                type="button"
+                className={`variant-photo-upload${photo ? " has-photo" : ""}`}
+                disabled={busy}
+                onClick={() => photoInputRef.current?.click()}
+                aria-label={photo ? `Replace photo: ${photo.name}` : "Choose a photo of it worn this way"}
+              >
+                <span className="variant-photo-upload__art" aria-hidden="true">
+                  {photo ? <img src={photo.dataUrl} alt="" /> : <ImageSquare size={30} weight="regular" />}
+                  <span className="variant-photo-upload__plus"><Plus size={11} weight="bold" /></span>
+                </span>
+                <span className="variant-photo-upload__text">{photo ? photo.name : "Choose a photo of it worn this way"}</span>
+              </button>
+            </div>
+          )}
 
-        {error && <p className="status error" role="alert">{error}</p>}
+          <label className="sheet-field">
+            <span>Name</span>
+            <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Sleeves rolled" disabled={busy} />
+            <small>Shown under the thumbnail.</small>
+          </label>
 
-        <p className="add-variant-sheet__cost">
-          {method === "describe"
-            ? "Makes two images — the garment, then a model photo wearing it."
-            : "Cuts the garment out of your photo, then makes a model photo wearing it."}
-          {" "}About a minute.
-        </p>
+          <label className="sheet-field">
+            <span>Detail <em>— optional</em></span>
+            <input value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Folded twice, above the elbow" disabled={busy} />
+            <small>{method === "describe" ? "Guides both the garment image and the model photo." : "Guides the model photo."}</small>
+          </label>
 
-        <GenerateButton
-          block
-          icon={<Sparkle size={16} weight="bold" aria-hidden="true" />}
-          label={method === "describe" ? "Generate" : "Add from photo"}
-          busy={busy}
-          disabled={!canSubmit}
-          onGenerate={submit}
-          tier={tier}
-          tiers={tiers}
-          onTierChange={onTierChange}
-          premiumAllowed={premiumAllowed}
-        />
+          {error && <p className="status error" role="alert">{error}</p>}
+        </div>
+
+        {/* What it costs, then the action that spends it: the fixed footer. */}
+        <footer className="add-variant-sheet__footer">
+          <p className="add-variant-sheet__cost">
+            {method === "describe"
+              ? "Makes two images — the garment, then a model photo wearing it."
+              : "Cuts the garment out of your photo, then makes a model photo wearing it."}
+            {" "}About a minute.
+          </p>
+
+          <GenerateButton
+            block
+            icon={<Sparkle size={16} weight="bold" aria-hidden="true" />}
+            label={method === "describe" ? "Generate" : "Add from photo"}
+            busy={busy}
+            disabled={!canSubmit}
+            onGenerate={submit}
+            tier={tier}
+            tiers={tiers}
+            onTierChange={onTierChange}
+            premiumAllowed={premiumAllowed}
+          />
+        </footer>
       </div>
     </div>
   );
@@ -929,6 +939,7 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
   }, [isDirty, nudgeUnsaved, dismiss]);
 
   useViewerKeyboard(requestClose, closeButtonRef);
+  useScrollEdges(scrollRef, sheetRef, { titleSelector: ".item-heading" });
 
   // A swipe down is a close like any other, so it goes through requestClose and
   // gets the same unsaved-changes guard: drag a sheet with unsaved edits and it
@@ -1122,7 +1133,10 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
     </div>
   );
 
-  // ⋯ and ✕ ride on the photo, top right, in both hero treatments.
+  // ⋯ and ✕ ride on the photo, top right, in both hero treatments — in a top
+  // bar outside the scroller, so they stay reachable however far the sheet is
+  // scrolled. The bar turns to glass, with the name in it, once the name has
+  // scrolled under it (useScrollEdges marks the sheet data-past-title).
   const toolbar = (
     <div className="viewer-toolbar">
       {menuSections.length > 0 && (
@@ -1152,6 +1166,17 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
     </div>
   );
 
+  const topBar = (
+    <header className="viewer-topbar item-sheet__bar">
+      {/* The editable name is in the body; this is its shadow for once it has
+          scrolled away, so it stays out of the accessibility tree. */}
+      <div className="viewer-heading viewer-topbar__title" aria-hidden="true">
+        <h2>{draft.name || type}</h2>
+      </div>
+      {toolbar}
+    </header>
+  );
+
   const content = (
     <div
       ref={overlayRef}
@@ -1173,11 +1198,11 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
       aria-label={draft.name || type}
       {...(isPhone ? dragHandlers : null)}
     >
+      {topBar}
       <div ref={scrollRef} className="item-sheet__scroll">
       {hasModeledImage ? (
         <ModeledHero src={variantModeledImage(item, selectedVariantId)} alt={`${draft.name || type} worn by a model`} showHeading={false}>
           {garmentArtwork}
-          {toolbar}
           {stageStatus}
           {/* Opened from ⋯, so there is no chip to grow from; it rises from
               the bottom centre, where the photo's actions always sit. */}
@@ -1198,7 +1223,6 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
       ) : (
         <div className="item-stage">
           {garmentArtwork}
-          {toolbar}
           {stageStatus || (canGenerate && (
             <div className="stage-action">
               <GenerateButton

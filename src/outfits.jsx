@@ -10,7 +10,7 @@ import { GenerateButton, RefineComposer, StageChip, StageError, StageStatus, use
 import { SuggestionPanel } from "./suggestions.jsx";
 import { OutfitStack } from "./components/OutfitStack.jsx";
 import { PiecePicker } from "./components/PiecePicker.jsx";
-import { ViewerPanel } from "./components/ViewerPanel.jsx";
+import { ViewerFooter, ViewerPanel } from "./components/ViewerPanel.jsx";
 import { ModeledHero } from "./components/ModeledHero.jsx";
 import { PanelActions } from "./components/PanelActions.jsx";
 import { EditableTitle } from "./components/EditableTitle.jsx";
@@ -345,6 +345,7 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
       openedFrom={openedFrom}
       ariaLabel={`Outfit: ${outfit.name}`}
       panelClassName={hasModeledImage ? "has-modeled-image" : undefined}
+      compactTitle={outfit.name || "Outfit"}
     >
       {hasModeledImage ? (
         <ModeledHero src={outfit.modeledImage} alt={`${outfit.name} worn by a model`} showHeading={false}>
@@ -418,15 +419,17 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
           ))}
         </div>
 
-        <PanelActions
-          onDelete={() => onDelete(outfit.id)}
-          onCancel={() => onEdit(outfit)}
-          cancelLabel={<><PencilSimple size={15} weight="regular" aria-hidden="true" /> Edit</>}
-          onConfirm={() => wearReady && !wornToday && onWear(outfit)}
-          confirmDisabled={!wearReady || wornToday}
-          confirmIcon={<CheckCircle size={15} weight={wornToday ? "fill" : "regular"} aria-hidden="true" />}
-          confirmLabel={wornToday ? "Worn today" : "Wore it today"}
-        />
+        <ViewerFooter>
+          <PanelActions
+            onDelete={() => onDelete(outfit.id)}
+            onCancel={() => onEdit(outfit)}
+            cancelLabel={<><PencilSimple size={15} weight="regular" aria-hidden="true" /> Edit</>}
+            onConfirm={() => wearReady && !wornToday && onWear(outfit)}
+            confirmDisabled={!wearReady || wornToday}
+            confirmIcon={<CheckCircle size={15} weight={wornToday ? "fill" : "regular"} aria-hidden="true" />}
+            confirmLabel={wornToday ? "Worn today" : "Wore it today"}
+          />
+        </ViewerFooter>
       </div>
     </ViewerPanel>
   );

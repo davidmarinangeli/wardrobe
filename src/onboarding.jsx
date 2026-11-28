@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, CaretDown, CaretUp, Check, CheckCircle, Info, SpinnerGap, UploadSimple, WarningCircle, X } from "@phosphor-icons/react";
 import { api } from "./api.js";
-import { ViewerPanel } from "./components/ViewerPanel.jsx";
+import { ViewerFooter, ViewerPanel } from "./components/ViewerPanel.jsx";
 import "./onboarding.css";
 
 const CONFIG_API = "/api/import/config";
@@ -168,10 +168,12 @@ function WelcomeStep({ onNext, managed = false }) {
           ? <li>The working archive lives on this computer; an optional Drive backup copies it. AI keys stay in the Wardrobe desktop app and are excluded from the archive.</li>
           : <li>The working archive lives in <code>data/</code>; an optional Drive backup copies it. AI keys stay in the local <code>.env</code> and are excluded from the archive.</li>}
       </ul>
-      <div className="onboarding-actions">
-        <span className="action-spacer" />
-        <button className="primary-button" type="button" onClick={onNext}>Get started <ArrowRight size={14} weight="bold" /></button>
-      </div>
+      <ViewerFooter>
+        <div className="onboarding-actions">
+          <span className="action-spacer" />
+          <button className="primary-button" type="button" onClick={onNext}>Get started <ArrowRight size={14} weight="bold" /></button>
+        </div>
+      </ViewerFooter>
     </div>
   );
 }
@@ -201,11 +203,13 @@ function ProviderStep({ provider, setProvider, onNext, onBack }) {
           </button>
         ))}
       </div>
-      <div className="onboarding-actions">
-        <button className="secondary-button" type="button" onClick={onBack}><ArrowLeft size={14} /> Back</button>
-        <span className="action-spacer" />
-        <button className="primary-button" type="button" onClick={onNext}>Continue <ArrowRight size={14} weight="bold" /></button>
-      </div>
+      <ViewerFooter>
+        <div className="onboarding-actions">
+          <button className="secondary-button" type="button" onClick={onBack}><ArrowLeft size={14} /> Back</button>
+          <span className="action-spacer" />
+          <button className="primary-button" type="button" onClick={onNext}>Continue <ArrowRight size={14} weight="bold" /></button>
+        </div>
+      </ViewerFooter>
     </div>
   );
 }
@@ -238,11 +242,13 @@ function ManagedProviderStep({ providers, onNext, onBack }) {
       {providers && !anyKey && (
         <p className="onboarding-status" role="note"><Info size={14} aria-hidden="true" /> Imports and modeled photos stay off until a key is added there. You can still add your reference photo now.</p>
       )}
-      <div className="onboarding-actions">
-        <button className="secondary-button" type="button" onClick={onBack}><ArrowLeft size={14} /> Back</button>
-        <span className="action-spacer" />
-        <button className="primary-button" type="button" onClick={onNext}>Continue <ArrowRight size={14} weight="bold" /></button>
-      </div>
+      <ViewerFooter>
+        <div className="onboarding-actions">
+          <button className="secondary-button" type="button" onClick={onBack}><ArrowLeft size={14} /> Back</button>
+          <span className="action-spacer" />
+          <button className="primary-button" type="button" onClick={onNext}>Continue <ArrowRight size={14} weight="bold" /></button>
+        </div>
+      </ViewerFooter>
     </div>
   );
 }
@@ -353,13 +359,15 @@ function KeysStep({ provider, onSaved, onBack, fromSettings = false }) {
       {error && <p className="onboarding-status is-error"><WarningCircle size={14} /> {error}</p>}
       {restarting && <p className="onboarding-status"><SpinnerGap size={14} className="onboarding-spinner" /> Saving and restarting the dev server…</p>}
 
-      <div className="onboarding-actions">
-        <button className="secondary-button" type="button" disabled={saving} onClick={onBack}><ArrowLeft size={14} /> Back</button>
-        <span className="action-spacer" />
-        <button className="primary-button" type="button" disabled={!canSave || saving} onClick={save}>
-          {saving ? <SpinnerGap size={14} className="onboarding-spinner" /> : <Check size={14} weight="bold" />} Save &amp; continue
-        </button>
-      </div>
+      <ViewerFooter>
+        <div className="onboarding-actions">
+          <button className="secondary-button" type="button" disabled={saving} onClick={onBack}><ArrowLeft size={14} /> Back</button>
+          <span className="action-spacer" />
+          <button className="primary-button" type="button" disabled={!canSave || saving} onClick={save}>
+            {saving ? <SpinnerGap size={14} className="onboarding-spinner" /> : <Check size={14} weight="bold" />} Save &amp; continue
+          </button>
+        </div>
+      </ViewerFooter>
     </div>
   );
 }
@@ -521,11 +529,13 @@ function PhotosStep({ setup, onSetupChange, onNext, onBack, eyebrow = "Step 3 of
 
       <ReferencePhotos setup={setup} onSetupChange={onSetupChange} onFullUploaded={() => setFullUploaded(true)} />
 
-      <div className="onboarding-actions">
-        <button className="secondary-button" type="button" onClick={onBack}><ArrowLeft size={14} /> Back</button>
-        <span className="action-spacer" />
-        <button className="primary-button" type="button" disabled={!fullUploaded} onClick={onNext}>Continue <ArrowRight size={14} weight="bold" /></button>
-      </div>
+      <ViewerFooter>
+        <div className="onboarding-actions">
+          <button className="secondary-button" type="button" onClick={onBack}><ArrowLeft size={14} /> Back</button>
+          <span className="action-spacer" />
+          <button className="primary-button" type="button" disabled={!fullUploaded} onClick={onNext}>Continue <ArrowRight size={14} weight="bold" /></button>
+        </div>
+      </ViewerFooter>
     </div>
   );
 }
@@ -664,10 +674,12 @@ function DoneStep({ setup, onSetupChange, onModeChange, onAddKey, onClose, manag
       </ul>
       <ProviderSwitcher setup={setup} onSetupChange={onSetupChange} onAddKey={onAddKey} />
       <AiModeToggle setup={setup} onChange={onModeChange} managed={managed} />
-      <div className="onboarding-actions">
-        <span className="action-spacer" />
-        <button className="primary-button" type="button" onClick={onClose}><Check size={14} weight="bold" /> Start building your wardrobe</button>
-      </div>
+      <ViewerFooter>
+        <div className="onboarding-actions">
+          <span className="action-spacer" />
+          <button className="primary-button" type="button" onClick={onClose}><Check size={14} weight="bold" /> Start building your wardrobe</button>
+        </div>
+      </ViewerFooter>
     </div>
   );
 }
@@ -741,8 +753,8 @@ export function Onboarding({ setup, onSetupChange, onModeChange, onClose, onOpen
       overlayClassName="onboarding-overlay"
       entryClassName="onboarding-entry"
       panelClassName="onboarding"
+      headerContent={<StepDots step={step} steps={managed ? MANAGED_STEPS : STEPS} />}
     >
-      <StepDots step={step} steps={managed ? MANAGED_STEPS : STEPS} />
       <div className="onboarding-storage-shortcut">
         <span>Archive settings</span>
         <button type="button" onClick={onOpenStorage}><span aria-hidden="true">↗</span> Archive / Google Drive</button>

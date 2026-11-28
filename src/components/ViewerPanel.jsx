@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "@phosphor-icons/react";
 import { useDismiss } from "../hooks/useDismiss.js";
@@ -6,18 +6,51 @@ import { useExpandOrigin } from "../hooks/useExpandOrigin.js";
 import { useSheetGesture } from "../hooks/useSheetGesture.js";
 import { useIsPhone } from "../hooks/useIsPhone.js";
 import { useViewerOpenClass } from "../hooks/useViewerOpenClass.js";
+import { useScrollEdges } from "../hooks/useScrollEdges.js";
+
+// The footer element of the nearest ViewerPanel, for <ViewerFooter>. `null`
+// outside a panel; `{ element: null }` for the one render before it mounts.
+const FooterSlot = createContext(null);
+
+/**
+ * Puts its children in the enclosing ViewerPanel's fixed footer, wherever in
+ * the panel's tree it is rendered. For action rows that live deep inside a
+ * step or a mode (the setup wizard's Back / Continue) and would otherwise
+ * scroll away with the content. A portal, so React events, context and state
+ * stay where the row was written. Outside a ViewerPanel it renders in place.
+ */
+export function ViewerFooter({ children }) {
+  const slot = useContext(FooterSlot);
+  if (!slot) return children;
+  return slot.element ? createPortal(children, slot.element) : null;
+}
 
 /**
  * Standard slide-in panel shell used by every modal/drawer in the app.
  *
- * Renders:  viewer-overlay  >  viewer-entry  >  aside.viewer  >  close button
- *                                                              +  optional heading
- *                                                              +  {children}
+ * Renders:  viewer-overlay  >  viewer-entry  >  aside.viewer  >  header  (title + close; fixed)
+ *                                                              +  .viewer-body  (children; the only scroller)
+ *                                                              +  footer  (actions; fixed, only when present)
+ *
+ * The aside is a frame that never scrolls: the header and footer stay put and
+ * only the body moves. Three kinds of header:
+ *   - a title (or headerContent): one row, title left, close right. Gets a
+ *     hairline once the body scrolls under it.
+ *   - compactTitle (photo-led panels with the name further down): a glass top
+ *     bar over the photo that shows the name once it has scrolled away.
+ *   - neither: the close floats in the top-right corner (panels that draw
+ *     their own header, like the piece picker and the cheat sheet editor).
  *
  * Props
  * ─────
- * title          string   – If provided, renders a <div.viewer-heading><h2> above children.
+ * title          string   – If provided, renders a <div.viewer-heading><h2> in the fixed header.
  *                           Omit when the heading is rendered inside children (e.g. modeled-hero mode).
+ * headerContent  node     – Rendered in the header row instead of a title (e.g. wizard progress).
+ * headerBelow    node     – A second, full-width header row under the title (e.g. tabs).
+ * compactTitle   string   – For panels without a title: the name shown in the top bar once
+ *                           the element matching compactTitleSelector scrolls under it.
+ * The action row goes in the fixed footer through <ViewerFooter>, rendered anywhere
+ * inside the panel's children (there is deliberately no `footer` prop: one way in).
  * ariaLabel      string   – `aria-label` on the <aside>. Defaults to `title`.
  * onClose        fn       – Called when the close button or overlay is clicked. The panel
  *                           plays its exit animation first (see useDismiss).
@@ -49,6 +82,11 @@ export function ViewerPanel({
   swipeHandleOnly = false,
   closeDisabled = false,
   focusTrap = false,
+  headerContent,
+  headerBelow,
+  compactTitle,
+  compactTitleSelector = ".viewer-title, .viewer-title-input",
+  bodyClassName,
   children,
 }) {
   // Every panel is a panel: the body class that locks scroll and scales the page
@@ -60,7 +98,10 @@ export function ViewerPanel({
   const entryRef = useRef(null);
   const sheetRef = useRef(null);
   const overlayRef = useRef(null);
+  const bodyRef = useRef(null);
+  const [footerElement, setFooterElement] = useState(null);
   useExpandOrigin(entryRef, openedFrom);
+  useScrollEdges(bodyRef, sheetRef, { titleSelector: compactTitle ? compactTitleSelector : undefined });
 
   // On a phone this panel is a bottom sheet, and a sheet you cannot push away
   // is a dialog wearing a sheet's clothes. The gesture is only wired up below
@@ -83,6 +124,9 @@ export function ViewerPanel({
   const { dragHandlers } = useSheetGesture({
     sheetRef,
     overlayRef,
+    // The body scrolls, not the sheet: a drag only belongs to the sheet when
+    // the body is at its top (or it starts on the header, a grab handle).
+    scrollRef: bodyRef,
     enabled: isPhone && swipeToClose && !closeDisabled,
     handleOnly: swipeHandleOnly,
     // Straight to onClose, not through dismiss(): the gesture has already
@@ -122,6 +166,23 @@ export function ViewerPanel({
     };
   }, [focusTrap]);
 
+  const hasHeaderRow = Boolean(title || headerContent);
+  // Memoized: every <ViewerFooter> reads this, and a fresh object per render
+  // would re-render each of them whenever the panel does.
+  const footerSlot = useMemo(() => ({ element: footerElement }), [footerElement]);
+  const closeButton = (
+    <button
+      className="icon-button viewer-icon-close"
+      type="button"
+      onClick={() => requestDismiss()}
+      aria-label="Close"
+      ref={closeRef}
+      disabled={closeDisabled}
+    >
+      <X size={24} weight="light" aria-hidden="true" />
+    </button>
+  );
+
   const content = (
     <div
       ref={overlayRef}
@@ -149,24 +210,43 @@ export function ViewerPanel({
           {...(isPhone ? dragHandlers : null)}
         >
 
-          <button
-            className="icon-button viewer-icon-close"
-            type="button"
-            onClick={() => requestDismiss()}
-            aria-label="Close"
-            ref={closeRef}
-            disabled={closeDisabled}
+          <header
+            className={`viewer-header${hasHeaderRow ? " viewer-header--row" : compactTitle ? " viewer-topbar" : " viewer-header--floating"}`}
           >
-            <X size={24} weight="light" aria-hidden="true" />
-          </button>
+            {hasHeaderRow ? (
+              // The title row never scrolls, so it is always a safe place to
+              // pull the sheet down from, whatever the body's scroll position.
+              // Only the row: a drag that starts on the tabs below it is not
+              // a request to close.
+              <div className="viewer-header__row" data-sheet-grab="">
+                {title ? (
+                  <div className="viewer-heading">
+                    <h2>{title}</h2>
+                  </div>
+                ) : (
+                  <div className="viewer-header__content">{headerContent}</div>
+                )}
+                {closeButton}
+              </div>
+            ) : compactTitle ? (
+              // The real name is in the body (an editable title); this is its
+              // shadow for once it has scrolled away, so it stays out of the
+              // accessibility tree.
+              <div className="viewer-heading viewer-topbar__title" aria-hidden="true">
+                <h2>{compactTitle}</h2>
+              </div>
+            ) : null}
+            {!hasHeaderRow && closeButton}
+            {headerBelow && <div className="viewer-header__below">{headerBelow}</div>}
+          </header>
 
-          {title && (
-            <div className="viewer-heading">
-              <h2>{title}</h2>
-            </div>
-          )}
+          <div ref={bodyRef} className={`viewer-body${bodyClassName ? ` ${bodyClassName}` : ""}`}>
+            <FooterSlot.Provider value={footerSlot}>
+              {children}
+            </FooterSlot.Provider>
+          </div>
 
-          {children}
+          <footer ref={setFooterElement} className="viewer-footer" />
         </aside>
       </div>
     </div>
