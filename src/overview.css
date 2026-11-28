@@ -260,6 +260,7 @@
 @media (max-width: 1180px) and (min-width: 861px) {
   .overview-layout { grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; }
   .overview-grid { grid-template-columns: repeat(auto-fill, minmax(135px, 1fr)); gap: 18px 13px; }
+  .overview-toolbar { grid-template-columns: minmax(170px, 1fr) minmax(260px, 1.5fr) minmax(20px, .3fr); }
 }
 
 @media (max-width: 860px) {
@@ -271,7 +272,8 @@
   .overview-panel-head { margin-bottom: var(--s-4); }
   .overview-panel-head__add { font-size: var(--text-body); --btn-pad-x: var(--s-3); }
   .overview-search { order: 0; height: 46px; }
-  .overview-active-filter { align-self: center; }
+  .overview-active-filter { align-self: center; margin: -4px 0 0; }
+  .overview-hidden-selection { margin: -5px 0 0; }
   .overview-layout { display: block; }
   .overview-selection--desktop { display: none; }
   .overview-section { margin-bottom: 28px; }
@@ -335,6 +337,7 @@
 
 @media (max-width: 520px) {
   .overview-page { padding-inline: var(--page-x); }
+  .overview-subnav button { flex: 1; }
   .overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px var(--s-3); }
   .overview-card .gallery-item__art { aspect-ratio: .82; }
   .overview-section__header { margin-bottom: 10px; }
