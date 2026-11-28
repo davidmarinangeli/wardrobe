@@ -232,8 +232,8 @@ function OutfitCard({ outfit, itemMap, onOpen, wornToday, wearReady, onWear }) {
   // It sits alongside as a real button and is positioned over the art by CSS.
   return (
     <div className="outfit-card-wrap">
-    <button type="button" className="outfit-card" onClick={(event) => onOpen(outfit.id, event.currentTarget)} aria-label={`View ${outfit.name}`}>
-      <div className={`outfit-card-art${processing ? " is-processing" : ""}`}>
+    <button type="button" className="outfit-card card card--outfit" onClick={(event) => onOpen(outfit.id, event.currentTarget)} aria-label={`View ${outfit.name}`}>
+      <div className={`outfit-card-art card__art card__art--stage${processing ? " is-processing" : ""}`}>
         {hasModeledImage ? (
           <>
             <div className="outfit-card-hero">
@@ -251,15 +251,18 @@ function OutfitCard({ outfit, itemMap, onOpen, wornToday, wearReady, onWear }) {
             <p className="outfit-card-status"><SpinnerGap size={13} className="outfit-card-spinner" aria-hidden="true" /> Generating model photo…</p>
           </div>
         )}
-        {/* Hidden from assistive tech: the card's aria-label already names it. */}
-        <span className="outfit-card-caption" aria-hidden="true">
-          <span className="outfit-card-name">{outfit.name}</span>
-        </span>
       </div>
+      {/* The same caption foot as every card, always visible: four flat
+          lays side by side are only told apart by their names.
+          Hidden from assistive tech: the card's aria-label already names it. */}
+      <span className="card__caption" aria-hidden="true">
+        <span className="card__name">{outfit.name}</span>
+        <span className="card__meta">{pieces.length} {pieces.length === 1 ? "piece" : "pieces"}</span>
+      </span>
     </button>
     <button
       type="button"
-      className={`secondary-button button--sm button--on-media outfit-worn-btn${wornToday ? " is-worn" : ""}`}
+      className={`secondary-button button--sm button--on-media card__corner outfit-worn-btn${wornToday ? " is-worn" : ""}`}
       onClick={() => wearReady && !wornToday && onWear(outfit)}
       disabled={!wearReady || wornToday}
       aria-busy={!wearReady || undefined}

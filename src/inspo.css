@@ -1,5 +1,5 @@
-/* Pins and wishlist pieces render as .gallery-item / .gallery-item__art--photo
-   (styles.css) in one merged .gallery-grid, so this file no longer needs its
+/* Pins and wishlist pieces render as .card--garment / .card__art--photo
+   (styles.css, S2 block) in one merged .gallery-grid, so this file needs no
    own card/grid rules — only the importer and the pin's notes field are
    Inspo-specific. The detect action shares the model-photo controls in
    styles.css (.stage-action, .generate-button, .stage-chip) and buttons.css. */

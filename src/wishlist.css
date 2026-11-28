@@ -2,10 +2,14 @@
   position: relative;
 }
 
+/* A status action, so it takes the card's corner slot (.card__corner in
+   styles.css): inside the art, top right, where "Wore it" and Edit sit on the
+   other cards. It used to hang off the art beside the name. */
 .wishlist-retry-badge {
   position: absolute;
-  right: 14px;
-  bottom: 14px;
+  z-index: 2;
+  top: var(--s-2);
+  right: var(--s-2);
   font-size: var(--text-caption);
   font-weight: var(--weight-regular);
   letter-spacing: var(--track-body);
