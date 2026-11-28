@@ -3,7 +3,7 @@
  * device (desktop Feature 07, Tailscale): the Google sign-in returns to
  * http://localhost:<port>, which only exists on the computer that runs it.
  */
-export const GOOGLE_DRIVE_REMOTE_CONNECT_NOTICE = "Collega Google Drive dal computer su cui è in esecuzione Wardrobe.";
+export const GOOGLE_DRIVE_REMOTE_CONNECT_NOTICE = "Connect Google Drive from the computer that runs Wardrobe.";
 
 /**
  * True when the page was not opened on this computer: any hostname except
@@ -14,32 +14,32 @@ export function isRemoteHostname(hostname) {
   return !["localhost", "127.0.0.1", "[::1]", "::1"].includes(value);
 }
 
-export const GOOGLE_DRIVE_OUTAGE_NOTICE = "Google Drive non è raggiungibile. Le modifiche restano salvate sul computer e verranno caricate su Drive appena torna la connessione.";
+export const GOOGLE_DRIVE_OUTAGE_NOTICE = "Google Drive can't be reached. Changes stay saved on this computer and will be uploaded to Drive as soon as the connection is back.";
 
 const SAFE_ERRORS = Object.freeze({
-  configuration_incomplete: "Completa la configurazione Google Drive nel file .env e riavvia l’app.",
-  configuration_invalid: "La configurazione Google Drive non è valida. Controlla le quattro variabili nel file .env.",
-  private_state_invalid: "Non riesco a leggere le impostazioni Google Drive salvate su questo computer. I dati dell’archivio non sono stati toccati.",
-  sync_state_invalid: "Lo stato di sincronizzazione Google Drive salvato su questo computer è illeggibile o danneggiato. I dati dell’archivio non sono stati toccati.",
-  reconnect_required: "La sessione Google Drive è scaduta. Ricollega l’account.",
-  target_changed: "L’account o la cartella Google Drive sono cambiati. Verifica di nuovo l’accesso.",
-  google_unavailable: "Google Drive non è raggiungibile in questo momento.",
-  google_permission_denied: "Questo account non può accedere alla cartella Google Drive configurata.",
-  folder_access_denied: "La cartella configurata non è accessibile o non consente le operazioni richieste.",
-  folder_read_denied: "Google Drive non ha completato la lettura della cartella, quindi non la considero vuota. Riprova.",
-  folder_write_denied: "La cartella Google Drive non consente di aggiungere l’archivio.",
-  incomplete_drive_listing: "Google Drive non ha completato l’elenco della cartella. Riprova la verifica.",
-  archive_invalid: "La copia scelta è incompleta o danneggiata. I dati sul computer non sono stati toccati.",
-  remote_unavailable: "La copia su Google Drive non è raggiungibile o è danneggiata.",
-  snapshot_changed: "I dati sono cambiati nel frattempo. Riprova per vedere la situazione aggiornata.",
-  sync_conflict: "La scelta è scaduta o i dati sono cambiati. Riprova per vedere la situazione aggiornata.",
-  archive_maintenance: "L’archivio è occupato da un’altra operazione, per esempio una generazione ancora in corso. Riprova tra poco.",
-  archive_control_invalid: "Il ripristino si è interrotto e richiede un recupero. Le modifiche restano sospese: vedi docs/google-drive-operations.md.",
-  cross_origin_request: "La richiesta deve provenire da questa applicazione.",
-  oauth_denied: "L’autorizzazione Google Drive è stata annullata.",
-  oauth_scope_insufficient: "Google non ha concesso i permessi richiesti. Ricollega l’account e verifica i permessi.",
-  account_mismatch: "L’account Google verificato non corrisponde alla connessione attiva.",
-  persistence_failed: "Non è stato possibile salvare in modo sicuro la connessione Google Drive.",
+  configuration_incomplete: "Finish the Google Drive configuration in the .env file and restart the app.",
+  configuration_invalid: "The Google Drive configuration isn't valid. Check the four variables in the .env file.",
+  private_state_invalid: "Can't read the Google Drive settings saved on this computer. The archive data hasn't been touched.",
+  sync_state_invalid: "The Google Drive backup state saved on this computer is unreadable or damaged. The archive data hasn't been touched.",
+  reconnect_required: "The Google Drive session has expired. Reconnect the account.",
+  target_changed: "The Google Drive account or folder has changed. Verify access again.",
+  google_unavailable: "Google Drive can't be reached right now.",
+  google_permission_denied: "This account can't access the configured Google Drive folder.",
+  folder_access_denied: "The configured folder isn't accessible or doesn't allow the required operations.",
+  folder_read_denied: "Google Drive didn't finish reading the folder, so it isn't treated as empty. Try again.",
+  folder_write_denied: "The Google Drive folder doesn't allow adding the archive.",
+  incomplete_drive_listing: "Google Drive didn't finish listing the folder. Try verifying again.",
+  archive_invalid: "The chosen copy is incomplete or damaged. The data on this computer hasn't been touched.",
+  remote_unavailable: "The copy on Google Drive can't be reached or is damaged.",
+  snapshot_changed: "The data changed in the meantime. Try again to see the current state.",
+  sync_conflict: "The choice expired or the data changed. Try again to see the current state.",
+  archive_maintenance: "The archive is busy with another operation, for example a generation still running. Try again shortly.",
+  archive_control_invalid: "The restore was interrupted and needs recovery. Editing stays paused until then: see docs/google-drive-operations.md.",
+  cross_origin_request: "The request must come from this app.",
+  oauth_denied: "Google Drive authorization was cancelled.",
+  oauth_scope_insufficient: "Google didn't grant the required permissions. Reconnect the account and check the permissions.",
+  account_mismatch: "The verified Google account doesn't match the active connection.",
+  persistence_failed: "The Google Drive connection couldn't be saved safely.",
 });
 const UNREACHABLE_ERRORS = new Set([
   "google_unavailable", "google_permission_denied", "folder_access_denied", "folder_read_denied",
@@ -47,14 +47,14 @@ const UNREACHABLE_ERRORS = new Set([
 ]);
 // Reconnecting the same account and folder resumes sync on its own, so this
 // means a different account, folder or drive: verifying access can't fix it.
-const SYNC_TARGET_CHANGED = "Google Drive ora punta a un altro account o a un’altra cartella. Disattiva e riattiva il backup per scegliere quale copia tenere.";
+const SYNC_TARGET_CHANGED = "Google Drive now points to a different account or folder. Turn backup off and on again to choose which copy to keep.";
 
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 // After this long an action says it is slow and that Settings can be closed.
 const SLOW_ACTION_MS = 12_000;
 const TERMINAL_RESTORE_STAGES = new Set(["complete", "failed", "recovery_required"]);
 
-function messageFor(error, fallback = "L’operazione Google Drive non è riuscita. Riprova.") {
+function messageFor(error, fallback = "The Google Drive operation failed. Try again.") {
   const code = typeof error?.code === "string" ? error.code : "";
   return SAFE_ERRORS[code] || fallback;
 }
@@ -99,7 +99,7 @@ function presentStatus(raw, archive = null) {
     syncPaused: source.syncPaused === true,
     syncError: syncError ? {
       message: syncError.code === "target_changed" ? SYNC_TARGET_CHANGED
-        : messageFor(syncError, "La sincronizzazione è in attesa di essere ripresa."),
+        : messageFor(syncError, "Backup is waiting to resume."),
       retryable: syncError.retryable === true,
       unreachable: UNREACHABLE_ERRORS.has(syncError.code),
     } : null,
@@ -115,7 +115,7 @@ function presentStatus(raw, archive = null) {
       error: archiveSource.maintenance?.error ? messageFor({ code: archiveSource.maintenance.error }) : null,
     },
     archiveGeneration: Number.isSafeInteger(archiveSource.archiveGeneration) ? archiveSource.archiveGeneration : null,
-    connectionError: error ? messageFor(error, "La connessione Google Drive richiede attenzione.") : null,
+    connectionError: error ? messageFor(error, "The Google Drive connection needs attention.") : null,
   };
 }
 
@@ -155,18 +155,18 @@ function operationPresentation(operation, activeOperationId) {
 }
 
 export function formatArchiveBytes(value) {
-  if (!Number.isFinite(value) || value <= 0) return "0 byte";
-  if (value < 1_000) return `${value} byte`;
+  if (!Number.isFinite(value) || value <= 0) return "0 bytes";
+  if (value < 1_000) return `${value} ${value === 1 ? "byte" : "bytes"}`;
   const units = ["kB", "MB", "GB", "TB"];
   let size = value / 1_000;
   let unit = 0;
   while (size >= 1_000 && unit < units.length - 1) { size /= 1_000; unit += 1; }
-  return `${new Intl.NumberFormat("it-IT", { maximumFractionDigits: size >= 100 ? 0 : 1 }).format(size)} ${units[unit]}`;
+  return `${new Intl.NumberFormat(undefined, { maximumFractionDigits: size >= 100 ? 0 : 1 }).format(size)} ${units[unit]}`;
 }
 
 export function formatBackupDate(value) {
   if (!value || !Number.isFinite(Date.parse(value))) return "";
-  return new Intl.DateTimeFormat("it-IT", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }
 
 export function createGoogleDriveStorageController({
@@ -323,7 +323,7 @@ export function createGoogleDriveStorageController({
         const visibleRestore = operationPresentation(archive.restore, activeOperationId);
         if (visibleRestore) publish({ restoreOperation: visibleRestore });
       }
-      publish({ statusError: "Impossibile aggiornare lo stato Google Drive. L’ultimo stato confermato resta valido." });
+      publish({ statusError: "Couldn't refresh the Google Drive status. The last confirmed status still applies." });
     })();
     let trackedRead;
     trackedRead = read.finally(() => {
@@ -399,7 +399,7 @@ export function createGoogleDriveStorageController({
       clearPreview();
       return true;
     } catch (error) {
-      publish({ actionError: messageFor(error, "Non è stato possibile annullare l’anteprima. Riprova prima di proseguire.") });
+      publish({ actionError: messageFor(error, "Couldn't cancel the preview. Try again before continuing.") });
       return false;
     }
   }
@@ -410,7 +410,7 @@ export function createGoogleDriveStorageController({
       if (!isCurrentAction(actionId)) return false;
       const raw = currentRawStatus;
       if (!raw?.connected || raw?.reconnectRequired || raw?.folder?.readable !== true || raw?.folder?.writable !== true) {
-        publish({ actionError: raw?.error ? messageFor(raw.error) : "Collega e verifica l’account e la cartella Google Drive prima di continuare." });
+        publish({ actionError: raw?.error ? messageFor(raw.error) : "Connect and verify the Google Drive account and folder before continuing." });
         return false;
       }
       const route = operation === "restore" ? "/api/google-drive/archive/restore/preview" : "/api/google-drive/archive/activation/preview";
@@ -514,7 +514,7 @@ export function createGoogleDriveStorageController({
   async function disconnect({ disableFirst = false } = {}) {
     return runAction("disconnect", async (actionId) => {
       if (snapshot.status?.backupEnabled && !disableFirst) {
-        publish({ actionError: "Disattiva prima la sincronizzazione. Le copie locale e Google Drive resteranno disponibili." });
+        publish({ actionError: "Turn off backup first. The local and Google Drive copies will stay available." });
         return false;
       }
       if (!(await clearPriorPreview())) return false;
@@ -556,7 +556,7 @@ export function createGoogleDriveStorageController({
       return true;
     }).catch((error) => {
       closeAfterCancel = null;
-      publish({ busy: null, actionError: messageFor(error, "Non è stato possibile annullare l’anteprima. Riprova prima di chiudere.") });
+      publish({ busy: null, actionError: messageFor(error, "Couldn't cancel the preview. Try again before closing.") });
       return false;
     });
     return closeAfterCancel;

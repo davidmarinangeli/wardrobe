@@ -22,33 +22,33 @@ const MAX_PENDING_ATTEMPTS = 16;
 const FETCH_TIMEOUT_MS = 15_000;
 const REFRESH_WINDOW_MS = 60_000;
 const SAFE_ERROR_MESSAGES = Object.freeze({
-  configuration_incomplete: "Completa la configurazione Google Drive per collegare un account.",
-  configuration_invalid: "La configurazione Google Drive non è valida.",
-  private_state_invalid: "Lo stato privato Google Drive non è leggibile o non è valido.",
-  target_changed: "La configurazione o la cartella Google Drive è cambiata. Ricollega l’account.",
-  reconnect_required: "La sessione Google Drive è scaduta. Ricollega l’account.",
-  oauth_state_invalid: "La richiesta Google Drive è scaduta o non corrisponde alla sessione.",
-  oauth_denied: "L’autorizzazione Google Drive è stata annullata.",
-  oauth_code_missing: "Google non ha restituito un codice di autorizzazione.",
-  oauth_scope_insufficient: "Google non ha concesso tutti i permessi richiesti per la cartella.",
-  oauth_refresh_missing: "Google non ha fornito un token offline. Riprova autorizzando nuovamente l’accesso.",
-  google_unavailable: "Google Drive non è raggiungibile in questo momento.",
-  google_permission_denied: "L’account non può accedere alla cartella Google Drive configurata.",
-  google_authentication_failed: "Google Drive non ha accettato la sessione. Ricollega l’account.",
-  account_mismatch: "L’account Google verificato non corrisponde alla connessione attiva.",
-  folder_access_denied: "La cartella configurata non è accessibile o non consente le operazioni richieste.",
-  folder_read_denied: "La cartella configurata non può essere elencata.",
-  folder_write_denied: "La cartella configurata non consente di aggiungere file.",
-  invalid_root_folder: "La destinazione configurata non è una cartella Drive valida.",
-  shortcut_not_supported: "La destinazione configurata non può essere un collegamento Drive.",
-  incomplete_drive_listing: "Google Drive non ha completato l’elenco della cartella.",
-  malformed_drive_listing: "Google Drive ha restituito un elenco non valido.",
-  stale_connection: "La connessione Google Drive è cambiata durante l’operazione. Riprova.",
-  persistence_failed: "Non è stato possibile salvare in modo sicuro la connessione Google Drive.",
+  configuration_incomplete: "Finish the Google Drive configuration to connect an account.",
+  configuration_invalid: "The Google Drive configuration isn't valid.",
+  private_state_invalid: "The private Google Drive state is unreadable or invalid.",
+  target_changed: "The Google Drive configuration or folder has changed. Reconnect the account.",
+  reconnect_required: "The Google Drive session has expired. Reconnect the account.",
+  oauth_state_invalid: "The Google Drive request has expired or doesn't match the session.",
+  oauth_denied: "Google Drive authorization was cancelled.",
+  oauth_code_missing: "Google didn't return an authorization code.",
+  oauth_scope_insufficient: "Google didn't grant all the permissions required for the folder.",
+  oauth_refresh_missing: "Google didn't provide an offline token. Reconnect and grant access again.",
+  google_unavailable: "Google Drive can't be reached right now.",
+  google_permission_denied: "The account can't access the configured Google Drive folder.",
+  google_authentication_failed: "Google Drive didn't accept the session. Reconnect the account.",
+  account_mismatch: "The verified Google account doesn't match the active connection.",
+  folder_access_denied: "The configured folder isn't accessible or doesn't allow the required operations.",
+  folder_read_denied: "The configured folder can't be listed.",
+  folder_write_denied: "The configured folder doesn't allow adding files.",
+  invalid_root_folder: "The configured destination isn't a valid Drive folder.",
+  shortcut_not_supported: "The configured destination can't be a Drive shortcut.",
+  incomplete_drive_listing: "Google Drive didn't finish listing the folder.",
+  malformed_drive_listing: "Google Drive returned an invalid listing.",
+  stale_connection: "The Google Drive connection changed during the operation. Try again.",
+  persistence_failed: "The Google Drive connection couldn't be saved safely.",
 });
 
 export class GoogleDriveError extends Error {
-  constructor(code, message = SAFE_ERROR_MESSAGES[code] || "Operazione Google Drive non riuscita.", { status = 400, retryable = false, cause } = {}) {
+  constructor(code, message = SAFE_ERROR_MESSAGES[code] || "The Google Drive operation failed.", { status = 400, retryable = false, cause } = {}) {
     super(message, cause ? { cause } : undefined);
     this.name = "GoogleDriveError";
     this.code = code;

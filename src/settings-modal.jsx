@@ -114,21 +114,21 @@ export function SettingsModal({ open, tab, onTabChange, onClose, aiSetup, aiBadg
           {/* Kept mounted while hidden, so switching tabs mid-preview loses nothing. */}
           <div id="settings-panel-archive" role="tabpanel" aria-labelledby="settings-tab-archive" hidden={tab !== "archive"}>
             {archiveDisabled ? (
-              <div className="settings-archive-off" lang="it">
+              <div className="settings-archive-off">
                 <p className="onboarding-eyebrow">Archive</p>
-                <h3>Google Drive non è configurato</h3>
+                <h3>Google Drive isn't configured</h3>
                 {managed ? (
                   <p>
-                    L’archivio resta su questo computer. Per tenerne una copia su Google Drive, inserisci Client ID,
-                    Client secret, Redirect URI e Folder ID nelle impostazioni dell’app desktop (icona di Wardrobe nella
-                    barra dei menu o nell’area di notifica › Settings… › Google Drive). Il server si riavvia da solo.
+                    The archive stays on this computer. To keep a copy on Google Drive, enter the Client ID,
+                    Client secret, Redirect URI and Folder ID in the desktop app's settings (Wardrobe icon in the
+                    menu bar or notification area › Settings… › Google Drive). The server restarts on its own.
                   </p>
                 ) : (
                   <p>
-                    L’archivio resta su questo computer. Per tenerne una copia su Google Drive, imposta{" "}
+                    The archive stays on this computer. To keep a copy on Google Drive, set{" "}
                     <code>GOOGLE_DRIVE_CLIENT_ID</code>, <code>GOOGLE_DRIVE_CLIENT_SECRET</code>,{" "}
-                    <code>GOOGLE_DRIVE_REDIRECT_URI</code> e <code>GOOGLE_DRIVE_FOLDER_ID</code> nel file <code>.env</code>,
-                    poi riavvia l’app. I passaggi sono in <code>docs/google-drive-operations.md</code>.
+                    <code>GOOGLE_DRIVE_REDIRECT_URI</code> and <code>GOOGLE_DRIVE_FOLDER_ID</code> in the <code>.env</code> file,
+                    then restart the app. The steps are in <code>docs/google-drive-operations.md</code>.
                   </p>
                 )}
               </div>

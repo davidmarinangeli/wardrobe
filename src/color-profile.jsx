@@ -491,7 +491,6 @@ function CertifiedSeasonPicker({ onSelect, onCancel }) {
   return (
     <div className="certified-picker">
       <header className="certified-picker-header">
-        <h3>Pick your season</h3>
         <p>
           If you've had an in-person consultation, choose what you were given and we'll use that
           palette instead of ours.

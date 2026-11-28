@@ -348,7 +348,7 @@ export function SuggestionPanel({ items, onSaveOutfit, onClose }) {
 
   return (
     <ViewerPanel
-      title="Suggest Outfits"
+      title="Suggest outfits"
       ariaLabel="Outfit suggestions"
       onClose={onClose}
       closeRef={closeRef}

@@ -171,7 +171,7 @@ test("failed preview cancellation keeps the preview open and allows a later ackn
   assert.equal(await controller.requestClose(), false);
   assert.equal(controller.getSnapshot().preview.decision, "initialize", "a failed acknowledgment cannot drop the worker-pausing preview");
   assert.equal(controller.getSnapshot().busy, null);
-  assert.match(controller.getSnapshot().actionError, /Drive non è raggiungibile/i);
+  assert.match(controller.getSnapshot().actionError, /Drive can't be reached/i);
   assert.equal(await controller.requestClose(), true);
   assert.equal(controller.getSnapshot().preview, null);
   assert.equal(cancellationAttempts, 2);
@@ -198,7 +198,7 @@ test("an incomplete remote read stays an explicit unavailable error, never an em
   assert.equal(view.preview.decision, "unavailable");
   assert.equal(view.preview.remote.valid, false);
   assert.equal(view.preview.remote.empty, false);
-  assert.match(view.preview.remote.error, /lettura/i);
+  assert.match(view.preview.remote.error, /finish reading/i);
   assert.deepEqual(view.preview.choices, ["cancel"]);
   assert.doesNotMatch(JSON.stringify(view), /opaque-token|private-account-id|private-folder-id|targetFingerprint/);
   await controller.choose("cancel");
@@ -290,7 +290,7 @@ test("rejected activation evidence clears consent and asks for a fresh preview",
   assert.equal(await controller.choose("use-local"), false);
   assert.equal(cancelled, true, "the now-stale preview is released on the server");
   assert.equal(controller.getSnapshot().preview, null);
-  assert.match(controller.getSnapshot().actionError, /scaduta|cambiati|nuova anteprima/i);
+  assert.match(controller.getSnapshot().actionError, /The choice expired or the data changed/);
   controller.stop();
 });
 
@@ -424,7 +424,7 @@ test("a new operation replaces a tracked terminal restore without accepting stal
   restore = { operationId: "restore-operation-two", stage: "failed", progress: 42, error: "archive_invalid" };
   await controller.poll();
   assert.equal(controller.getSnapshot().restoreOperation.stage, "failed");
-  assert.match(controller.getSnapshot().restoreOperation.error, /incomplet|danneggiat/i);
+  assert.match(controller.getSnapshot().restoreOperation.error, /incomplete|damaged/i);
   assert.doesNotMatch(JSON.stringify(controller.getSnapshot()), /restore-operation-one|restore-operation-two/);
   controller.stop();
 });
@@ -559,7 +559,7 @@ test("an activation refused while the archive is busy drops the consumed preview
   await controller.openPreview("activation");
   assert.equal(await controller.choose("use-local"), false);
   assert.equal(controller.getSnapshot().preview, null);
-  assert.match(controller.getSnapshot().actionError, /occupato/);
+  assert.match(controller.getSnapshot().actionError, /busy/);
   controller.stop();
 });
 
@@ -608,8 +608,8 @@ test("a sync target change asks to reactivate the backup instead of verifying ac
 
   await controller.start();
   const { syncError } = controller.getSnapshot().status;
-  assert.match(syncError.message, /Disattiva e riattiva il backup/);
-  assert.doesNotMatch(syncError.message, /Verifica/);
+  assert.match(syncError.message, /Turn backup off and on again/);
+  assert.doesNotMatch(syncError.message, /Verify/);
   assert.equal(syncError.unreachable, false, "a different destination is not a Drive outage");
   controller.stop();
 });

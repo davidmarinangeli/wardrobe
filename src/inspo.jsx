@@ -100,7 +100,7 @@ function InspoImporter({ onClose, onImported }) {
   const canSubmit = tab === "url" ? urlText.trim().length > 0 : dropQueue.length > 0;
 
   return (
-    <ViewerPanel title="Add Inspo" ariaLabel="Add inspiration" onClose={onClose} closeRef={closeButtonRef} entryClassName="inspo-importer-entry">
+    <ViewerPanel title="Add inspo" ariaLabel="Add inspiration" onClose={onClose} closeRef={closeButtonRef} entryClassName="inspo-importer-entry">
       <div className="inspo-importer-body">
         <nav className="inspo-tabs">
           <button type="button" className={tab === "url" ? "active" : ""} onClick={() => setTab("url")}>From URLs</button>

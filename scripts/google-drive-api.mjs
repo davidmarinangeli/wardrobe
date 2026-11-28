@@ -215,64 +215,64 @@ function safeError(error) {
   ]);
   const exposedCode = allowed.has(code) ? code : "google_unavailable";
   const safeMessages = {
-    invalid_request: "La richiesta non è valida.",
-    cross_origin_request: "La richiesta deve provenire da questa applicazione.",
-    file_trashed: "Il file Drive richiesto è nel cestino.",
-    drive_metadata_id_mismatch: "Google Drive ha restituito metadati per un elemento diverso.",
-    configuration_incomplete: "Completa la configurazione Google Drive per collegare un account.",
-    configuration_invalid: "La configurazione Google Drive non è valida.",
-    private_state_invalid: "Lo stato privato Google Drive non è leggibile o non è valido.",
-    target_changed: "La configurazione o la cartella Google Drive è cambiata. Ricollega l’account.",
-    reconnect_required: "La sessione Google Drive è scaduta. Ricollega l’account.",
-    oauth_state_invalid: "La richiesta Google Drive è scaduta o non corrisponde alla sessione.",
-    oauth_denied: "L’autorizzazione Google Drive è stata annullata.",
-    oauth_code_missing: "Google non ha restituito un codice di autorizzazione.",
-    oauth_scope_insufficient: "Google non ha concesso tutti i permessi richiesti per la cartella.",
-    oauth_refresh_missing: "Google non ha fornito un token offline. Riprova autorizzando nuovamente l’accesso.",
-    google_permission_denied: "L’account non può accedere alla cartella Google Drive configurata.",
-    google_authentication_failed: "Google Drive non ha accettato la sessione. Ricollega l’account.",
-    account_mismatch: "L’account Google verificato non corrisponde alla connessione attiva.",
-    folder_access_denied: "La cartella configurata non è accessibile o non consente le operazioni richieste.",
-    stale_connection: "La connessione Google Drive è cambiata durante l’operazione. Riprova.",
-    persistence_failed: "Non è stato possibile salvare in modo sicuro la connessione Google Drive.",
-    invalid_drive_id: "L’identificativo Drive non è valido.",
-    malformed_drive_metadata: "Google Drive ha restituito metadati non validi.",
-    shortcut_not_supported: "I collegamenti Drive non sono supportati per l’archivio.",
-    invalid_root_folder: "La destinazione configurata non è una cartella Drive valida.",
-    folder_read_denied: "La cartella Drive non può essere letta.",
-    folder_write_denied: "La cartella Drive non consente di aggiungere l’archivio.",
-    incomplete_drive_listing: "Google Drive non ha completato l’elenco della cartella.",
-    malformed_drive_listing: "Google Drive ha restituito un elenco non valido.",
-    duplicate_drive_id: "Google Drive ha restituito elementi duplicati.",
-    drive_parent_mismatch: "Google Drive ha restituito un elemento fuori dalla cartella richiesta.",
-    foreign_shared_drive: "L’elemento si trova in un’altra unità Drive.",
-    file_read_denied: "Questo file Drive non può essere scaricato.",
-    file_write_denied: "Questo file Drive non può essere sostituito.",
-    file_edit_denied: "I metadati di questo file Drive non possono essere modificati.",
-    file_delete_denied: "Questo file Drive non può essere eliminato.",
-    file_too_large: "Il file supera la dimensione supportata.",
-    google_document_not_supported: "I documenti Google nativi non sono supportati nell’archivio.",
-    invalid_file_name: "Il nome del file non è valido.",
-    invalid_mime_type: "Il tipo del file non è supportato.",
-    invalid_app_properties: "I metadati applicativi non sono validi.",
-    empty_update: "Indica almeno un campo da aggiornare.",
-    drive_parent_ambiguous: "La posizione del file Drive non è univoca.",
-    drive_ancestry_cycle: "La struttura delle cartelle Drive non è valida.",
-    drive_ancestry_too_deep: "La struttura delle cartelle Drive è troppo profonda.",
-    drive_parent_not_folder: "La cartella superiore Drive non è valida.",
-    root_mutation_forbidden: "La cartella archivio configurata non può essere modificata o eliminata.",
-    created_file_outside_target: "Google Drive ha creato un elemento fuori dalla destinazione verificata.",
-    updated_file_moved: "Google Drive ha spostato il file durante l’aggiornamento.",
-    malformed_page_token: "Google Drive ha restituito un token di pagina non valido.",
-    repeated_page_token: "Google Drive ha ripetuto una pagina dell’elenco.",
-    drive_listing_too_large: "La cartella Drive supera il limite di elementi supportato.",
-    drive_listing_too_many_pages: "La cartella Drive ha troppe pagine da elencare.",
-    archive_maintenance: "L’archivio è in manutenzione. Riprova tra poco.",
-    archive_control_invalid: "Lo stato di ripristino dell’archivio non è leggibile o non è valido.",
-    archive_invalid: "L’archivio selezionato non è completo o non è valido.",
-    snapshot_changed: "L’archivio è cambiato dopo l’anteprima. Rivedi la scelta.",
-    sync_conflict: "La scelta dell’archivio è scaduta o non corrisponde all’anteprima.",
-    google_unavailable: "Google Drive non è raggiungibile in questo momento.",
+    invalid_request: "The request isn't valid.",
+    cross_origin_request: "The request must come from this app.",
+    file_trashed: "The requested Drive file is in the trash.",
+    drive_metadata_id_mismatch: "Google Drive returned metadata for a different item.",
+    configuration_incomplete: "Finish the Google Drive configuration to connect an account.",
+    configuration_invalid: "The Google Drive configuration isn't valid.",
+    private_state_invalid: "The private Google Drive state is unreadable or invalid.",
+    target_changed: "The Google Drive configuration or folder has changed. Reconnect the account.",
+    reconnect_required: "The Google Drive session has expired. Reconnect the account.",
+    oauth_state_invalid: "The Google Drive request has expired or doesn't match the session.",
+    oauth_denied: "Google Drive authorization was cancelled.",
+    oauth_code_missing: "Google didn't return an authorization code.",
+    oauth_scope_insufficient: "Google didn't grant all the permissions required for the folder.",
+    oauth_refresh_missing: "Google didn't provide an offline token. Reconnect and grant access again.",
+    google_permission_denied: "The account can't access the configured Google Drive folder.",
+    google_authentication_failed: "Google Drive didn't accept the session. Reconnect the account.",
+    account_mismatch: "The verified Google account doesn't match the active connection.",
+    folder_access_denied: "The configured folder isn't accessible or doesn't allow the required operations.",
+    stale_connection: "The Google Drive connection changed during the operation. Try again.",
+    persistence_failed: "The Google Drive connection couldn't be saved safely.",
+    invalid_drive_id: "The Drive ID isn't valid.",
+    malformed_drive_metadata: "Google Drive returned invalid metadata.",
+    shortcut_not_supported: "Drive shortcuts aren't supported for the archive.",
+    invalid_root_folder: "The configured destination isn't a valid Drive folder.",
+    folder_read_denied: "The Drive folder can't be read.",
+    folder_write_denied: "The Drive folder doesn't allow adding the archive.",
+    incomplete_drive_listing: "Google Drive didn't finish listing the folder.",
+    malformed_drive_listing: "Google Drive returned an invalid listing.",
+    duplicate_drive_id: "Google Drive returned duplicate items.",
+    drive_parent_mismatch: "Google Drive returned an item outside the requested folder.",
+    foreign_shared_drive: "The item is on a different shared drive.",
+    file_read_denied: "This Drive file can't be downloaded.",
+    file_write_denied: "This Drive file can't be replaced.",
+    file_edit_denied: "This Drive file's metadata can't be changed.",
+    file_delete_denied: "This Drive file can't be deleted.",
+    file_too_large: "The file exceeds the supported size.",
+    google_document_not_supported: "Native Google documents aren't supported in the archive.",
+    invalid_file_name: "The file name isn't valid.",
+    invalid_mime_type: "The file type isn't supported.",
+    invalid_app_properties: "The app metadata isn't valid.",
+    empty_update: "Specify at least one field to update.",
+    drive_parent_ambiguous: "The Drive file's location is ambiguous.",
+    drive_ancestry_cycle: "The Drive folder structure isn't valid.",
+    drive_ancestry_too_deep: "The Drive folder structure is too deep.",
+    drive_parent_not_folder: "The parent Drive folder isn't valid.",
+    root_mutation_forbidden: "The configured archive folder can't be changed or deleted.",
+    created_file_outside_target: "Google Drive created an item outside the verified destination.",
+    updated_file_moved: "Google Drive moved the file during the update.",
+    malformed_page_token: "Google Drive returned an invalid page token.",
+    repeated_page_token: "Google Drive repeated a page of the listing.",
+    drive_listing_too_large: "The Drive folder exceeds the supported number of items.",
+    drive_listing_too_many_pages: "The Drive folder has too many pages to list.",
+    archive_maintenance: "The archive is under maintenance. Try again shortly.",
+    archive_control_invalid: "The archive restore state is unreadable or invalid.",
+    archive_invalid: "The selected archive is incomplete or invalid.",
+    snapshot_changed: "The archive changed after the preview. Review your choice.",
+    sync_conflict: "The archive choice has expired or doesn't match the preview.",
+    google_unavailable: "Google Drive can't be reached right now.",
   };
   return { error: { code: exposedCode, message: safeMessages[exposedCode] || safeMessages.google_unavailable, retryable: Boolean(error?.retryable) } };
 }
@@ -357,13 +357,13 @@ export function googleDriveApi(options = {}) {
     const method = req.method || "GET";
     try {
       if (route === "/api/google-drive/status") {
-        if (method !== "GET") return json(res, 405, { error: { code: "method_not_allowed", message: "Metodo non consentito.", retryable: false } });
+        if (method !== "GET") return json(res, 405, { error: { code: "method_not_allowed", message: "Method not allowed.", retryable: false } });
         const [authStatus, syncStatus, archiveStatus] = await Promise.all([service.getStatus(), syncWorker?.getSafeStatus() || {}, archiveManager?.status() || {}]);
         return json(res, 200, { ...authStatus, ...syncStatus, ...archiveStatus });
       }
 
       if (route === "/api/google-drive/archive/status") {
-        if (method !== "GET") return json(res, 405, { error: { code: "method_not_allowed", message: "Metodo non consentito.", retryable: false } });
+        if (method !== "GET") return json(res, 405, { error: { code: "method_not_allowed", message: "Method not allowed.", retryable: false } });
         return json(res, 200, await archiveManager.status());
       }
 
@@ -376,7 +376,7 @@ export function googleDriveApi(options = {}) {
         ["/api/google-drive/archive/restore/confirm", "restore"],
       ]);
       if (previewRoutes.has(route) || choiceRoutes.has(route) || route === "/api/google-drive/archive/disable" || route === "/api/google-drive/archive/retry") {
-        if (method !== "POST") return json(res, 405, { error: { code: "method_not_allowed", message: "Metodo non consentito.", retryable: false } });
+        if (method !== "POST") return json(res, 405, { error: { code: "method_not_allowed", message: "Method not allowed.", retryable: false } });
         if (!service.callbackOrigin) {
           const status = await service.getStatus();
           throw new GoogleDriveError(status.error?.code || "configuration_incomplete");
@@ -390,7 +390,7 @@ export function googleDriveApi(options = {}) {
       }
 
       if (route === "/api/google-drive/oauth/callback") {
-        if (method !== "GET") return json(res, 405, { error: { code: "method_not_allowed", message: "Metodo non consentito.", retryable: false } });
+        if (method !== "GET") return json(res, 405, { error: { code: "method_not_allowed", message: "Method not allowed.", retryable: false } });
         let resultCode = "oauth_state_invalid";
         try {
           await service.handleOAuthCallback({
@@ -415,9 +415,9 @@ export function googleDriveApi(options = {}) {
       }
 
       if (!["/api/google-drive/oauth/start", "/api/google-drive/verify", "/api/google-drive/disconnect"].includes(route)) {
-        return json(res, 404, { error: { code: "not_found", message: "Risorsa non trovata.", retryable: false } });
+        return json(res, 404, { error: { code: "not_found", message: "Not found.", retryable: false } });
       }
-      if (method !== "POST") return json(res, 405, { error: { code: "method_not_allowed", message: "Metodo non consentito.", retryable: false } });
+      if (method !== "POST") return json(res, 405, { error: { code: "method_not_allowed", message: "Method not allowed.", retryable: false } });
       if (!service.callbackOrigin) {
         const status = await service.getStatus();
         const code = status.error?.code || (status.state === "configuration_invalid" ? "configuration_invalid" : "configuration_incomplete");

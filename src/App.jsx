@@ -616,7 +616,7 @@ export function App() {
             loading={!archiveMaintenanceActive && !error}
             error={error}
             empty={archiveMaintenanceActive}
-            emptyMessage="È in corso un’operazione sull’archivio: il guardaroba torna disponibile appena finisce. Dettagli in Settings › Archive."
+            emptyMessage="An archive operation is in progress: the wardrobe will be available again as soon as it finishes. Details in Settings › Cloud backup."
             noun="archive"
           />
         ) : view === "overview" ? (
