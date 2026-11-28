@@ -36,10 +36,16 @@
 
 .field > span { display: block; margin-bottom: var(--s-2); }
 
+/* A .field is usually a <label>: a block, so stacked fields get the gap
+   their labels need (Category, then Notes). */
+.field { display: block; }
+.field + .field { margin-top: var(--s-4); }
+
 .field-label em,
 .field > span em,
 .sheet-field > span em,
 .cheat-title-field em,
+.import-field label span,
 .onboarding-field label span {
   margin-left: 2px;
   color: var(--muted);
