@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-28T02:30:00Z",
+  "title": "Design System: Wardrobe",
+  "extensions": {
+    "colorMeta": {
+      "paper": { "role": "neutral", "displayName": "Paper", "canonical": "#f4f0e8", "tonalRamp": ["#2a2722", "#4a463f", "#6d675f", "#948d82", "#b9b1a5", "#d8d0c3", "#ebe5da", "#f4f0e8"] },
+      "paper-warm": { "role": "neutral", "displayName": "Warm Paper", "canonical": "#f7f2e9", "tonalRamp": ["#2b2621", "#4c463e", "#6f685e", "#968e82", "#bcb3a6", "#dcd4c7", "#eee8de", "#f7f2e9"] },
+      "paper-raised": { "role": "neutral", "displayName": "Raised Paper", "canonical": "#fbf7f0", "tonalRamp": ["#2c2823", "#4d4841", "#716a61", "#988f85", "#beb6aa", "#ded7cc", "#f0ebe3", "#fbf7f0"] },
+      "surface-stage": { "role": "neutral", "displayName": "Stage", "canonical": "#eee7d9", "tonalRamp": ["#28241d", "#48423a", "#6a6356", "#918876", "#b6ac99", "#d4cab7", "#e4dccc", "#eee7d9"] },
+      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#191919", "tonalRamp": ["#191919", "#2e2e2e", "#474747", "#626262", "#808080", "#a1a1a1", "#c6c6c6", "#ebebeb"] },
+      "ink-soft": { "role": "neutral", "displayName": "Soft Ink", "canonical": "#2e2a26", "tonalRamp": ["#1d1a17", "#2e2a26", "#47423c", "#625c54", "#817a70", "#a39b90", "#c8c1b6", "#ece6dc"] },
+      "muted": { "role": "neutral", "displayName": "Taupe", "canonical": "#6d675f", "tonalRamp": ["#26231f", "#3d3934", "#56514a", "#6d675f", "#8a847b", "#aaa49b", "#cbc6be", "#ece8e2"] },
+      "line": { "role": "neutral", "displayName": "Hairline", "canonical": "#d8d0c3", "tonalRamp": ["#2a261f", "#4a443a", "#6d6557", "#938a7b", "#b8ae9f", "#d8d0c3", "#e9e3d9", "#f6f2ec"] },
+      "oxblood": { "role": "primary", "displayName": "Oxblood", "canonical": "#6e302e", "tonalRamp": ["#2a100f", "#4a1d1c", "#6e302e", "#8f4744", "#b06663", "#cc8d8a", "#e4bcba", "#f6e6e5"] },
+      "oxblood-warm": { "role": "primary", "displayName": "Warm Oxblood", "canonical": "#8c4436", "tonalRamp": ["#2f140f", "#55251c", "#8c4436", "#a85d4e", "#c27e70", "#d9a398", "#ecc9c2", "#f9ebe8"] },
+      "sage-success": { "role": "secondary", "displayName": "Sage", "canonical": "#4e6350", "tonalRamp": ["#1a221b", "#2f3c30", "#4e6350", "#68806a", "#879e88", "#a9bcaa", "#cdd9cd", "#eef3ee"] },
+      "brick-error": { "role": "secondary", "displayName": "Brick", "canonical": "#8a3f35", "tonalRamp": ["#2e1411", "#542620", "#8a3f35", "#a6594e", "#bf7a70", "#d6a097", "#eac8c2", "#f8eae8"] },
+      "danger-red": { "role": "secondary", "displayName": "Danger Red", "canonical": "#b23a2a", "tonalRamp": ["#3a120c", "#6a2118", "#b23a2a", "#c95a4a", "#da7d70", "#e8a39a", "#f3cac4", "#fcebe9"] },
+      "dark-glass-solid": { "role": "neutral", "displayName": "Dark Glass (solid fallback)", "canonical": "#2b2621", "tonalRamp": ["#151210", "#2b2621", "#443d36", "#5f564d", "#7d7268", "#9e9389", "#c4bbb2", "#ebe5df"] },
+      "dark-glass-ink": { "role": "neutral", "displayName": "Dark Glass Ink", "canonical": "#f7f2e9", "tonalRamp": ["#2b2621", "#4c463e", "#6f685e", "#968e82", "#bcb3a6", "#dcd4c7", "#eee8de", "#f7f2e9"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "The one page title (h1) per view." },
+      "title": { "displayName": "Title", "purpose": "Dialog, sheet and popover titles; page section headings (h2)." },
+      "section": { "displayName": "Section", "purpose": "A section inside a dialog or page (h3); at regular weight, one-line statements." },
+      "subsection": { "displayName": "Subsection", "purpose": "Sub-sections (h4) and card titles." },
+      "body": { "displayName": "Body", "purpose": "Running text, field values, buttons, tabs, chips, garment names." },
+      "caption": { "displayName": "Caption", "purpose": "Meta, counts, hints, helper text." },
+      "eyebrow": { "displayName": "Eyebrow", "purpose": "Tracked caps label voice: field labels, row keys, filter chips, the top view switch. Never above a heading." }
+    },
+    "shadows": [
+      { "name": "shadow-xs", "value": "0 1px 2px rgba(60, 47, 33, .05)", "purpose": "Resting chips and small floating labels." },
+      { "name": "shadow-sm", "value": "0 1px 2px rgba(60, 47, 33, .05), 0 6px 16px rgba(60, 47, 33, .06)", "purpose": "Resting cards, active filter pill, primary button at rest." },
+      { "name": "shadow-md", "value": "0 2px 4px rgba(60, 47, 33, .06), 0 14px 32px rgba(60, 47, 33, .1)", "purpose": "Hover lift of cards and buttons." },
+      { "name": "shadow-lg", "value": "0 4px 8px rgba(60, 47, 33, .07), 0 28px 60px rgba(60, 47, 33, .16)", "purpose": "Panels, dialogs, menus, the dragged suggestion card." },
+      { "name": "shadow-contact", "value": "drop-shadow(0 1px 2px rgba(60, 47, 33, .12)) drop-shadow(0 8px 12px rgba(60, 47, 33, .16))", "purpose": "A garment cut-out standing on its card (filter, follows the silhouette)." },
+      { "name": "shadow-contact-lift", "value": "drop-shadow(0 22px 22px rgba(60, 47, 33, .2))", "purpose": "The cut-out lifted on hover." },
+      { "name": "glass-edge", "value": "inset 0 1px 0 rgba(255, 255, 255, .7)", "purpose": "The lit top edge every raised surface carries next to its shadow." },
+      { "name": "glass-dark-edge", "value": "inset 0 1px 0 rgba(255, 255, 255, .22)", "purpose": "The lit edge of dark glass chrome." },
+      { "name": "ring-focus", "value": "0 0 0 3px rgba(140, 68, 54, .12)", "purpose": "Field focus halo, together with an accent-warm border." }
+    ],
+    "glass": [
+      { "name": "glass-card", "value": "linear-gradient(160deg, rgba(255, 252, 246, .92), rgba(246, 237, 224, .84))", "purpose": "Card level: translucent warm fill without backdrop-filter (grid cards, hot cards, picker tiles)." },
+      { "name": "glass-chrome", "value": "rgba(250, 245, 237, .72) + blur(20px) saturate(155%)", "purpose": "Chrome level: the desktop top bar, on a pseudo-element." },
+      { "name": "glass-blur-panel", "value": "blur(14px) saturate(140%)", "purpose": "Frosted overlays inside a panel and on-media buttons." },
+      { "name": "glass-blur-sm", "value": "blur(7px) saturate(130%)", "purpose": "Light frost: popover backdrops, the modeled-hero fade, processing bands." },
+      { "name": "glass-blur-scrim", "value": "blur(3px)", "purpose": "The full-viewport scrim under panels." },
+      { "name": "glass-dark", "value": "rgba(30, 26, 22, .32) + blur(10px)", "purpose": "Dark chrome level: phone bottom nav and floating secondary actions; refraction from GlassFilter.jsx." }
+    ],
+    "motion": [
+      { "name": "ease-out", "value": "cubic-bezier(.23, 1, .32, 1)", "purpose": "Default for anything arriving or changing state." },
+      { "name": "ease-in-out", "value": "cubic-bezier(.77, 0, .175, 1)", "purpose": "Symmetric moves." },
+      { "name": "ease-drawer", "value": "cubic-bezier(.32, .72, 0, 1)", "purpose": "Panels and sheets entering." },
+      { "name": "ease-spring", "value": "cubic-bezier(.18, 1.12, .28, 1)", "purpose": "Slight overshoot for something settling after being moved (suggestion deck)." },
+      { "name": "dur-press", "value": "140ms", "purpose": "Press feedback." },
+      { "name": "dur-pop", "value": "180ms", "purpose": "Hover, colour and small state changes." },
+      { "name": "dur-panel", "value": "260ms", "purpose": "Panels, cards lifting, page scale-back." }
+    ],
+    "breakpoints": [
+      { "name": "phone", "value": "860px", "purpose": "At and below: bottom nav, sheets, 44px touch floor, --page-x 24px." },
+      { "name": "narrow-phone", "value": "520px", "purpose": "Two-column card grids with tighter captions." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one filled oxblood action a section is for; last in its row, never destructive.",
+      "html": "<button class=\"ds-btn-primary\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><path d=\"M12 5v14M5 12h14\"/></svg>Outfit</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; gap: 7px; height: 38px; padding: 0 var(--s-4, 16px); border: 1px solid var(--accent, #6e302e); border-radius: var(--r-full, 999px); background: var(--accent, #6e302e); color: var(--paper, #f4f0e8); font: 500 13px/1 'Instrument Sans Variable', 'Helvetica Neue', Arial, sans-serif; box-shadow: var(--shadow-sm); cursor: pointer; transition: background 180ms cubic-bezier(.23,1,.32,1), border-color 180ms cubic-bezier(.23,1,.32,1), box-shadow 180ms cubic-bezier(.23,1,.32,1), transform 140ms cubic-bezier(.23,1,.32,1); } .ds-btn-primary:hover { background: var(--accent-warm, #8c4436); border-color: var(--accent-warm, #8c4436); box-shadow: var(--shadow-md); } .ds-btn-primary:active { transform: scale(.97); } .ds-btn-primary:focus-visible { outline: 2px solid var(--accent-warm, #8c4436); outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Outlined paper pill for every other action that deserves a button.",
+      "html": "<button class=\"ds-btn-secondary\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><path d=\"M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3z\"/></svg>Suggest outfit</button>",
+      "css": ".ds-btn-secondary { display: inline-flex; align-items: center; gap: 7px; height: 38px; padding: 0 var(--s-4, 16px); border: 1px solid var(--line, #d8d0c3); border-radius: var(--r-full, 999px); background: var(--paper-raised, #fbf7f0); color: var(--ink-soft, #2e2a26); font: 500 13px/1 'Instrument Sans Variable', 'Helvetica Neue', Arial, sans-serif; cursor: pointer; transition: border-color 180ms cubic-bezier(.23,1,.32,1), box-shadow 180ms cubic-bezier(.23,1,.32,1), transform 140ms cubic-bezier(.23,1,.32,1); } .ds-btn-secondary:hover { border-color: var(--muted, #6d675f); box-shadow: var(--shadow-sm); } .ds-btn-secondary:active { transform: scale(.97); } .ds-btn-secondary:focus-visible { outline: 2px solid var(--accent-warm, #8c4436); outline-offset: 2px; }"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Outlined destructive action; filled only at the final confirming step.",
+      "html": "<button class=\"ds-btn-danger\">Delete</button>",
+      "css": ".ds-btn-danger { display: inline-flex; align-items: center; gap: 7px; height: 38px; padding: 0 var(--s-4, 16px); border: 1px solid color-mix(in srgb, #b23a2a 36%, transparent); border-radius: 999px; background: transparent; color: #b23a2a; font: 500 13px/1 'Instrument Sans Variable', 'Helvetica Neue', Arial, sans-serif; cursor: pointer; transition: background 180ms cubic-bezier(.23,1,.32,1), border-color 180ms cubic-bezier(.23,1,.32,1); } .ds-btn-danger:hover { background: color-mix(in srgb, #b23a2a 8%, transparent); border-color: #b23a2a; } .ds-btn-danger:focus-visible { outline: 2px solid var(--accent-warm, #8c4436); outline-offset: 2px; }"
+    },
+    {
+      "name": "View Switch",
+      "kind": "nav",
+      "refersTo": "view-switch-tab",
+      "description": "The desktop top navigation: a washed pill track with three tracked-caps destinations.",
+      "html": "<nav class=\"ds-switch\"><button class=\"ds-switch__tab is-active\">Wardrobe</button><button class=\"ds-switch__tab\">Overview</button><button class=\"ds-switch__tab\">Inspo</button></nav>",
+      "css": ".ds-switch { display: inline-flex; gap: 4px; padding: 3px; border-radius: 999px; background: rgba(46, 42, 38, .045); } .ds-switch__tab { min-height: 34px; padding: 7px 16px; border: 0; border-radius: 999px; background: transparent; color: var(--muted, #6d675f); font: 500 11px/1 'Instrument Sans Variable', 'Helvetica Neue', Arial, sans-serif; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; transition: background 180ms cubic-bezier(.23,1,.32,1), color 180ms cubic-bezier(.23,1,.32,1); } .ds-switch__tab:hover:not(.is-active) { background: rgba(46, 42, 38, .045); color: var(--ink-soft, #2e2a26); } .ds-switch__tab.is-active { background: var(--paper-raised, #fbf7f0); color: var(--ink-soft, #2e2a26); box-shadow: var(--shadow-sm); } .ds-switch__tab:focus-visible { outline: 2px solid var(--accent-warm, #8c4436); outline-offset: 2px; }"
+    },
+    {
+      "name": "Filter Chip",
+      "kind": "chip",
+      "refersTo": "chip-filter",
+      "description": "Category filter pill as shipped (tracked caps); S3 of the plan unifies it with the picker chip.",
+      "html": "<div class=\"ds-chips\"><button class=\"ds-chip is-active\">All</button><button class=\"ds-chip\">Tops</button><button class=\"ds-chip\">Jackets</button></div>",
+      "css": ".ds-chips { display: flex; gap: 6px; } .ds-chip { min-height: 38px; padding: 9px 17px; border: 1px solid transparent; border-radius: 999px; background: rgba(46, 42, 38, .045); color: var(--muted, #6d675f); font: 500 11px/1 'Instrument Sans Variable', 'Helvetica Neue', Arial, sans-serif; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; transition: background 180ms cubic-bezier(.23,1,.32,1), color 180ms cubic-bezier(.23,1,.32,1); } .ds-chip:hover:not(.is-active) { background: rgba(46, 42, 38, .09); color: var(--ink-soft, #2e2a26); } .ds-chip.is-active { border-color: rgba(255, 255, 255, .5); background: var(--paper-raised, #fbf7f0); color: var(--ink-soft, #2e2a26); box-shadow: var(--shadow-sm); } .ds-chip:focus-visible { outline: 2px solid var(--accent-warm, #8c4436); outline-offset: 2px; }"
+    },
+    {
+      "name": "Garment Card",
+      "kind": "card",
+      "refersTo": "card-garment-art",
+      "description": "Translucent warm card that makes a white cut-out visible, with the caption outside below.",
+      "html": "<button class=\"ds-card\"><span class=\"ds-card__art\"><svg width=\"96\" height=\"110\" viewBox=\"0 0 96 110\"><path d=\"M30 8l18 8 18-8 22 14-8 22-10-4v62H26V40l-10 4-8-22z\" fill=\"#c69c6d\" stroke=\"#8a6a45\" stroke-width=\"1.5\"/></svg></span><span class=\"ds-card__name\">Camel Cable-Knit Sweater</span><span class=\"ds-card__type\">Top · <em>in 1 look</em></span></button>",
+      "css": ".ds-card { display: flex; flex-direction: column; gap: 3px; width: 200px; padding: 0; border: 0; background: transparent; text-align: left; cursor: zoom-in; font-family: 'Instrument Sans Variable', 'Helvetica Neue', Arial, sans-serif; } .ds-card__art { display: grid; place-items: center; aspect-ratio: .84; margin-bottom: 9px; padding: 14px; border: 1px solid rgba(255, 255, 255, .5); border-radius: var(--r-lg, 20px); background: linear-gradient(160deg, rgba(255, 252, 246, .92), rgba(246, 237, 224, .84)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .7), var(--shadow-sm); transition: transform 260ms cubic-bezier(.23,1,.32,1), box-shadow 260ms cubic-bezier(.23,1,.32,1); } .ds-card__art svg { filter: drop-shadow(0 1px 2px rgba(60, 47, 33, .12)) drop-shadow(0 8px 12px rgba(60, 47, 33, .16)); } .ds-card:hover .ds-card__art { transform: translateY(-3px); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .7), var(--shadow-md); } .ds-card:focus-visible { outline: none; } .ds-card:focus-visible .ds-card__art { outline: 2px solid var(--accent-warm, #8c4436); outline-offset: 2px; } .ds-card__name { color: var(--ink-soft, #2e2a26); font-size: 13px; font-weight: 500; } .ds-card__type { color: var(--muted, #6d675f); font-size: 11px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; } .ds-card__type em { font-style: normal; color: var(--accent-warm, #8c4436); }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Raised paper field with an eyebrow label; focus is an accent-warm border plus the warm ring.",
+      "html": "<label class=\"ds-field\"><span>Name</span><input value=\"Saturday errands\"></label>",
+      "css": ".ds-field { display: grid; gap: 8px; width: 280px; font-family: 'Instrument Sans Variable', 'Helvetica Neue', Arial, sans-serif; } .ds-field span { color: var(--muted, #6d675f); font-size: 11px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; } .ds-field input { min-height: 42px; padding: 10px 12px; border: 1px solid var(--line, #d8d0c3); border-radius: var(--r-sm, 10px); background: var(--paper-raised, #fbf7f0); color: var(--ink-soft, #2e2a26); font: inherit; font-size: 13px; transition: border-color 180ms cubic-bezier(.23,1,.32,1), box-shadow 180ms cubic-bezier(.23,1,.32,1); } .ds-field input:hover { border-color: var(--muted, #6d675f); } .ds-field input:focus { outline: none; border-color: var(--accent-warm, #8c4436); box-shadow: 0 0 0 3px rgba(140, 68, 54, .12); }"
+    },
+    {
+      "name": "Panel",
+      "kind": "custom",
+      "refersTo": "panel",
+      "description": "ViewerPanel anatomy: fixed header (title + close), the only scrolling body, fixed footer with the action row.",
+      "html": "<section class=\"ds-panel\"><header class=\"ds-panel__head\"><h2>Saturday Errands</h2><button class=\"ds-panel__close\" aria-label=\"Close\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><path d=\"M6 6l12 12M18 6L6 18\"/></svg></button></header><div class=\"ds-panel__body\">An easy weekend uniform: crisp stripes and mid-wash denim.</div><footer class=\"ds-panel__foot\"><button class=\"ds-panel__danger\">Delete</button><button class=\"ds-panel__primary\">Wore it today</button></footer></section>",
+      "css": ".ds-panel { display: flex; flex-direction: column; width: 360px; border: 1px solid rgba(255, 255, 255, .5); border-radius: var(--r-xl, 28px); background: var(--paper-warm, #f7f2e9); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .7), var(--shadow-lg); overflow: hidden; font-family: 'Instrument Sans Variable', 'Helvetica Neue', Arial, sans-serif; color: var(--ink-soft, #2e2a26); } .ds-panel__head { display: flex; align-items: center; justify-content: space-between; padding: 24px 24px 10px 34px; } .ds-panel__head h2 { margin: 0; color: var(--ink, #191919); font-size: 22px; font-weight: 500; letter-spacing: -.025em; line-height: 1.15; } .ds-panel__close { display: grid; place-items: center; width: 40px; height: 40px; border: 0; border-radius: 999px; background: transparent; color: var(--ink-soft, #2e2a26); cursor: pointer; } .ds-panel__close:hover { background: rgba(46, 42, 38, .045); } .ds-panel__close:focus-visible { outline: 2px solid var(--accent-warm, #8c4436); outline-offset: 2px; } .ds-panel__body { padding: 8px 34px 24px; font-size: 13px; line-height: 1.5; } .ds-panel__foot { display: flex; justify-content: space-between; padding: 12px 34px 16px; } .ds-panel__danger { height: 38px; padding: 0 16px; border: 1px solid color-mix(in srgb, #b23a2a 36%, transparent); border-radius: 999px; background: transparent; color: #b23a2a; font: inherit; font-size: 13px; cursor: pointer; } .ds-panel__primary { height: 38px; padding: 0 16px; border: 1px solid var(--accent, #6e302e); border-radius: 999px; background: var(--accent, #6e302e); color: var(--paper, #f4f0e8); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; } .ds-panel__primary:hover { background: var(--accent-warm, #8c4436); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Warm Atelier Rail",
+    "overview": "Wardrobe is a quiet workroom for the clothes someone already owns. Everything around the garments is warm paper: a cream field lit by three soft radial pools and a barely visible grain, so that backdrop-filter has something real to blur. The garments are the only saturated things on screen; the interface keeps to ink, muted taupe and one oxblood accent that marks the single action a view is for.\n\nDepth is material rather than decorative. Cards are translucent warm fills with a lit top edge and a warm, soft shadow; chrome that content scrolls under is real frosted glass; floating controls on a phone switch to a dark, refracting glass register so the colour passing underneath becomes the thing you see. Panels and dialogs are opaque paper with the largest radius in the set, sitting on a lightly blurred scrim. Motion is short, exponential, and grows from the thing that was touched.\n\nThe surface mode is Operate: the user is in a task (find a piece, build an outfit, decide what to keep), so consistency and scanability outrank expression, and the brand lives in the precise details: the warm shadow tint, the lit edge, the contact shadow under a cut-out.",
+    "keyCharacteristics": [
+      "Warm neutrals only; nothing pure black on pure white. `--ink-soft` carries body copy, `--ink` is for emphasis and filled surfaces.",
+      "One accent (oxblood) for the one primary action, selection rings and accent ink; never decoration.",
+      "Glass in four registers (card fill, light chrome, panel, dark chrome), each with its own blur budget.",
+      "Generous, consistent rounding: five radius steps plus pill.",
+      "One sans family (Instrument Sans Variable) carrying every role; levels differ by size, headings are all weight 500.",
+      "Short, purposeful motion (140 / 180 / 260 ms) with custom ease-out curves; every effect has a reduced-motion and reduced-transparency fallback."
+    ],
+    "rules": [
+      { "name": "The One Voice Rule", "body": "Oxblood fills at most one control per section; a second filled button in the same view is a bug, not emphasis. (The global top bar counts as its own section.)", "section": "colors" },
+      { "name": "The Garments Are the Colour Rule", "body": "No new brand colours, gradients or tinted panels. Hue on screen comes from photos, cut-outs and the season palette swatches. (Binding for this UI round: `docs/impeccable/plan.md`.)", "section": "colors" },
+      { "name": "The Warm Shadow Rule", "body": "Every shadow is tinted `rgba(60, 47, 33, …)`; a cool grey shadow on cream reads as dirt.", "section": "colors" },
+      { "name": "The Six Sizes Rule", "body": "Every `font-size` is a `--text-*` token; no hand-set px values. Levels differ by size, not weight: every heading is 500, 600 is for emphasis inside body text and short labels.", "section": "typography" },
+      { "name": "The 11px Floor Rule", "body": "Nothing smaller than 11px except the two documented exceptions.", "section": "typography" },
+      { "name": "The Blur Budget Rule", "body": "Blur radius is a performance budget, not a style knob: 20px only on the desktop chrome, 14px on panel overlays, 10px with no saturate on anything floating over scrolling content on a phone, 3px on the full-viewport scrim. Never add a new blur value.", "section": "elevation" },
+      { "name": "The Lit Edge Rule", "body": "Anything raised carries `--glass-edge` alongside its shadow; anything glass carries `--glass-border`.", "section": "elevation" },
+      { "name": "The Five Radii Rule", "body": "Every rectangular surface picks one of the five steps; nothing invents its own (three hand-set radii remain, listed as orphans).", "section": "elevation" }
+    ],
+    "dos": [
+      "**Do** take every colour from the `:root` tokens; add no new brand colour.",
+      "**Do** use `--r-*` for every corner, `--shadow-*` for every shadow, `--glass-blur*` for every blur and `--s-*` for spacing that lands on the scale.",
+      "**Do** use the button classes from `buttons.css` and re-theme them only through `--btn-*`.",
+      "**Do** keep one filled oxblood action per section and put it last in its row.",
+      "**Do** build every modal on `ViewerPanel`'s header / body / footer anatomy.",
+      "**Do** give every raised surface `--glass-edge` and every garment a contact shadow.",
+      "**Do** provide `prefers-reduced-motion` and `prefers-reduced-transparency` fallbacks for every new effect."
+    ],
+    "donts": [
+      "**Don't** set a `font-size` outside the `--text-*` scale or below 11px.",
+      "**Don't** add backdrop-filter to grid cards, or a blur radius outside the five `--glass-blur*` tokens.",
+      "**Don't** use cool grey or black shadows, or a zero-offset coloured glow outside the AI moments that already have one.",
+      "**Don't** put a second filled primary in a view, or make a destructive action filled except at its final confirmation.",
+      "**Don't** add a top-level nav destination for a secondary feature; it belongs in a hot card or a panel.",
+      "**Don't** stack an uppercase eyebrow above a title that already names the thing (see `docs/impeccable/audit.md`)."
+    ]
+  }
+}

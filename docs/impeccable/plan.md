@@ -101,6 +101,8 @@ Alla fine ogni agente:
 
 Lo step 0a parte dopo M.
 
+**Esito dello step 0a.** `PRODUCT.md`, `DESIGN.md` e `.impeccable/design.json` alla radice del repo; `docs/impeccable/audit.md` (problemi per pagina con gravità e step, top 10, verifica del diff visivo); `docs/impeccable/components.md` (inventario per famiglia, forma canonica, valori orfani). Il consolidamento ha sostituito 409 spaziature e 2 radius con i token esistenti, senza differenze visive. L'audit ha corretto alcuni assunti di questo piano: le sezioni della wave 1 qui sotto sono già aggiornate, e la tabella "Proprietà dei file" è nuova.
+
 ### Step 0b: estensione dell'harness (1 agente, fuori dal repo, in parallelo a M e 0a)
 
 - `variants.mjs` diventa a "round": ogni variante dichiara la propria `baseline`. Il round 1 resta confrontato con `before`; il round 2 con `impeccable-base`.
@@ -111,21 +113,52 @@ Lo step 0a parte dopo M.
 
 Ogni step ha un file di proprietà. Si modificano solo quelli dichiarati, per poter unire liberamente qualunque combinazione di A e B. Se servono primitive condivise in `src/styles.css`, si scrivono solo dentro un blocco commentato `/* == S<n> ... == */` dello step.
 
+Ogni step legge prima `docs/impeccable/audit.md` (i problemi con il suo codice di step) e `docs/impeccable/components.md` (le famiglie che tocca), e chiude i P1 e P2 che gli sono assegnati in entrambe le varianti, salvo dove la variante li risolve in modo diverso.
+
+### Proprietà dei file (precisata dallo step 0a)
+
+L'audit ha mostrato che diversi file servono a più step: `App.jsx`, `styles.css`, `item-editor.jsx` (contiene anche la card del Wardrobe), `outfits.jsx` (card e viewer), `inspo.jsx` (header, card, importer e viewer). Per questi la proprietà è per funzione o per gruppo di selettori, non per file. I numeri di riga sono quelli del commit dello step 0a e servono a trovare il punto.
+
+| File | S1 | S2 | S3 | S4 | S5 |
+| --- | --- | --- | --- | --- | --- |
+| `App.jsx` | header delle pagine, barra in alto, `MobileHeadRow`/h1, azioni di pagina | definizione delle hot card (≈320-390: eyebrow, titolo, corpo) | il blocco `navExtra` col filtro "Matches my colors" (≈655-668) | — | — |
+| `styles.css` | `.app-top-bar*`, `.app-view-switch*`, `.top-action*`, `.gallery-pane`, `.gallery-header`, `.mobile-headrow`/`.mobile-largetitle` (757-781), `.gallery-meta-row`, `.piece-count` e i loro override responsive | `.gallery-grid`, `.gallery-item*` (898-1065), `.gallery-item__peek-dots` (3360-3370) e override responsive | `.category-nav*` (803-895 e override a 860px), `.field*` (1939-1975), `.tag-editor`/`.editable-tag*`/`.tag-input-row` (2179-2231), `.detail-row__tag` (3104-3114), `.sheet-field*` (3245-3263) | sezione viewer: `.viewer*`, `.detail-row*` (salvo `__tag`), `.details-label`, `.item-*`, `.variant-*`, `.sheet-menu`/`.tier-menu`, `.save-bar*`, `.stage-*`, `.refine-composer*`, `.modeled-*` | `.popover-*` (402-470) |
+| `item-editor.jsx` | — | `GalleryItem` (123-273) | — | tutto il resto | — |
+| `outfits.jsx` | — | `OutfitCard`, `OutfitHoverPieces`, `OutfitFlatLay` e la griglia di `OutfitsSection` | — | `OutfitViewer`, `OutfitPicker` | — |
+| `inspo.jsx` | `Inspo` (header, conteggio, Pieces/Sources) | `PinCard` (205-242) | — | — | `InspoImporter` (28-204) |
+| `cheat-sheets.jsx` | — | `SheetCard` (75-91) | — | — | — |
+| `overview-pieces.jsx` | — | il markup della card e del checkbox (≈235-260) | — | — | — |
+| `overview.css` | tutto salvo la ricerca | `.overview-card*` (201-228, 294-346) | `.overview-search*` (56-92) | — | — |
+| `outfits.css` | — | griglia e card (`.outfit-card*`) | `.outfit-style-tag*` | viewer (`.outfit-viewer*`) | — |
+| `inspo.css` | — | griglia | `.inspo-tabs*` e `.inspo-url-field*` (33-104) | — | contenitore dell'importer e dropzone |
+| `settings-modal.css` | — | — | `.settings-tab*` (13-48) | tutto il resto | — |
+| `declutter.css` / `cheat-sheets.css` | — | griglia dei cheat sheet | soli tab (`.declutter-tabs*`, `.cheat-editor__mobile-tabs*`) | — | — |
+| `components/piece-picker.css` | — | tile e checkbox | filtri (`.piece-picker__filters`, `__search`, `__chips`, 25-37) | resto | — |
+| `onboarding.css` | — | — | — | — | tutto (anche `.provider-switch`, usato da Settings: S4 lo corregge solo con un override in `settings-modal.css`) |
+| `main.jsx` | — | — | gli import di `chips.css` e `fields.css`, dopo `styles.css` e prima di `buttons.css` | — | — |
+
+Regole che rendono combinabile qualunque A/B:
+- **S3 non modifica JSX di S2, S4 o S5.** I nuovi `chips.css` e `fields.css` applicano la forma canonica anche alle classi esistenti con liste di selettori (per esempio `.field input, .sheet-field input, .import-field input, .onboarding-field input`), con specificità uguale o maggiore. Le regole duplicate si tolgono solo dai blocchi che S3 possiede (tabella sopra); i duplicati negli altri file restano e li toglie lo step proprietario in wave 2 o S6. Le sostituzioni di classe nei JSX S3 le fa solo in `App.jsx` (`navExtra`) e nei componenti che non sono di nessuno step della wave 1 (`declutter.jsx` per i tab, `cheat-sheets.jsx` per i soli tab telefono).
+- **S1 non cambia i nomi di classe** `.category-nav`, `button.active`/`aria-pressed` e `.piece-count` (se lo tiene): può spostarli o toglierli dal layout, ma lo stile del chip è di S3.
+- **Testi.** La grafia "colours/colors" è mista (`audit.md`, problema trasversale 7). La decide l'utente al gate; fino ad allora nessuno step la cambia.
+
 ### S1: shell delle pagine e gerarchia (Wardrobe, Overview, Inspo, barra in alto, header e nav mobile)
 
-**Problemi:**
-- Overview mostra la posizione quattro volte: nav, h1, tab, h2.
-- Wardrobe su desktop non ha un titolo ma un eyebrow "20 PIECES", mentre su telefono ha l'h1 "Wardrobe".
-- Inspo mette la pill "SOURCES (5)" dentro la riga delle categorie.
+**Problemi** (audit A01-A08):
+- Overview mostra la posizione quattro volte su desktop (nav, h1, tab, h2 "Outfits 5") e cinque su telefono, dove si aggiungono la tab bar e, scorrendo, la pill flottante col nome della pagina (07-phone).
+- Wardrobe e Inspo hanno ora un h1 su entrambe le larghezze (viene da `.mobile-headrow`, riusato su desktop in `styles.css:763-781`), più l'eyebrow-conteggio "20 PIECES" / "11 ITEMS" e la riga dei chip: tre righe di intestazione. Il vecchio assunto "Wardrobe su desktop non ha titolo" non vale più.
+- Inspo mette la pill "SOURCES (5)" dentro la riga delle categorie, e il conteggio "11 ITEMS" somma pezzi e fonti senza cambiare tra le due viste.
+- Le etichette della bottom nav sono a 2,0:1 e 1,5:1 sul vetro scuro (P1, WCAG 1.4.3).
+- Su telefono i due bottoni flottanti più la bottom nav coprono la riga inferiore della griglia già al primo caricamento.
 - Le tre pagine hanno un header diverso.
 
 **Comando impeccable:** `layout` + `distill`.
 
 **Variante A, "i tab sono il titolo":**
-- Su desktop niente h1, perché la nav dice già dove sei.
+- Su desktop nessun h1 visibile, perché la nav dice già dove sei. L'h1 resta nel DOM con `.sr-only` (già globale), così vale la regola "un solo h1 per vista".
 - I sotto-tab diventano l'intestazione della pagina: più grandi, con il conteggio ("Outfits 5"), sulla stessa riga delle azioni, allineate a destra.
 - Nessun h2 di sezione.
-- Wardrobe e Inspo: conteggio e filtri su una sola riga. In Inspo "Pieces / Sources" diventano due tab come in Overview.
+- Wardrobe e Inspo: conteggio e filtri su una sola riga. In Inspo "Pieces / Sources" diventano due tab come in Overview, ognuno col proprio conteggio.
 
 **Variante B, "titolo + segmented":**
 - Un solo h1 per pagina con il nome del contenuto corrente ("Outfits"), il conteggio come caption.
@@ -134,17 +167,25 @@ Ogni step ha un file di proprietà. Si modificano solo quelli dichiarati, per po
 - Wardrobe ha "Wardrobe · 20"; Inspo ha "Inspo" con il segmented "Pieces / Sources", separato dalle categorie.
 
 **Entrambe:**
-- su telefono stessa logica, con `MobileHeader` coerente;
+- su telefono stessa logica, con `MobileHeader` coerente; la pill flottante col nome della pagina non ripete ciò che dice già la tab bar;
 - un solo h1 per vista;
-- azioni con al massimo un primario.
+- azioni con al massimo un primario;
+- contrasto delle etichette della bottom nav ≥4,5:1 senza nuovi colori: si agisce su opacità di `--glass-dark` (o sul suo uso nella sola nav), colore delle etichette tra i token esistenti e peso, e si verifica col detector (`impeccable detect --json http://127.0.0.1:<porta> --viewport 390x844`);
+- il conteggio di Inspo descrive la vista corrente;
+- i bottoni flottanti su telefono non coprono contenuto a riposo (spazio riservato sotto la griglia, o meno chrome).
 
-**File:** `App.jsx` (solo la parte header delle pagine), `components/PageShell.jsx`, `MobileHeader.jsx`, `BottomNav.jsx`, `mobile-chrome.css`, `overview.jsx`, `overview.css`, `inspo.jsx` (solo l'header), la sezione header/topbar di `styles.css`.
+**File:** vedi la tabella "Proprietà dei file". In sintesi: `App.jsx` (header delle pagine e barra in alto), `components/PageShell.jsx`, `MobileHeader.jsx`, `BottomNav.jsx`, `mobile-chrome.css`, `overview.jsx`, `overview.css` (salvo ricerca e card), `inspo.jsx` (solo `Inspo`), i selettori S1 di `styles.css`. Lo stile dei chip di categoria è di S3.
 
 **Stati da controllare:** 01–09.
 
 ### S2: card e griglie
 
-**Problemi:** le card dei capi (Wardrobe, Pieces, Inspo), degli outfit, dei cheat sheet, le hot card ("My colours", "Declutter") e le tile del picker hanno superfici, radius, padding, caption e badge diversi. Ne fanno parte i puntini del carosello sotto la card, che spostano la caption, e il badge "Retry" che esce dalla card.
+**Problemi** (audit B01-B08, `components.md` §1 e §12): le card dei capi (Wardrobe, Pieces, Inspo), degli outfit, dei cheat sheet, le hot card ("My colours", "Declutter") e le tile del picker hanno superfici, radius, padding, caption e badge diversi. Ne fanno parte i puntini del carosello sotto la card, che spostano la caption di 22px, e il badge "Retry" che esce dalla card. In più:
+- su desktop le card degli outfit non mostrano il nome finché non ci si passa sopra (P1: con quattro flat lay simili non si riconosce nulla), su telefono sì;
+- la caption usa tre pesi di titolo (13/500, 15/500, 15/600) e la meta in maiuscolo o in sentence case; il commento in `outfits.css` dice "card titles are --text-subsection everywhere" ma la card del Wardrobe usa `--text-body`;
+- il picker scrive la categoria al plurale ("TOPS"), le altre card al singolare;
+- l'eyebrow delle hot card fa da kicker sopra il titolo;
+- copertina dei cheat sheet `#fff` letterale e un'ombra interna nera (`hot-cards.css:132`).
 
 **Comando impeccable:** `polish` + `layout`.
 
@@ -160,9 +201,12 @@ Ogni step ha un file di proprietà. Si modificano solo quelli dichiarati, per po
 **Entrambe:**
 - un solo componente o classe base di card con varianti dichiarate (garment, outfit, sheet, hot, picker tile);
 - stati hover, selezione e focus uguali;
-- il checkbox di selezione è identico in Pieces e nel picker.
+- il checkbox di selezione è identico in Pieces e nel picker;
+- il nome dell'outfit è sempre visibile su desktop come su telefono;
+- una sola regola per caso e peso della caption, e la categoria al singolare ovunque;
+- niente kicker sopra il titolo della hot card (il nome della funzione diventa il titolo, o una riga sotto).
 
-**File:** la sezione grid/card di `styles.css`, `components/hot-cards.css`, `HotCards.jsx`, `OutfitStack.jsx`, `piece-picker.css` (solo le tile), `outfits.css` (solo la griglia), `cheat-sheets.css` (solo la griglia), `inspo.css` (solo la griglia), `wishlist.css`.
+**File:** vedi la tabella "Proprietà dei file". In sintesi: i selettori S2 di `styles.css`, `components/hot-cards.css`, `HotCards.jsx`, `OutfitStack.jsx`, i componenti card dentro `item-editor.jsx` (`GalleryItem`), `outfits.jsx` (`OutfitCard` e griglia), `inspo.jsx` (`PinCard`), `cheat-sheets.jsx` (`SheetCard`), `overview-pieces.jsx` (markup della card), le definizioni delle hot card in `App.jsx`, `piece-picker.css` (solo tile e checkbox), `outfits.css`, `cheat-sheets.css`, `inspo.css` e `overview.css` (solo griglia e card), `wishlist.css`.
 
 **Stati da controllare:** 01–09, 28, 31, 46.
 
@@ -172,8 +216,9 @@ Ogni step ha un file di proprietà. Si modificano solo quelli dichiarati, per po
 - Le pill delle categorie sono tutte maiuscole e la riga è lunghissima su desktop.
 - "MATCHES MY COLORS" è un filtro di natura diversa, ma ha lo stesso aspetto delle categorie.
 - I chip dei tag e degli stili hanno ognuno uno stile diverso: "cotton" nel viewer, "CASUAL" nell'outfit.
-- Ci sono almeno tre tipi di tab: la nav in alto, i tab di Overview e i tab di Settings.
-- Il campo di ricerca e gli input non hanno un aspetto unico.
+- I tab sono cinque implementazioni, non tre (audit C01): Overview (sottolineato `--accent`), Settings (sottolineato `--ink`), importer Inspo (maiuscolo a tutta larghezza, `--accent-warm`, e `:focus-visible` senza outline), Declutter e cheat editor su telefono (segmented). In Settings sotto i tab ci sono due filetti.
+- Il campo di ricerca e gli input non hanno un aspetto unico; il focus è di tre tipi e quello della ricerca Overview non viene disegnato (`overview.css:72`, valore non valido).
+- Le card di scelta "uno tra N" (provider in Settings e nel wizard, metodo "Describe it / Use a photo", occasioni, risposte del quiz, copia Drive) hanno cinque stati selezionati diversi (audit C07, `components.md` §11): famiglia nuova, non prevista nella prima stesura.
 
 **Comando impeccable:** `distill` + `typeset` (solo per le etichette dei controlli).
 
@@ -185,24 +230,29 @@ Ogni step ha un file di proprietà. Si modificano solo quelli dichiarati, per po
 
 **Variante B, "track glass":**
 - Le categorie stanno in una sola traccia glass a scorrimento, come un segmented lungo, con lo stesso linguaggio della nav in alto.
-- I filtri trasversali ("Matches my colors", "Sources" se S1 non li ha spostati) vanno in un bottone "Filter" con un menu.
+- Il filtro trasversale "Matches my colors" va in un bottone "Filter" con un menu. "Sources" non è di S3: lo toglie dalla riga dei chip S1, in entrambe le sue varianti.
 
 **Entrambe:**
-- un solo stile di chip per i tag (read-only ed editabile);
-- un solo stile di campo per testo, ricerca e select;
-- i tab dentro i modali (Settings, Declutter, Inspo importer) sono un solo componente.
+- un solo stile di chip per i tag (read-only ed editabile), in sentence case: i tag del capo ("cotton") e gli style tag dell'outfit ("CASUAL") diventano uguali;
+- un solo stile di campo per testo, ricerca e select, con un solo focus (bordo `--accent-warm` + `--ring-focus`); corretto il focus della ricerca Overview;
+- i tab dentro i modali (Settings, Declutter, Inspo importer, cheat editor su telefono) sono un solo componente, con outline al focus; il filetto dei tab è l'unico divisore sotto l'header (in Settings il secondo filetto viene da `.provider-switch` in `onboarding.css`: lo neutralizza S4 con un override, S3 non tocca `onboarding.css`);
+- una `.choice` (card di scelta) definita in `fields.css` con un solo stato selezionato, applicata con selettori alias alle classi esistenti dove S3 può (le altre le aggancia S6);
+- bersagli dei tab e dei toggle almeno 44px su telefono.
 
-**File:** `src/components/chips.css` (nuovo) e `src/components/fields.css` (nuovo), più la sostituzione delle classi nei JSX che usano chip, tab o campi. Non si tocca la struttura degli header, che è di S1.
+**File:** `src/components/chips.css` (nuovo) e `src/components/fields.css` (nuovo), importati in `main.jsx`; i selettori S3 della tabella "Proprietà dei file" (chip di categoria, campi e tag in `styles.css`, tab in `settings-modal.css`, `inspo.css`, `declutter.css`, `cheat-sheets.css`, filtri del picker, ricerca di Overview); in JSX solo `App.jsx` (`navExtra`), `declutter.jsx` e `cheat-sheets.jsx` (soli tab). Non si tocca la struttura degli header, che è di S1, né il JSX di S2, S4 e S5.
 
 **Stati da controllare:** 01, 03, 06, 08–14, 19, 25, 35, 39, 51.
 
 ### S4: contenuto dei modali principali
 
-**Problemi:**
-- I titoli dei modali sono a volte in maiuscolo ("SATURDAY ERRANDS", "WHITE OXFORD SHIRT", "SETTINGS") e a volte no.
-- Le etichette di sezione sono di tre tipi: eyebrow "CATEGORY", "3 PIECES", "WAYS TO WEAR IT · 3".
+**Problemi** (audit D01-D08):
+- I titoli dei modali sono già in sentence case e in `--text-title` dopo il primo giro (Settings, item e outfit viewer: 10, 15, 25): questo punto della prima stesura è chiuso. Resta il kicker sopra il titolo nelle conferme ("UNSAVED CHANGES", "DELETE SHEET": 44, 45) e nel pannello di selezione bulk ("OVERVIEW", `overview-pieces.jsx:271`, se S4 lo prende; altrimenti S6).
+- Le etichette di sezione sono di tre tipi e il conteggio ha tre formati: eyebrow "CATEGORY", "3 PIECES", "WAYS TO WEAR IT · 3", "OUTFITS · 1".
 - Ogni modale ha le sue righe chiave/valore.
-- La posizione delle azioni cambia: Delete/Edit/Wore it inline nell'outfit e menu ⋯ nel capo.
+- La posizione delle azioni cambia: Delete/Edit/Wore it nel footer dell'outfit e menu ⋯ nel capo (P1).
+- Settings › Cloud backup chiama la stessa funzione in tre modi: tab "Cloud backup", eyebrow "ARCHIVE", titolo "Google Drive isn't configured" (12); il wizard dice "Archive / Google Drive".
+- `ConfirmDialog` ha superficie `--paper-raised` e radius `--r-lg`, diversi dal pannello.
+- Sotto i tab di Settings ci sono due filetti (`.provider-switch { border-top }` in `onboarding.css:538`).
 
 **Comando impeccable:** `layout` + `clarify` (etichette).
 
@@ -217,19 +267,24 @@ Ogni step ha un file di proprietà. Si modificano solo quelli dichiarati, per po
 - Le azioni secondarie vanno nel menu ⋯ dell'header; il primario va nel footer.
 
 **Entrambe:**
-- titolo del modale in sentence case con `--text-title`;
+- titolo del modale in sentence case con `--text-title`, senza eyebrow sopra (anche nelle conferme);
 - stessa riga chiave/valore in item viewer, outfit viewer e Settings;
-- stesso spazio tra le sezioni.
+- un solo formato per il conteggio nelle etichette di sezione;
+- stesso spazio tra le sezioni;
+- un nome solo per l'archivio in Settings (tab, titolo, testo), allineato a quello del wizard: la parola la propone S4 nelle NOTES, la conferma l'utente al gate;
+- `ConfirmDialog` con la superficie e il radius del pannello;
+- in Settings un solo filetto sotto i tab, con un override in `settings-modal.css` (non in `onboarding.css`, che è di S5).
 
 **Ambito:** item viewer (15–24), outfit viewer (25–27), Settings (10–14), piece picker (28–31), ConfirmDialog.
 
-**File:** `item-editor.jsx`, `item-sheet.js`, `outfits.jsx`, `settings-modal.*`, `google-drive-storage.css`, `components/PiecePicker.jsx` (non le tile, che sono di S2), `ConfirmDialog.jsx`, `confirm-dialog.css`, `PanelActions.jsx`, `ModelPhotoControls.jsx`, `ModeledHero.jsx`, la sezione viewer di `styles.css`.
+**File:** vedi la tabella "Proprietà dei file". In sintesi: `item-editor.jsx` (salvo `GalleryItem`), `item-sheet.js`, `outfits.jsx` (`OutfitViewer`, `OutfitPicker`), `settings-modal.jsx`, `settings-modal.css` (salvo i tab), `google-drive-storage.*`, `components/PiecePicker.jsx` (non le tile, che sono di S2), `ConfirmDialog.jsx`, `confirm-dialog.css`, `PanelActions.jsx`, `ModelPhotoControls.jsx`, `ModeledHero.jsx`, `outfits.css` (solo viewer), i selettori S4 di `styles.css`.
 
 ### S5: popover e flussi
 
-**Problemi:**
-- Il popover di import, il popover Mirror e l'importer Inspo hanno un linguaggio visivo diverso da quello dei modali.
-- Il wizard di onboarding ha gerarchie e bottoni suoi.
+**Problemi** (audit E01-E06):
+- Il popover di import, il popover Mirror e l'importer Inspo hanno un linguaggio visivo diverso da quello dei modali: kicker sopra il titolo ("WARDROBE IMPORT", "AI MIRROR"), icona nel titolo, e nell'import tre stati detti insieme ("2 ready for review", "Import needs attention", "3 items").
+- Il wizard di onboarding ha gerarchie e bottoni suoi, e dice due cose sul progresso: cinque trattini (contano anche welcome e done) e l'eyebrow "Step 1 of 3" (P1). Ogni step ha anche un kicker ("SETUP", "STEP 2 OF 3", "ALL SET") e la scorciatoia "Archive settings" in un riquadro sopra il titolo.
+- Quattro dropzone con quattro implementazioni (import, Inspo, Mirror, wizard).
 
 **Comando impeccable:** `polish` + `onboard` (solo per il wizard).
 
@@ -241,11 +296,16 @@ Ogni step ha un file di proprietà. Si modificano solo quelli dichiarati, per po
 - Su desktop import, Mirror e importer Inspo diventano pannelli `ViewerPanel`: lo stesso side sheet dell'item viewer.
 - Su telefono sono già sheet.
 
-**Entrambe:** il wizard usa lo stesso header e footer dei modali, uno step indicator coerente e un solo primario per step.
+**Entrambe:**
+- il wizard usa lo stesso header e footer dei modali, un solo indicatore di passo (trattini e testo contano la stessa cosa) e un solo primario per step;
+- nessun kicker sopra i titoli di popover e step; il contesto, se serve, va nel sottotitolo;
+- la scorciatoia all'archivio del wizard non sta sopra il titolo (footer o riga secondaria);
+- una sola dropzone per import, Inspo, Mirror e wizard;
+- i tab dell'importer Inspo prendono il componente tab di S3: S5 non li ristila (`inspo.css:33-104` è di S3), sistema solo il contenitore.
 
 **Ambito:** 51–62.
 
-**File:** `import-flow.*`, `mirror.*`, `inspo.jsx` (solo l'importer), `onboarding.*`.
+**File:** `import-flow.*`, `mirror.*`, `inspo.jsx` (solo `InspoImporter`), `inspo.css` (contenitore dell'importer e dropzone), `onboarding.*`, i selettori `.popover-*` di `styles.css`. Il primario disabilitato che appare rosa (opacità .45 dell'oxblood, 51 e 60) è di `buttons.css`, condiviso: va in S7.
 
 ## Revisione (dopo ogni step della wave 1)
 
@@ -267,7 +327,7 @@ Dall'hub su http://127.0.0.1:5300 (tab "Round 2") l'utente sceglie A, B o nessun
 ## Wave 2: dopo la scelta (sequenziale)
 
 1. **Merge dei vincitori** in `ui/impeccable`, uno step alla volta, risolvendo i conflitti. Poi tour completo.
-2. **S6, propagazione** ai modali di funzione che la wave 1 non ha toccato: color profile (34–37), declutter (38–40), suggestions (32–33), cheat sheet viewer/editor (41–47), pin Inspo e wishlist (48–50). Usa i pattern vincenti di S2, S3 e S4.
+2. **S6, propagazione** ai modali di funzione che la wave 1 non ha toccato: color profile (34–37), declutter (38–40), suggestions (32–33), cheat sheet viewer/editor (41–47), pin Inspo e wishlist (48–50). Usa i pattern vincenti di S2, S3 e S4. In più (audit F01-F05): la card di scelta di S3 applicata a quiz, stagioni e copia Drive; i kicker rimasti ("ORIGINAL", "COLLECTION", "WHAT YOUR INSPO BOARD SAYS", "OVERVIEW" del pannello bulk se S4 non l'ha preso); i duplicati di stile che S3 ha lasciato nei file degli altri step; i riquadri interni (memo, avvisi, guide) ridotti a un solo `.inset` (`components.md` §10).
 3. **S7, rifinitura finale:**
    - `impeccable adapt` sul telefono;
    - `impeccable polish` su tutto;
