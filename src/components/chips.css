@@ -1,0 +1,669 @@
+/* ─── Chips, tags and tabs (S3, variant B: "glass track") ────────────────────
+   One component per job, instead of one per module, all in the language of
+   the top view switch: a wash track with a raised paper pill for "on".
+
+     .chip-track  a single-choice filter row (the category rows of Wardrobe,
+                Inspo and the piece picker): one continuous track that
+                scrolls sideways, its segments the categories.
+     .chip      a filter you can press on its own (the picker's tag row):
+                a wash pill, raised paper when on.
+     .category-filter  the "Filter" button at the end of a category track,
+                holding filters that combine with any category ("Matches my
+                colors") in a small menu (.filter-menu).
+     .tag       a label, not a control: garment tags, outfit style tags, the
+                editable tag list. Smaller than a chip, never uppercase.
+     .tabs      the tabs inside a panel (Settings, Add inspo, Declutter, the
+                cheat sheet editor on a phone): the same segmented track.
+
+   The existing class names keep working: each rule lists them next to the
+   canonical one (same or higher specificity, and this file loads after every
+   component stylesheet, see main.jsx). Their old declarations were removed
+   only from the blocks S3 owns; duplicates in other files are left for the
+   step that owns them. */
+
+/* ─── Shared label voice ────────────────────────────────────────────────── */
+
+.chip,
+.piece-picker__chip,
+.chip-track > button,
+.category-nav > button:not(.category-filter) {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  border: 1px solid transparent;
+  border-radius: var(--r-full);
+  background: var(--wash-1);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--track-body);
+  line-height: var(--leading-none);
+  text-transform: none;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background var(--dur-pop) var(--ease-out),
+    border-color var(--dur-pop) var(--ease-out),
+    box-shadow var(--dur-pop) var(--ease-out),
+    color var(--dur-pop) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
+}
+
+/* ─── Chip (on its own) ─────────────────────────────────────────────────── */
+
+.chip,
+.piece-picker__chip {
+  min-height: 32px;
+  padding: 0 var(--s-3);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .chip:hover,
+  .piece-picker__chip:hover { background: var(--wash-2); color: var(--ink); }
+}
+
+.chip[aria-pressed="true"],
+.chip.is-active,
+.piece-picker__chip.is-active {
+  border-color: var(--glass-border);
+  background: var(--paper-raised);
+  color: var(--ink);
+  box-shadow: var(--glass-edge), var(--shadow-xs);
+}
+
+.chip:focus-visible,
+.piece-picker__chip:focus-visible {
+  outline: 2px solid var(--accent-warm);
+  outline-offset: 2px;
+}
+
+.chip:active,
+.piece-picker__chip:active { transform: scale(.97); }
+
+/* A count inside a chip ("#cotton 4"): quieter, tabular. */
+.chip__count,
+.piece-picker__chip-count {
+  color: var(--muted);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-regular);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Rows that scroll ──────────────────────────────────────────────────── */
+
+.chip-row,
+.chip-track,
+.category-nav,
+.piece-picker__chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.chip-row,
+.piece-picker__tags { gap: 6px; }
+
+.chip-row::-webkit-scrollbar,
+.chip-track::-webkit-scrollbar,
+.category-nav::-webkit-scrollbar,
+.piece-picker__chips::-webkit-scrollbar { display: none; }
+
+/* The picker's rows: 4px of block padding, given back by the margins, so
+   the focus ring is not clipped by the scrolling row. */
+.piece-picker__chips {
+  margin-block: -4px;
+  padding-block: 4px;
+}
+
+/* ─── Track ─────────────────────────────────────────────────────────────── */
+
+/* The page's category row. Only as wide as its segments, so on a wide screen
+   it never stretches. The track is drawn by the segments themselves (each
+   carries the wash; the ends are rounded), so a control that follows the
+   categories, like the Filter button, can sit outside it in the same row. */
+.category-nav {
+  width: max-content;
+  max-width: 100%;
+  gap: 0;
+  margin: 24px 0 -4px;
+  border: 0;
+  padding: 4px 0;
+  background: transparent;
+}
+
+.chip-track,
+.piece-picker__chips:not(.piece-picker__tags) { gap: 0; }
+
+.chip-track > button,
+.category-nav > button:not(.category-filter),
+.piece-picker__chips:not(.piece-picker__tags) > .piece-picker__chip {
+  isolation: isolate;
+  min-height: 38px;
+  border: 0;
+  border-radius: 0;
+  padding: 0 14px;
+  background: var(--wash-1);
+  color: var(--ink-soft);
+  box-shadow: none;
+}
+
+/* Rounded ends: the first segment, and the last one before anything that
+   is not a segment (or the end of the row). */
+.chip-track > button:first-child,
+.category-nav > button:first-child,
+.piece-picker__chips:not(.piece-picker__tags) > .piece-picker__chip:first-child {
+  border-radius: var(--r-full) 0 0 var(--r-full);
+  padding-left: 17px;
+}
+
+.chip-track > button:last-child,
+.category-nav > button:not(.category-filter):last-child,
+.category-nav > button:not(.category-filter):has(+ .category-filter),
+.piece-picker__chips:not(.piece-picker__tags) > .piece-picker__chip:last-child {
+  border-radius: 0 var(--r-full) var(--r-full) 0;
+  padding-right: 17px;
+}
+
+/* The "on" pill: raised paper inset 3px into the track, as in the view
+   switch. Drawn behind the label. */
+.chip-track > button::before,
+.category-nav > button:not(.category-filter)::before,
+.piece-picker__chips:not(.piece-picker__tags) > .piece-picker__chip::before {
+  position: absolute;
+  inset: 3px;
+  z-index: -1;
+  border-radius: var(--r-full);
+  background: transparent;
+  content: "";
+  transition:
+    background var(--dur-pop) var(--ease-out),
+    box-shadow var(--dur-pop) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .chip-track > button:hover,
+  .category-nav > button:not(.category-filter):hover,
+  .piece-picker__chips:not(.piece-picker__tags) > .piece-picker__chip:hover { background: var(--wash-1); color: var(--ink); }
+
+  .chip-track > button:hover::before,
+  .category-nav > button:not(.category-filter):hover::before,
+  .piece-picker__chips:not(.piece-picker__tags) > .piece-picker__chip:hover::before { background: var(--wash-1); }
+}
+
+.chip-track > button[aria-pressed="true"],
+.chip-track > button.is-active,
+.category-nav > button.active,
+.piece-picker__chips:not(.piece-picker__tags) > .piece-picker__chip.is-active {
+  border: 0;
+  background: var(--wash-1);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+.chip-track > button[aria-pressed="true"]::before,
+.chip-track > button.is-active::before,
+.category-nav > button.active::before,
+.piece-picker__chips:not(.piece-picker__tags) > .piece-picker__chip.is-active::before {
+  background: var(--paper-raised);
+  box-shadow: var(--glass-edge), var(--shadow-xs);
+}
+
+/* Focus rings the pill, inside the segment, so a neighbour cannot paint
+   over it. */
+.chip-track > button:focus-visible,
+.category-nav > button:not(.category-filter):focus-visible,
+.piece-picker__chips:not(.piece-picker__tags) > .piece-picker__chip:focus-visible {
+  z-index: 1;
+  outline: 2px solid var(--accent-warm);
+  outline-offset: -3px;
+}
+
+/* Pressing shrinks the pill, not the segment (the track must not dent). */
+.chip-track > button:active,
+.category-nav > button:not(.category-filter):active,
+.piece-picker__chips:not(.piece-picker__tags) > .piece-picker__chip:active { transform: none; }
+
+.chip-track > button:active::before,
+.category-nav > button:not(.category-filter):active::before,
+.piece-picker__chips:not(.piece-picker__tags) > .piece-picker__chip:active::before { transform: scale(.96); }
+
+/* Inspo's group rule ("Sources" | the categories) inside the track: the
+   track goes on behind it. */
+.category-nav__divider {
+  flex: 0 0 13px;
+  align-self: stretch;
+  height: auto;
+  margin: 0;
+  background:
+    linear-gradient(var(--wash-3), var(--wash-3)) center / 1px 16px no-repeat,
+    var(--wash-1);
+}
+
+/* Edge fade. A row that scrolls says so by dissolving into the page at the
+   edge with more behind it: nothing at rest on a wide screen (nothing
+   overflows), the right edge before any scroll, both mid-way, the left at
+   the end. Two sticky pseudo-elements, shown by scroll-state queries on the
+   row itself: no script, no animation. A browser without scroll-state
+   queries shows the plain row. --chip-row-bg is what the row sits on. */
+.chip-row,
+.chip-track,
+.category-nav,
+.piece-picker__chips {
+  --chip-row-bg: var(--paper);
+  --chip-row-gap: 0px;
+  container-type: scroll-state;
+}
+
+.chip-row,
+.piece-picker__tags { --chip-row-gap: 6px; }
+.piece-picker__chips { --chip-row-bg: var(--paper-warm); }
+
+.chip-row::before,
+.chip-track::before,
+.category-nav::before,
+.piece-picker__chips::before,
+.chip-row::after,
+.chip-track::after,
+.category-nav::after,
+.piece-picker__chips::after {
+  position: sticky;
+  z-index: 3;
+  flex: none;
+  align-self: stretch;
+  width: 40px;
+  opacity: 0;
+  pointer-events: none;
+  content: "";
+  transition: opacity var(--dur-pop) var(--ease-out);
+}
+
+.chip-row::before,
+.chip-track::before,
+.category-nav::before,
+.piece-picker__chips::before {
+  left: 0;
+  margin-right: calc(-40px - var(--chip-row-gap));
+  background: linear-gradient(to right, var(--chip-row-bg), transparent);
+}
+
+.chip-row::after,
+.chip-track::after,
+.category-nav::after,
+.piece-picker__chips::after {
+  right: 0;
+  margin-left: calc(-40px - var(--chip-row-gap));
+  background: linear-gradient(to left, var(--chip-row-bg), transparent);
+}
+
+/* With a Filter button pinned at the right, the button does the right-hand
+   fade itself (below). */
+.category-nav:has(> .category-filter)::after { display: none; }
+
+@container scroll-state(scrollable: left) {
+  .chip-row::before,
+  .chip-track::before,
+  .category-nav::before,
+  .piece-picker__chips::before { opacity: 1; }
+}
+
+@container scroll-state(scrollable: right) {
+  .chip-row::after,
+  .chip-track::after,
+  .category-nav::after,
+  .piece-picker__chips::after { opacity: 1; }
+}
+
+/* ─── Filter button and menu ────────────────────────────────────────────── */
+
+.category-filter {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  margin: 0 0 0 var(--s-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-full);
+  padding: 0 14px 0 12px;
+  background: var(--paper-raised);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--track-body);
+  line-height: var(--leading-none);
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    border-color var(--dur-pop) var(--ease-out),
+    box-shadow var(--dur-pop) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
+}
+
+.category-filter > svg { flex: none; color: var(--muted); }
+
+/* What scrolls under the pinned button fades into the page before it, and
+   a ring of page colour hides the track's square corners around the pill.
+   Only while there is more to the right: at rest the track's own rounded
+   end shows. */
+.category-filter::before {
+  position: absolute;
+  top: -4px;
+  right: calc(100% + 1px);
+  bottom: -4px;
+  width: 0;
+  background: linear-gradient(to right, transparent, var(--paper) 70%);
+  content: "";
+  pointer-events: none;
+}
+
+@container scroll-state(scrollable: right) {
+  .category-filter::before { width: 40px; }
+  .category-filter { --filter-cover: 10px; }
+}
+
+.category-filter { box-shadow: 0 0 0 var(--filter-cover, 0px) var(--paper); }
+
+@media (hover: hover) and (pointer: fine) {
+  .category-filter:hover {
+    border-color: var(--muted);
+    box-shadow: 0 0 0 var(--filter-cover, 0px) var(--paper), var(--shadow-xs);
+  }
+}
+
+.category-filter[aria-expanded="true"] { border-color: var(--muted); }
+.category-filter.is-active { border-color: var(--ink-soft); color: var(--ink); }
+.category-filter.is-active > svg { color: var(--ink); }
+
+.category-filter:focus-visible {
+  outline: 2px solid var(--accent-warm);
+  outline-offset: 2px;
+}
+
+.category-filter:active { transform: scale(.97); }
+
+/* How many filters are on: a small ink count, so the button says the grid
+   is narrowed even with the menu closed. */
+.category-filter__count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  margin-right: -6px;
+  border-radius: var(--r-full);
+  padding: 0 5px;
+  background: var(--ink);
+  color: var(--paper-raised);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-medium);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The menu: the same surface as the viewer's ⋯ menu. */
+.filter-menu {
+  position: fixed;
+  z-index: 60;
+  display: grid;
+  min-width: 248px;
+  max-width: calc(100vw - 24px);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 6px;
+  background: var(--paper-raised);
+  box-shadow: var(--glass-edge), var(--shadow-lg);
+  transform-origin: top right;
+  animation: filter-menu-in var(--dur-pop) var(--ease-out) both;
+}
+
+@keyframes filter-menu-in {
+  from { opacity: 0; transform: translateY(-4px) scale(.98); }
+}
+
+.filter-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  border: 0;
+  border-radius: var(--r-sm);
+  padding: var(--s-2) 10px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--text-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .filter-menu__item:hover { background: var(--wash-1); color: var(--ink); }
+}
+
+.filter-menu__item:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: -2px; }
+
+.filter-menu__swatch {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px var(--wash-3);
+}
+
+.filter-menu__text { display: grid; flex: 1; gap: 2px; min-width: 0; }
+.filter-menu__label { font-weight: var(--weight-medium); }
+.filter-menu__description { color: var(--muted); font-size: var(--text-caption); line-height: var(--leading-caption); }
+.filter-menu__check { display: grid; flex: none; place-items: center; width: 16px; color: var(--ink); }
+
+/* ─── Phone: 44px targets ───────────────────────────────────────────────── */
+
+@media (max-width: 860px) {
+  .category-nav { width: 100%; margin: 22px 0 -4px; }
+
+  .chip-track > button,
+  .category-nav > button:not(.category-filter),
+  .piece-picker__chips:not(.piece-picker__tags) > .piece-picker__chip,
+  .category-filter { min-height: 44px; }
+
+  .chip,
+  .piece-picker__tags > .piece-picker__chip { min-height: 36px; padding-inline: 14px; }
+
+  /* A standalone chip stays visually light; its hit area does not. */
+  .chip::after,
+  .piece-picker__tags > .piece-picker__chip::after {
+    position: absolute;
+    inset: -4px 0;
+    content: "";
+  }
+}
+
+@media (max-width: 520px) {
+  .category-nav { margin: 18px 0 -4px; }
+  .category-nav > button:not(.category-filter) { padding: 0 14px; font-size: var(--text-body); }
+  .category-nav > button:first-child { padding-left: 17px; }
+  .category-nav > button:not(.category-filter):last-child,
+  .category-nav > button:not(.category-filter):has(+ .category-filter) { padding-right: 17px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chip:active,
+  .piece-picker__chip:active,
+  .category-filter:active { transform: none; }
+  .chip-track > button:active::before,
+  .category-nav > button:not(.category-filter):active::before,
+  .piece-picker__chips:not(.piece-picker__tags) > .piece-picker__chip:active::before { transform: none; }
+  .filter-menu { animation: none; }
+}
+
+/* ─── Tag ───────────────────────────────────────────────────────────────── */
+
+.tag,
+.detail-row__tag,
+.editable-tag,
+.outfit-style-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-height: 24px;
+  margin: 0;
+  border: 0;
+  border-radius: var(--r-full);
+  padding: 0 10px;
+  background: var(--wash-1);
+  color: var(--ink-soft);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-regular);
+  letter-spacing: 0;
+  line-height: var(--leading-none);
+  text-transform: none;
+  white-space: nowrap;
+}
+
+/* With a remove button: the button sits in the tag's own padding. */
+.tag--removable,
+.editable-tag { padding-right: var(--s-1); }
+
+.tag-list,
+.detail-row__tags,
+.editable-tags,
+.outfit-style-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* ─── Tabs ──────────────────────────────────────────────────────────────── */
+
+/* The segmented track, sized for a panel: the same wash and raised pill as
+   the category track and the view switch. */
+.tabs,
+.settings-tabs,
+.inspo-tabs {
+  display: flex;
+  align-items: stretch;
+  align-self: flex-start;
+  width: max-content;
+  max-width: 100%;
+  gap: 2px;
+  margin: 0;
+  border: 0;
+  border-radius: var(--r-full);
+  padding: 3px;
+  background: var(--wash-1);
+}
+
+.tabs > button,
+.settings-tab,
+.inspo-tabs button {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  margin: 0;
+  border: 0;
+  border-radius: var(--r-full);
+  padding: 0 14px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--track-body);
+  line-height: var(--leading-none);
+  text-transform: none;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background var(--dur-pop) var(--ease-out),
+    box-shadow var(--dur-pop) var(--ease-out),
+    color var(--dur-pop) var(--ease-out);
+}
+
+.tabs > button[aria-selected="true"],
+.tabs > button.is-active,
+.settings-tab.is-active,
+.inspo-tabs button.active {
+  border: 0;
+  background: var(--paper-raised);
+  color: var(--ink);
+  box-shadow: var(--glass-edge), var(--shadow-xs);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tabs > button:hover:not([aria-selected="true"], .is-active, .is-disabled),
+  .settings-tab:hover:not(.is-active, .is-disabled),
+  .inspo-tabs button:hover:not(.active) { background: var(--wash-1); color: var(--ink); }
+}
+
+.tabs > button:focus-visible,
+.settings-tab:focus-visible,
+.inspo-tabs button:focus-visible {
+  outline: 2px solid var(--accent-warm);
+  outline-offset: 2px;
+  border-radius: var(--r-full);
+}
+
+/* A tab that explains itself when opened (Settings › Cloud backup before
+   Drive is configured). */
+.tabs > button.is-disabled,
+.settings-tab.is-disabled { opacity: .45; }
+
+/* "Piles 2", "Pieces 6": one count format inside a tab. */
+.tabs__count {
+  color: var(--muted);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-regular);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tabs in a panel header's second row: the track sits under the title with
+   the header's own spacing, and the header keeps its hairline-on-scroll
+   (Settings and Add inspo had hidden it, because their underline was the
+   divider; a track is not a line). */
+.viewer-header__below > .tabs,
+.viewer-header__below > .settings-tabs,
+.viewer-header__below > .inspo-tabs { margin: var(--s-3) 0; }
+.viewer > .viewer-header--row:has(> .viewer-header__below > .tabs) { padding-bottom: 0; }
+.viewer[data-scrolled] > .viewer-header--row:has(> .viewer-header__below > :is(.tabs, .settings-tabs, .inspo-tabs)) {
+  border-bottom: 1px solid var(--line);
+}
+.viewer > .viewer-header--row:has(> .viewer-header__below > .tabs) + .viewer-body { padding-top: var(--s-4); }
+
+@media (max-width: 860px) {
+  .tabs > button,
+  .settings-tab,
+  .inspo-tabs button { min-height: 38px; }
+
+  /* The 38px pill plus the track's 3px either side is the 44px target. */
+  .tabs > button::after,
+  .settings-tab::after,
+  .inspo-tabs button::after {
+    position: absolute;
+    inset: -3px 0;
+    content: "";
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tabs > button,
+  .settings-tab,
+  .inspo-tabs button { transition: none; }
+}

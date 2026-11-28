@@ -4,6 +4,7 @@ import { WardrobeImportFlow } from "./import-flow.jsx";
 import { api } from "./api.js";
 import { buildOutfitIndex } from "../shared/outfit-index.mjs";
 import { ColorProfileModal, SEASONS, itemMatchesPalette } from "./color-profile.jsx";
+import { CategoryFilter } from "./components/CategoryFilter.jsx";
 import { Mirror } from "./mirror.jsx";
 import { Inspo } from "./inspo.jsx";
 import { Overview } from "./overview.jsx";
@@ -650,20 +651,18 @@ export function App() {
           onCategory={chooseType}
           navLabel="Filter wardrobe by item type"
           navExtra={colorProfile && (
-            <button
-              type="button"
-              className={`color-filter-btn${onlyMatches ? " active" : ""}`}
-              onClick={() => setOnlyMatches((current) => !current)}
-              aria-pressed={onlyMatches}
-              title={onlyMatches ? "Show all pieces" : `Show only pieces matching your ${(SEASONS[colorProfile.season] || SEASONS[colorProfile.parentSeason])?.label || "palette"}`}
-            >
-              <span
-                className="season-dot"
-                style={{ backgroundColor: (SEASONS[colorProfile.season] || SEASONS[colorProfile.parentSeason])?.accent }}
-                aria-hidden="true"
-              />
-              Matches my colors
-            </button>
+            // Filters that combine with any category sit behind one button at
+            // the end of the track, not in it.
+            <CategoryFilter
+              options={[{
+                id: "palette",
+                label: "Matches my colors",
+                description: `Only pieces in your ${(SEASONS[colorProfile.season] || SEASONS[colorProfile.parentSeason])?.label || "palette"} palette`,
+                swatch: (SEASONS[colorProfile.season] || SEASONS[colorProfile.parentSeason])?.accent,
+                checked: onlyMatches,
+                onToggle: () => setOnlyMatches((current) => !current),
+              }]}
+            />
           )}
           beforeContent={<HotCards cards={[colorCard, declutterCard].filter(Boolean)} label="Wardrobe shortcuts" />}
         >

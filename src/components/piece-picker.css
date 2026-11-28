@@ -24,15 +24,8 @@
 
 /* ─── Filters ────────────────────────────────────────────────────────────── */
 .piece-picker__filters { display: grid; gap: 10px; padding: var(--s-4) var(--s-5); border-bottom: 1px solid var(--line); }
-.piece-picker__search { width: 100%; min-width: 0; min-height: 44px; padding: 11px var(--s-3); border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--paper-raised); color: var(--ink-soft); font: inherit; font-size: var(--text-body); }
-.piece-picker__search:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
-.piece-picker__chips { display: flex; gap: 6px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
-.piece-picker__chips::-webkit-scrollbar { display: none; }
-.piece-picker__chip { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 var(--s-4); border: 1px solid var(--line); border-radius: var(--r-full); background: var(--paper-raised); color: var(--ink-soft); font: inherit; font-size: var(--text-body); white-space: nowrap; cursor: pointer; transition: background var(--dur-pop) var(--ease-out), border-color var(--dur-pop) var(--ease-out), color var(--dur-pop) var(--ease-out); }
-.piece-picker__chip.is-active { border-color: var(--ink); background: var(--ink); color: var(--paper-raised); }
-.piece-picker__chip-count { color: var(--muted); font-size: var(--text-caption); font-variant-numeric: tabular-nums; }
-.piece-picker__chip.is-active .piece-picker__chip-count { color: inherit; opacity: .7; }
-.piece-picker__chip:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
+/* The search field and the chips are the shared components
+   (src/components/fields.css, src/components/chips.css, S3). */
 
 /* ─── Notices: limit reached, pieces no longer in the wardrobe ───────────── */
 .piece-picker__notices { display: grid; gap: var(--s-2); padding: var(--s-3) var(--s-5) 0; }

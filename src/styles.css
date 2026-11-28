@@ -800,87 +800,7 @@ button { font: inherit; }
   text-transform: uppercase;
 }
 
-.category-nav {
-  width: max-content;
-  max-width: 100%;
-  display: flex;
-  align-items: center;
-  flex-wrap: nowrap;
-  gap: 6px;
-  /* overflow-x makes this a clipping box, and the active pill carries
-     --shadow-sm — a 16px blur pushed 6px down. With no vertical padding the
-     scroll container cut it off flat at the pill's edge. The padding gives the
-     shadow room to exist inside the clip; the negative margins give that room
-     back to the layout, so nothing below moves. */
-  margin: 22px 0 -18px;
-  border: 0;
-  padding: 6px 0 18px;
-  overflow-x: auto;
-  background: transparent;
-  scrollbar-width: none;
-}
-
-
-.category-nav button {
-  position: relative;
-  flex: 0 0 auto;
-  min-height: 38px;
-  border: 1px solid transparent;
-  border-radius: var(--r-full);
-  padding: 9px 17px;
-  background: var(--wash-1);
-  color: var(--muted);
-  font-size: var(--text-eyebrow);
-  font-weight: var(--weight-medium);
-  letter-spacing: var(--track-caps);
-  text-transform: uppercase;
-  cursor: pointer;
-  transition:
-    background var(--dur-pop) var(--ease-out),
-    color var(--dur-pop) var(--ease-out),
-    border-color var(--dur-pop) var(--ease-out),
-    transform var(--dur-press) var(--ease-out);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .category-nav button:hover { color: var(--ink-soft); background: var(--wash-2); }
-}
-
-.category-nav button.active {
-  border-color: var(--glass-border);
-  background: var(--paper-raised);
-  color: var(--ink-soft);
-  box-shadow: var(--shadow-sm);
-}
-
-.category-nav button.color-filter-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.category-nav button.color-filter-btn .season-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex: none;
-}
-
-.category-nav button.color-filter-btn.active {
-  border-color: var(--accent);
-  color: var(--ink);
-  font-weight: var(--weight-semibold);
-  box-shadow: 0 0 0 1px var(--accent), var(--shadow-xs);
-}
-
-.category-nav button:focus-visible {
-  outline: 2px solid var(--accent-warm);
-  outline-offset: 2px;
-}
-
-.category-nav button:active { transform: scale(.97); }
-
-.category-nav::-webkit-scrollbar { display: none; }
+/* The category filter row and its chips: src/components/chips.css (S3). */
 
 /* Splits the nav into groups. Inspo uses it to separate the source pins from
    the pieces detected out of them — two different kinds of thing sharing one
@@ -1943,38 +1863,7 @@ button:where(.edit-button, .primary-button, .secondary-button, .danger-button, .
   padding: 0;
 }
 
-.field > span {
-  display: block;
-  margin-bottom: var(--s-2);
-  color: var(--muted);
-  font-size: var(--text-eyebrow);
-  font-weight: var(--weight-medium);
-  letter-spacing: var(--track-caps);
-  text-transform: uppercase;
-}
-
-.field input,
-.field select,
-.tag-input-row input {
-  width: 100%;
-  min-height: 42px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
-  padding: 10px var(--s-3);
-  background: var(--paper-raised);
-  color: var(--ink-soft);
-  font: inherit;
-  font-size: var(--text-body);
-  transition: border-color var(--dur-pop) var(--ease-out), box-shadow var(--dur-pop) var(--ease-out);
-}
-
-.field input:focus,
-.field select:focus,
-.tag-input-row input:focus {
-  border-color: var(--accent-warm);
-  box-shadow: var(--ring-focus);
-  outline: none;
-}
+/* The label, input, select and focus of .field: src/components/fields.css (S3). */
 
 .colors-editor {
   display: grid;
@@ -2178,57 +2067,21 @@ button:where(.edit-button, .primary-button, .secondary-button, .danger-button, .
 
 .tag-editor { min-width: 0; }
 
+/* The tags themselves are .tag (src/components/chips.css); the input row is
+   in src/components/fields.css. */
 .editable-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
   min-height: 28px;
   margin-bottom: var(--s-2);
 }
 
-.editable-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border: 1px solid var(--glass-border);
-  border-radius: var(--r-full);
-  padding: 5px var(--s-2) 5px 11px;
-  background: var(--wash-1);
-  color: var(--ink-soft);
-  font-size: var(--text-caption);
-}
-
-/* An .icon-button at the 24px floor, tucked into the chip's padding so the
-   chip keeps its height. */
+/* An .icon-button at the 24px floor, tucked into the tag's padding so the
+   tag keeps its height. */
 .editable-tag button {
   --btn-icon: 24px;
   --btn-fg: var(--muted);
   --btn-fg-hover: var(--error);
-  margin: -4px -5px -4px -2px;
+  margin: -4px -2px -4px 0;
 }
-
-/* Input and button share one seam — rounded only on their outer corners so
-   together they read as a single pill-shaped control, not two mismatched
-   rectangles glued together. */
-.tag-input-row { display: flex; }
-.tag-input-row input { min-width: 0; border-right: 0; border-radius: var(--r-sm) 0 0 var(--r-sm); }
-.tag-input-row button {
-  width: 40px;
-  border: 1px solid var(--line);
-  border-radius: 0 var(--r-sm) var(--r-sm) 0;
-  background: var(--paper-raised);
-  color: var(--ink-soft);
-  cursor: pointer;
-  transition: background var(--dur-pop) var(--ease-out), color var(--dur-pop) var(--ease-out), border-color var(--dur-pop) var(--ease-out);
-}
-.tag-input-row button:disabled { color: var(--line); cursor: default; }
-
-@media (hover: hover) and (pointer: fine) {
-  .tag-input-row button:not(:disabled):hover { background: var(--accent); border-color: var(--accent); color: var(--paper); }
-}
-
-.tag-input-row button:not(:disabled):focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
-.tag-input-row button:not(:disabled):active { transform: scale(.94); }
 
 /* One --page-x drives header, grid and top bar together at every width. */
 @media (max-width: 1180px) {
@@ -3101,16 +2954,7 @@ button.variant-strip__tile:active .variant-strip__art { transform: scale(.96); }
 .detail-swatch__dot { width: 16px; height: 16px; border-radius: var(--r-full); box-shadow: inset 0 0 0 1px var(--wash-3); }
 .detail-row__tags { display: flex; flex-wrap: wrap; gap: 6px; }
 
-.detail-row__tag {
-  display: inline-flex;
-  align-items: center;
-  min-height: 26px;
-  padding: 0 10px;
-  border: 1px solid var(--glass-border);
-  border-radius: var(--r-full);
-  background: var(--wash-1);
-  font-size: var(--text-caption);
-}
+/* .detail-row__tag is a .tag: src/components/chips.css (S3). */
 
 .detail-row__editor { padding: var(--s-4) 0 20px; border-bottom: 1px solid var(--wash-2); }
 
@@ -3243,24 +3087,8 @@ button.variant-strip__tile:active .variant-strip__art { transform: scale(.96); }
 
 /* Also used by the regenerate panel's note. */
 .sheet-field { display: grid; gap: 6px; }
-.sheet-field > span { color: var(--muted); font-size: var(--text-eyebrow); font-weight: var(--weight-medium); letter-spacing: var(--track-caps); text-transform: uppercase; }
-.sheet-field > span em { font-style: normal; letter-spacing: 0; text-transform: none; }
+/* The label and input of .sheet-field: src/components/fields.css (S3). */
 .sheet-field > small { color: var(--muted); font-size: var(--text-caption); line-height: var(--leading-caption); }
-
-.sheet-field input {
-  min-width: 0;
-  min-height: 44px;
-  box-sizing: border-box;
-  padding: 10px var(--s-3);
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
-  background: var(--paper-raised);
-  color: var(--ink-soft);
-  font: inherit;
-  font-size: var(--text-body);
-}
-
-.sheet-field input:focus { outline: none; border-color: var(--accent-warm); box-shadow: var(--ring-focus); }
 
 .add-variant-sheet__photo .variant-photo-upload {
   display: flex;

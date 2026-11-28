@@ -30,46 +30,14 @@
   gap: 20px;
 }
 
-.inspo-tabs {
-  display: flex;
-  border-bottom: 1px solid var(--line);
-  gap: 0;
-}
+/* The tabs themselves are the shared .tabs (src/components/chips.css, S3). */
 
 /* In the header's second row (as in Settings): the tabs' underline is the
    header's divider, and the body starts its own spacing below it. */
 .viewer.inspo-importer-panel > .viewer-header--row,
 .viewer.inspo-importer-panel[data-scrolled] > .viewer-header--row { padding-bottom: 0; border-bottom: 0; }
-.viewer-header__below > .inspo-tabs { margin-top: var(--s-3); }
 .viewer.inspo-importer-panel > .viewer-header--row + .viewer-body { padding-top: 20px; }
 .viewer.inspo-importer-panel .inspo-importer-body { padding-top: 0; }
-
-.inspo-tabs button {
-  flex: 1;
-  min-height: 38px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  padding: 9px var(--s-3);
-  background: transparent;
-  color: var(--muted);
-  font-size: var(--text-eyebrow);
-  font-weight: var(--weight-medium);
-  letter-spacing: var(--track-caps);
-  text-transform: uppercase;
-  cursor: pointer;
-  margin-bottom: -1px;
-}
-
-.inspo-tabs button.active {
-  border-bottom-color: var(--accent-warm);
-  color: var(--ink-soft);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .inspo-tabs button:hover:not(.active) { color: var(--ink-soft); }
-}
-
-.inspo-tabs button:focus-visible:not(.active) { color: var(--ink-soft); outline: none; }
 
 /* URL textarea */
 .inspo-url-field {
@@ -78,28 +46,7 @@
   gap: 6px;
 }
 
-.inspo-url-field label {
-  color: var(--muted);
-  font-size: var(--text-eyebrow);
-  font-weight: var(--weight-medium);
-  letter-spacing: var(--track-caps);
-  text-transform: uppercase;
-}
-
-.inspo-url-field textarea {
-  width: 100%;
-  min-height: 120px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
-  padding: 9px 10px;
-  background: var(--paper-raised);
-  color: var(--ink-soft);
-  font: inherit;
-  font-size: var(--text-body);
-  resize: vertical;
-}
-
-.inspo-url-field textarea:focus { border-color: var(--accent-warm); box-shadow: var(--ring-focus); outline: none; }
+/* The label and textarea are the shared field (src/components/fields.css, S3). */
 
 .inspo-url-hint {
   margin: 0;

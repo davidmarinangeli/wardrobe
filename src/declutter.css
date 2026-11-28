@@ -9,38 +9,7 @@
   gap: var(--s-5);
 }
 
-.declutter-tabs {
-  align-self: flex-start;
-  display: flex;
-  gap: 2px;
-  padding: 3px;
-  border-radius: var(--r-full);
-  background: var(--wash-1);
-}
-
-.declutter-tabs button {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-2);
-  border: 0;
-  border-radius: var(--r-full);
-  padding: 6px 14px;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-size: var(--text-body);
-  font-weight: var(--weight-medium);
-  cursor: pointer;
-  transition: background var(--dur-pop) var(--ease-out), color var(--dur-pop) var(--ease-out);
-}
-
-.declutter-tabs button.active {
-  background: var(--paper-raised);
-  color: var(--ink);
-  box-shadow: var(--shadow-xs);
-}
-
-.declutter-tabs button:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
+/* The Review / Piles tabs are the shared .tabs (src/components/chips.css, S3). */
 
 /* ─── Locked ─────────────────────────────────────────────────────────────── */
 
