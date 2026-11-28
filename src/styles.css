@@ -2395,9 +2395,11 @@ button:where(.edit-button, .primary-button, .secondary-button, .danger-button, .
   .viewer-overlay,
   .viewer-entry { animation: none; }
 
+  /* No movement, so the refusal shows as a ring around the whole panel: a
+     full outline, never a bar down one side. */
   .viewer.shake {
     animation: none;
-    box-shadow: inset 3px 0 0 var(--accent), var(--shadow-lg);
+    box-shadow: var(--glass-edge), 0 0 0 2px var(--accent-warm), var(--shadow-lg);
   }
 }
 
@@ -3050,10 +3052,14 @@ button.variant-strip__tile:active .variant-strip__art { transform: scale(.96); }
 .detail-rows { margin-top: 22px; border-top: 1px solid var(--line); }
 
 .detail-row {
+  /* One line of a row: every cell is centred on it, so a value that wraps
+     (tags on a phone) grows the row downwards while the key and the chevron
+     stay level with its first line. */
+  --row-line: 32px;
   position: relative;
   display: grid;
   grid-template-columns: 92px minmax(0, 1fr) 16px;
-  align-items: center;
+  align-items: start;
   column-gap: var(--s-2);
   width: 100%;
   min-height: 52px;
@@ -3070,10 +3076,10 @@ button.variant-strip__tile:active .variant-strip__art { transform: scale(.96); }
 .detail-row:focus-visible,
 .detail-row:has(.detail-row__select:focus-visible) { outline: 2px solid var(--accent-warm); outline-offset: 2px; border-radius: var(--r-xs); }
 
-.detail-row__label { color: var(--muted); font-size: var(--text-eyebrow); font-weight: var(--weight-medium); letter-spacing: var(--track-caps); text-transform: uppercase; }
-.detail-row__value { min-width: 0; font-size: var(--text-body); }
+.detail-row__label { display: flex; align-items: center; min-height: var(--row-line); color: var(--muted); font-size: var(--text-eyebrow); font-weight: var(--weight-medium); letter-spacing: var(--track-caps); text-transform: uppercase; }
+.detail-row__value { display: flex; align-items: center; min-width: 0; min-height: var(--row-line); font-size: var(--text-body); }
 .detail-row__muted { color: var(--muted); font-size: var(--text-caption); }
-.detail-row__caret { color: var(--muted); transition: transform var(--dur-pop) var(--ease-out), color var(--dur-pop) var(--ease-out); }
+.detail-row__caret { margin-top: calc((var(--row-line) - 14px) / 2); color: var(--muted); transition: transform var(--dur-pop) var(--ease-out), color var(--dur-pop) var(--ease-out); }
 .detail-row[aria-expanded="true"] .detail-row__caret { transform: rotate(90deg); color: var(--ink-soft); }
 
 @media (hover: hover) and (pointer: fine) {
@@ -3099,7 +3105,7 @@ button.variant-strip__tile:active .variant-strip__art { transform: scale(.96); }
 .detail-row__swatches { display: flex; flex-wrap: wrap; gap: 6px 14px; }
 .detail-swatch { display: inline-flex; align-items: center; gap: 7px; font-size: var(--text-body); font-variant-numeric: tabular-nums; }
 .detail-swatch__dot { width: 16px; height: 16px; border-radius: var(--r-full); box-shadow: inset 0 0 0 1px var(--wash-3); }
-.detail-row__tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.detail-row__tags { display: flex; flex-wrap: wrap; gap: 6px; padding-block: 3px; }
 
 .detail-row__tag {
   display: inline-flex;

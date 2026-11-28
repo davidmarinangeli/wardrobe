@@ -10,7 +10,9 @@ import "./confirm-dialog.css";
  *
  * Props
  * ─────
- * eyebrow, title, description  – The copy. `title` names the decision.
+ * title, description           – The copy. `title` names the decision on its own:
+ *                                there is no kicker above it, so a legacy `eyebrow`
+ *                                prop is accepted and ignored.
  * keepLabel, discardLabel      – Button labels. Keep is the safe default and gets focus.
  *                                discardLabel may be a node (e.g. a spinner while busy).
  * onKeep, onDiscard            – Called by the buttons. The caller owns Escape.
@@ -19,12 +21,12 @@ import "./confirm-dialog.css";
  * solid                        – Fills Discard (.danger-button--solid): only for the final
  *                                step of a destructive action, such as deleting a sheet.
  *
- * Same anatomy as every panel: eyebrow and title on top, the explanation, then
- * the action row with the safe Keep rightmost and the destructive Discard to
- * its left. Neither is a primary (buttons.css): Keep is a .secondary-button and
- * Discard a .danger-button.
+ * Same surface and anatomy as every panel, only smaller: the title, the
+ * explanation, then the action row with the safe Keep rightmost and the
+ * destructive Discard to its left. Neither is a primary (buttons.css): Keep is
+ * a .secondary-button and Discard a .danger-button.
  */
-export function ConfirmDialog({ eyebrow, title, description, keepLabel, discardLabel, onKeep, onDiscard, keepRef, busy = false, solid = false }) {
+export function ConfirmDialog({ title, description, keepLabel, discardLabel, onKeep, onDiscard, keepRef, busy = false, solid = false }) {
   const titleId = useId();
   const descriptionId = useId();
   const ownKeepRef = useRef(null);
@@ -38,10 +40,7 @@ export function ConfirmDialog({ eyebrow, title, description, keepLabel, discardL
   return (
     <div className="confirm-layer" role="presentation">
       <div className="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined}>
-        <header className="confirm-dialog__header">
-          {eyebrow && <span className="confirm-dialog__eyebrow">{eyebrow}</span>}
-          <h2 id={titleId}>{title}</h2>
-        </header>
+        <h2 id={titleId}>{title}</h2>
         {description && <p id={descriptionId}>{description}</p>}
         <footer className="confirm-dialog__actions">
           <button type="button" className={`danger-button${solid ? " danger-button--solid" : ""} confirm-dialog__discard`} onClick={onDiscard} disabled={busy} aria-busy={busy || undefined}>{discardLabel}</button>
