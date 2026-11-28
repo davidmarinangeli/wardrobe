@@ -324,7 +324,7 @@
 .inspo-tabs {
   display: flex;
   align-items: stretch;
-  gap: var(--s-5);
+  gap: var(--s-4);
   margin: 0;
   border: 0;
   border-bottom: 1px solid var(--line);
@@ -338,12 +338,14 @@
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  min-width: 32px;
   min-height: 40px;
   margin: 0;
   border: 0;
   border-radius: 0;
-  padding: 0;
+  padding: 0 var(--s-1);
   background: none;
   color: var(--muted);
   font: inherit;
@@ -428,7 +430,7 @@
 @media (max-width: 860px) {
   .tabs > button,
   .settings-tab,
-  .inspo-tabs button { min-height: 44px; }
+  .inspo-tabs button { min-width: 44px; min-height: 44px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
