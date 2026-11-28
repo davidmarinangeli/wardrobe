@@ -865,6 +865,7 @@ button { font: inherit; }
 .gallery-header > .gallery-meta-row {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: var(--s-4);
   min-width: 0;
 }
@@ -884,17 +885,16 @@ button { font: inherit; }
   mask-image: linear-gradient(to left, transparent, var(--ink) var(--s-7));
 }
 
-.piece-count {
+/* The count leads the row in muted body text, not tracked caps (the base
+   .piece-count rule below is the older eyebrow). */
+.gallery-meta-row > .piece-count {
   flex: none;
   margin: 0;
-  color: var(--muted);
   font-size: var(--text-body);
-}
-
-.gallery-meta-row > .piece-count {
-  font-size: var(--text-body);
+  font-weight: var(--weight-regular);
+  letter-spacing: var(--track-body);
+  text-transform: none;
   font-variant-numeric: tabular-nums;
-  line-height: var(--leading-none);
   white-space: nowrap;
 }
 
@@ -916,6 +916,25 @@ button { font: inherit; }
   }
 }
 /* == /S1 page shell == */
+
+.gallery-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-5);
+}
+
+/* Caps kept as the structural device, but at roughly half the volume:
+   tracking down from .1em, lighter weight, warm muted instead of ink. */
+.piece-count {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-eyebrow);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--track-caps);
+  line-height: var(--leading-none);
+  text-transform: uppercase;
+}
 
 .category-nav {
   width: max-content;
