@@ -1,0 +1,411 @@
+/* ─── Chips, tags and tabs (S3, variant A: "light chips") ─────────────────────
+   One component per job, instead of one per module:
+
+     .chip      a filter you can press: category rows (Wardrobe, Inspo), the
+                piece picker's category and tag rows. Sentence case, a wash
+                at rest, filled with --ink when on.
+     .chip-row  the row that holds them: one line, scrolls sideways, fades at
+                whichever edge has more to show.
+     .chip-toggle  a filter of a different kind sitting at the end of a chip
+                row ("Matches my colors"): a switch, set off by a divider, so
+                it does not read as one more category.
+     .tag       a label, not a control: garment tags, outfit style tags, the
+                editable tag list. Smaller than a chip, never uppercase.
+     .tabs      the tabs inside a panel (Settings, Add inspo, Declutter, the
+                cheat sheet editor on a phone): an underline row whose rule is
+                the header's divider.
+
+   The existing class names keep working: each rule lists them next to the
+   canonical one (same or higher specificity, and this file loads after every
+   component stylesheet, see main.jsx). Their old declarations were removed
+   only from the blocks S3 owns; duplicates in other files are left for the
+   step that owns them. */
+
+/* ─── Chip ──────────────────────────────────────────────────────────────── */
+
+.chip,
+.category-nav > button,
+.piece-picker__chip {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  margin: 0;
+  border: 1px solid transparent;
+  border-radius: var(--r-full);
+  padding: 0 var(--s-3);
+  background: var(--wash-1);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--track-body);
+  line-height: var(--leading-none);
+  text-transform: none;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background var(--dur-pop) var(--ease-out),
+    border-color var(--dur-pop) var(--ease-out),
+    color var(--dur-pop) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .chip:hover,
+  .category-nav > button:hover,
+  .piece-picker__chip:hover { background: var(--wash-2); color: var(--ink); }
+}
+
+/* On: one rendering everywhere, a solid ink pill. */
+.chip[aria-pressed="true"],
+.chip.is-active,
+.category-nav > button.active,
+.piece-picker__chip.is-active {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper-raised);
+  box-shadow: none;
+}
+
+.chip:focus-visible,
+.category-nav > button:focus-visible,
+.piece-picker__chip:focus-visible {
+  outline: 2px solid var(--accent-warm);
+  outline-offset: 2px;
+}
+
+.chip:active,
+.category-nav > button:active,
+.piece-picker__chip:active { transform: scale(.97); }
+
+/* A count inside a chip ("#cotton 4"): quieter, tabular. */
+.chip__count,
+.piece-picker__chip-count {
+  color: var(--muted);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-regular);
+  font-variant-numeric: tabular-nums;
+}
+
+.chip[aria-pressed="true"] .chip__count,
+.chip.is-active .chip__count,
+.piece-picker__chip.is-active .piece-picker__chip-count { color: inherit; opacity: .7; }
+
+/* ─── Chip row ──────────────────────────────────────────────────────────── */
+
+.chip-row,
+.category-nav,
+.piece-picker__chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.chip-row::-webkit-scrollbar,
+.category-nav::-webkit-scrollbar,
+.piece-picker__chips::-webkit-scrollbar { display: none; }
+
+/* The page's filter row. Only as wide as its chips, so on a wide screen it
+   never stretches; the 4px of block padding is room for the focus ring (the
+   row is a clipping box) and for the phone hit area below. */
+.category-nav {
+  width: max-content;
+  max-width: 100%;
+  margin: 24px 0 -4px;
+  border: 0;
+  padding: 4px 0;
+  background: transparent;
+}
+
+/* The picker's rows: the same 4px, given back by the margins, for the same
+   two reasons. */
+.piece-picker__chips {
+  margin-block: -4px;
+  padding-block: 4px;
+}
+
+/* Edge fade. A row that scrolls says so by dissolving at the edge with more
+   behind it: none at rest on a wide screen (nothing overflows, the timeline
+   is inactive), the right edge before any scroll, both mid-way, the left at
+   the end. Scroll-driven, so it costs nothing per frame; a browser without
+   scroll timelines shows the plain row. The mask colours are alpha only. */
+@property --chip-fade-start { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --chip-fade-end { syntax: "<length>"; inherits: false; initial-value: 0px; }
+
+@keyframes chip-row-fade {
+  from { --chip-fade-start: 0px; --chip-fade-end: 40px; }
+  12% { --chip-fade-start: 40px; }
+  88% { --chip-fade-end: 40px; }
+  to { --chip-fade-start: 40px; --chip-fade-end: 0px; }
+}
+
+@supports (animation-timeline: scroll()) {
+  .chip-row,
+  .category-nav,
+  .piece-picker__chips {
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      #000 var(--chip-fade-start),
+      #000 calc(100% - var(--chip-fade-end)),
+      transparent
+    );
+    animation: chip-row-fade linear both;
+    animation-timeline: scroll(self inline);
+  }
+}
+
+/* ─── Toggle at the end of a chip row ───────────────────────────────────── */
+
+.chip-toggle,
+.category-nav > button.chip-toggle {
+  gap: var(--s-2);
+  padding: 0 var(--s-2) 0 var(--s-1);
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink-soft);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .chip-toggle:hover,
+  .category-nav > button.chip-toggle:hover { background: var(--wash-1); color: var(--ink); }
+}
+
+/* The toggle is never "filled": its switch carries the state. */
+.chip-toggle[aria-pressed="true"],
+.category-nav > button.chip-toggle.active {
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink);
+}
+
+.chip-toggle__switch {
+  position: relative;
+  flex: none;
+  width: 28px;
+  height: 16px;
+  border-radius: var(--r-full);
+  background: var(--wash-3);
+  transition: background var(--dur-pop) var(--ease-out);
+}
+
+.chip-toggle__switch::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--paper-raised);
+  box-shadow: var(--shadow-xs);
+  content: "";
+  transition: transform var(--dur-pop) var(--ease-out);
+}
+
+.chip-toggle[aria-pressed="true"] .chip-toggle__switch { background: var(--ink); }
+.chip-toggle[aria-pressed="true"] .chip-toggle__switch::after { transform: translateX(12px); }
+
+/* ─── Phone: lower chips, 44px targets ──────────────────────────────────── */
+
+@media (max-width: 860px) {
+  .category-nav { width: 100%; margin: 22px 0 -4px; }
+
+  .chip,
+  .category-nav > button,
+  .piece-picker__chip { min-height: 36px; padding-inline: 14px; }
+
+  /* The chip stays visually light; its hit area does not. */
+  .chip::after,
+  .category-nav > button::after,
+  .piece-picker__chip::after {
+    position: absolute;
+    inset: -4px 0;
+    content: "";
+  }
+
+  .chip-toggle,
+  .category-nav > button.chip-toggle { padding-inline: var(--s-1) var(--s-2); }
+}
+
+@media (max-width: 520px) {
+  .category-nav { margin: 18px 0 -4px; }
+  .category-nav > button { min-height: 36px; padding: 0 14px; font-size: var(--text-body); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chip:active,
+  .category-nav > button:active,
+  .piece-picker__chip:active { transform: none; }
+  .chip-toggle__switch,
+  .chip-toggle__switch::after { transition: none; }
+}
+
+/* ─── Tag ───────────────────────────────────────────────────────────────── */
+
+.tag,
+.detail-row__tag,
+.editable-tag,
+.outfit-style-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-height: 24px;
+  margin: 0;
+  border: 0;
+  border-radius: var(--r-full);
+  padding: 0 10px;
+  background: var(--wash-1);
+  color: var(--ink-soft);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-regular);
+  letter-spacing: 0;
+  line-height: var(--leading-none);
+  text-transform: none;
+  white-space: nowrap;
+}
+
+/* With a remove button: the button sits in the tag's own padding. */
+.tag--removable,
+.editable-tag { padding-right: var(--s-1); }
+
+.tag-list,
+.detail-row__tags,
+.editable-tags,
+.outfit-style-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* ─── Tabs ──────────────────────────────────────────────────────────────── */
+
+.tabs,
+.settings-tabs,
+.inspo-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: var(--s-5);
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  padding: 0;
+}
+
+.tabs > button,
+.settings-tab,
+.inspo-tabs button {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--track-body);
+  line-height: var(--leading-none);
+  text-transform: none;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color var(--dur-pop) var(--ease-out);
+}
+
+/* The active bar sits on the row's rule, so the rule is the only line. */
+.tabs > button::after,
+.settings-tab::after,
+.inspo-tabs button::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  border-radius: var(--r-full);
+  background: transparent;
+  content: "";
+  transition: background var(--dur-pop) var(--ease-out);
+}
+
+.tabs > button[aria-selected="true"],
+.tabs > button.is-active,
+.settings-tab.is-active,
+.inspo-tabs button.active {
+  border: 0;
+  color: var(--ink);
+}
+
+.tabs > button[aria-selected="true"]::after,
+.tabs > button.is-active::after,
+.settings-tab.is-active::after,
+.inspo-tabs button.active::after { background: var(--accent); }
+
+@media (hover: hover) and (pointer: fine) {
+  .tabs > button:hover:not([aria-selected="true"], .is-active, .is-disabled),
+  .settings-tab:hover:not(.is-active, .is-disabled),
+  .inspo-tabs button:hover:not(.active) { color: var(--ink-soft); }
+}
+
+.tabs > button:focus-visible,
+.settings-tab:focus-visible,
+.inspo-tabs button:focus-visible {
+  outline: 2px solid var(--accent-warm);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+
+/* A tab that explains itself when opened (Settings › Cloud backup before
+   Drive is configured). */
+.tabs > button.is-disabled,
+.settings-tab.is-disabled { opacity: .45; }
+.tabs > button.is-disabled.is-active::after,
+.settings-tab.is-disabled.is-active::after { background: var(--muted); }
+
+/* "Piles 2", "Pieces 6": one count format inside a tab. */
+.tabs__count {
+  color: var(--muted);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-regular);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tabs in a panel header's second row: the tab rule replaces the header's
+   own hairline, so there is one line under the header, scrolled or not. */
+.viewer > .viewer-header--row:has(> .viewer-header__below > .tabs) { padding-bottom: 0; }
+.viewer > .viewer-header--row:has(> .viewer-header__below > .tabs),
+.viewer[data-scrolled] > .viewer-header--row:has(> .viewer-header__below > .tabs) { border-bottom-color: transparent; }
+.viewer-header__below > .tabs,
+.viewer-header__below > .settings-tabs,
+.viewer-header__below > .inspo-tabs { margin-top: 10px; }
+.viewer > .viewer-header--row:has(> .viewer-header__below > .tabs) + .viewer-body { padding-top: 20px; }
+
+@media (max-width: 860px) {
+  .tabs > button,
+  .settings-tab,
+  .inspo-tabs button { min-height: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tabs > button,
+  .settings-tab,
+  .inspo-tabs button,
+  .tabs > button::after,
+  .settings-tab::after,
+  .inspo-tabs button::after { transition: none; }
+}

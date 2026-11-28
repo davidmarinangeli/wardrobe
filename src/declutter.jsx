@@ -254,22 +254,23 @@ export function DeclutterPanel({ wear, itemsById, retiredItems, onSetStatus, onC
       onClose={onClose}
       closeRef={closeRef}
       entryClassName="declutter-entry"
+      // The header's second row, as in Settings: the tabs stay put while a
+      // section scrolls, and their rule is the header's divider.
+      headerBelow={wear && (hasPiles || wear.unlocked) ? (
+        <div className="tabs" role="tablist" aria-label="Declutter sections">
+          <button type="button" role="tab" aria-selected={tab === "review"} className={tab === "review" ? "is-active" : ""} onClick={() => setTab("review")}>
+            Review
+          </button>
+          <button type="button" role="tab" aria-selected={tab === "piles"} className={tab === "piles" ? "is-active" : ""} onClick={() => setTab("piles")}>
+            Piles {hasPiles && <span className="tabs__count">{sell.length + donate.length}</span>}
+          </button>
+        </div>
+      ) : undefined}
     >
       <div className="declutter-body">
         {(stateError || browserState.error?.message) && <p className="declutter-note" role="alert">{stateError || browserState.error.message}</p>}
         {!browserState.ready && !browserState.error && <p className="declutter-note">Syncing your saved decisions…</p>}
         {!wear && <p className="declutter-note">Loading…</p>}
-
-        {wear && (hasPiles || wear.unlocked) && (
-          <div className="declutter-tabs" role="tablist" aria-label="Declutter sections">
-            <button type="button" role="tab" aria-selected={tab === "review"} className={tab === "review" ? "active" : ""} onClick={() => setTab("review")}>
-              Review
-            </button>
-            <button type="button" role="tab" aria-selected={tab === "piles"} className={tab === "piles" ? "active" : ""} onClick={() => setTab("piles")}>
-              Piles {hasPiles && <span className="declutter-pile__count">{sell.length + donate.length}</span>}
-            </button>
-          </div>
-        )}
 
         {!wear ? null : tab === "review" ? (
           wear.unlocked

@@ -611,8 +611,8 @@ function CheatSheetEditor({ items, entry, onClose, onSaved, onSheetUpdate, premi
         </header>
 
         {isPhone && (
-          <div className="cheat-editor__mobile-tabs" role="tablist" aria-label="Cheat sheet editor">
-            <button ref={mobilePiecesTabRef} type="button" role="tab" aria-selected={mobileView === "pieces"} className={mobileView === "pieces" ? "is-active" : ""} onClick={() => handleMobileTab("pieces")}>Pieces ({selectedCount})</button>
+          <div className="cheat-editor__mobile-tabs tabs" role="tablist" aria-label="Cheat sheet editor">
+            <button ref={mobilePiecesTabRef} type="button" role="tab" aria-selected={mobileView === "pieces"} className={mobileView === "pieces" ? "is-active" : ""} onClick={() => handleMobileTab("pieces")}>Pieces <span className="tabs__count">{selectedCount}</span></button>
             <button ref={mobilePreviewTabRef} type="button" role="tab" aria-selected={mobileView === "preview"} className={mobileView === "preview" ? "is-active" : ""} onClick={() => handleMobileTab("preview")}>Preview</button>
           </div>
         )}

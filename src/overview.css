@@ -53,40 +53,9 @@
 .overview-subnav button.is-active::after { position: absolute; right: 0; bottom: -1px; left: 0; height: 2px; background: var(--accent); content: ""; }
 .overview-subnav button:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
 
-.overview-search {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  min-width: 0;
-  height: 48px;
-  padding: 0 15px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-full);
-  background: var(--paper-raised);
-  color: var(--muted);
-  box-shadow: var(--shadow-xs);
-}
-
-.overview-search:focus-within {
-  border-color: var(--accent-warm);
-  box-shadow: 0 0 0 3px var(--ring-focus);
-}
-
-.overview-search input {
-  width: 100%;
-  min-width: 0;
-  height: 100%;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--ink-soft);
-  font: inherit;
-  font-size: var(--text-body);
-}
-
-.overview-search input::placeholder { color: var(--muted); opacity: .82; }
-.overview-search input::-webkit-search-cancel-button { display: none; }
+/* The search field is the shared .search (src/components/fields.css, S3);
+   only its place in the Overview grid is here. */
+.overview-search { grid-column: 1 / -1; }
 
 .overview-search__clear,
 .overview-active-filter button,

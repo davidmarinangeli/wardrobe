@@ -10,38 +10,7 @@
 .viewer.settings-panel[data-scrolled] > .viewer-header--row { padding-bottom: 0; border-bottom: 0; }
 .viewer.settings-panel > .viewer-header--row + .viewer-body { padding-top: 22px; }
 
-.settings-tabs {
-  display: flex;
-  gap: var(--s-1);
-  margin-top: 10px;
-  border-bottom: 1px solid var(--line);
-}
-
-.settings-tab {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  margin-bottom: -1px;
-  padding: 9px 14px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: none;
-  color: var(--muted);
-  font: inherit;
-  font-size: var(--text-body);
-  font-weight: var(--weight-semibold);
-  cursor: pointer;
-}
-
-.settings-tab.is-active { border-bottom-color: var(--ink); color: var(--ink); }
-.settings-tab.is-disabled { opacity: .45; }
-.settings-tab.is-disabled.is-active { border-bottom-color: var(--muted); }
-.settings-tab:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; border-radius: var(--r-sm, 4px); }
-
-@media (hover: hover) and (pointer: fine) {
-  .settings-tab:hover:not(.is-active):not(.is-disabled) { color: var(--ink-soft); }
-}
+/* The tabs themselves are the shared .tabs (src/components/chips.css, S3). */
 
 /* The gear's TEST/PROD dot, repeated on the AI tab — inline here, not pinned
    to a corner the way it is on the round gear button. */

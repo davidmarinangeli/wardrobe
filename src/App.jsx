@@ -650,20 +650,22 @@ export function App() {
           onCategory={chooseType}
           navLabel="Filter wardrobe by item type"
           navExtra={colorProfile && (
-            <button
-              type="button"
-              className={`color-filter-btn${onlyMatches ? " active" : ""}`}
-              onClick={() => setOnlyMatches((current) => !current)}
-              aria-pressed={onlyMatches}
-              title={onlyMatches ? "Show all pieces" : `Show only pieces matching your ${(SEASONS[colorProfile.season] || SEASONS[colorProfile.parentSeason])?.label || "palette"}`}
-            >
-              <span
-                className="season-dot"
-                style={{ backgroundColor: (SEASONS[colorProfile.season] || SEASONS[colorProfile.parentSeason])?.accent }}
-                aria-hidden="true"
-              />
-              Matches my colors
-            </button>
+            <>
+              {/* A different kind of filter from the categories (it combines
+                  with any of them), so it is a switch set off by a rule, not
+                  one more pill. */}
+              <span className="category-nav__divider" aria-hidden="true" />
+              <button
+                type="button"
+                className={`chip-toggle color-filter-btn${onlyMatches ? " active" : ""}`}
+                onClick={() => setOnlyMatches((current) => !current)}
+                aria-pressed={onlyMatches}
+                title={onlyMatches ? "Show all pieces" : `Show only pieces matching your ${(SEASONS[colorProfile.season] || SEASONS[colorProfile.parentSeason])?.label || "palette"}`}
+              >
+                <span className="chip-toggle__switch" aria-hidden="true" />
+                Matches my colors
+              </button>
+            </>
           )}
           beforeContent={<HotCards cards={[colorCard, declutterCard].filter(Boolean)} label="Wardrobe shortcuts" />}
         >

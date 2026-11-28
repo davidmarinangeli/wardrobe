@@ -1,0 +1,332 @@
+/* ─── Fields and choices (S3) ─────────────────────────────────────────────────
+   One field for text, search, select and textarea; one label above it; one
+   focus (warm-oxblood border plus --ring-focus); one card for a "one of N"
+   choice.
+
+     .field-label  the label above a field: sentence case, body size, medium.
+                   An <em> inside it is the quiet "optional".
+     .input        44px, --r-sm, raised paper, hairline. Textareas keep their
+                   own height and only grow vertically.
+     .search       an .input with a leading magnifier (and the component's own
+                   clear button, where it has one).
+     .choice       a selectable card ("one of N": AI provider, how to make a
+                   new way to wear it). One selected state.
+
+   The existing class names keep working through the selector lists below
+   (same or higher specificity; this file loads after every component
+   stylesheet, see main.jsx). Their old declarations were removed only from
+   the blocks S3 owns; duplicates elsewhere are left for their owners. */
+
+/* ─── Label ─────────────────────────────────────────────────────────────── */
+
+.field-label,
+.field > span,
+.sheet-field > span,
+.inspo-url-field label,
+.import-field label,
+.onboarding-field label,
+.cheat-title-field > span {
+  color: var(--ink-soft);
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--track-body);
+  line-height: var(--leading-caption);
+  text-transform: none;
+}
+
+.field > span { display: block; margin-bottom: var(--s-2); }
+
+.field-label em,
+.field > span em,
+.sheet-field > span em,
+.cheat-title-field em,
+.onboarding-field label span {
+  margin-left: 2px;
+  color: var(--muted);
+  font-style: normal;
+  font-weight: var(--weight-regular);
+  letter-spacing: var(--track-body);
+  text-transform: none;
+}
+
+/* ─── Input, select, textarea ───────────────────────────────────────────── */
+
+.input,
+.field input:not([type="checkbox"], [type="radio"], [type="color"], [type="range"], [type="file"]),
+.field select,
+.field textarea,
+.sheet-field input,
+.tag-input-row input,
+.inspo-url-field textarea,
+.import-field input:not([type="color"], [type="range"]),
+.import-field select,
+.import-field textarea,
+.onboarding-field input,
+.cheat-title-field input,
+.cheat-title-field textarea,
+.piece-picker__search {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 11px var(--s-3);
+  background: var(--paper-raised);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--text-body);
+  line-height: var(--leading-caption);
+  box-shadow: none;
+  transition:
+    border-color var(--dur-pop) var(--ease-out),
+    box-shadow var(--dur-pop) var(--ease-out);
+}
+
+/* Single-line controls share one height; textareas keep the height their
+   component gives them. */
+input.input,
+select.input,
+.field input:not([type="checkbox"], [type="radio"], [type="color"], [type="range"], [type="file"]),
+.field select,
+.sheet-field input,
+.tag-input-row input,
+.import-field input:not([type="color"], [type="range"]),
+.import-field select,
+.onboarding-field input,
+.cheat-title-field input,
+.piece-picker__search { min-height: 44px; }
+
+textarea.input,
+.field textarea,
+.inspo-url-field textarea,
+.import-field textarea,
+.cheat-title-field textarea {
+  line-height: var(--leading-body);
+  resize: vertical;
+}
+
+.inspo-url-field textarea { min-height: 120px; }
+
+.input::placeholder,
+.field input::placeholder,
+.field textarea::placeholder,
+.sheet-field input::placeholder,
+.tag-input-row input::placeholder,
+.inspo-url-field textarea::placeholder,
+.import-field input::placeholder,
+.import-field textarea::placeholder,
+.onboarding-field input::placeholder,
+.cheat-title-field input::placeholder,
+.cheat-title-field textarea::placeholder,
+.piece-picker__search::placeholder,
+.overview-search input::placeholder { color: var(--muted); opacity: 1; }
+
+@media (hover: hover) and (pointer: fine) {
+  .input:hover:not(:focus, :disabled),
+  .field :is(input, select, textarea):hover:not(:focus, :disabled),
+  .sheet-field input:hover:not(:focus, :disabled),
+  .tag-input-row input:hover:not(:focus, :disabled),
+  .inspo-url-field textarea:hover:not(:focus, :disabled),
+  .import-field :is(input, select, textarea):hover:not(:focus, :disabled, [type="color"], [type="range"]),
+  .onboarding-field input:hover:not(:focus, :disabled),
+  .cheat-title-field :is(input, textarea):hover:not(:focus, :disabled),
+  .piece-picker__search:hover:not(:focus, :disabled),
+  .overview-search:hover:not(:focus-within) { border-color: color-mix(in srgb, var(--line), var(--muted) 40%); }
+}
+
+/* The one focus. Fields show it on any focus, not only keyboard focus: the
+   caret alone is too small a signal on a 44px box. */
+.input:focus,
+.field input:focus,
+.field select:focus,
+.field textarea:focus,
+.sheet-field input:focus,
+.tag-input-row input:focus,
+.inspo-url-field textarea:focus,
+.import-field input:focus,
+.import-field select:focus,
+.import-field textarea:focus,
+.onboarding-field input:focus,
+.cheat-title-field input:focus,
+.cheat-title-field textarea:focus,
+.piece-picker__search:focus,
+.piece-picker__search:focus-visible {
+  border-color: var(--accent-warm);
+  box-shadow: var(--ring-focus);
+  outline: none;
+}
+
+.input:disabled,
+.field :is(input, select, textarea):disabled,
+.sheet-field input:disabled,
+.import-field :is(input, select, textarea):disabled,
+.onboarding-field input:disabled,
+.cheat-title-field :is(input, textarea):disabled { opacity: .55; cursor: not-allowed; }
+
+/* ─── Search ────────────────────────────────────────────────────────────── */
+
+/* A wrapper with its own icon and clear button (Overview › Pieces). */
+.search,
+.overview-search {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+  height: 44px;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 0 6px 0 var(--s-3);
+  background: var(--paper-raised);
+  color: var(--muted);
+  box-shadow: none;
+  transition:
+    border-color var(--dur-pop) var(--ease-out),
+    box-shadow var(--dur-pop) var(--ease-out);
+}
+
+.search > svg,
+.overview-search > svg { flex: none; width: 16px; height: 16px; }
+
+.search input,
+.overview-search input {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--text-body);
+}
+
+.search input::-webkit-search-cancel-button,
+.overview-search input::-webkit-search-cancel-button { display: none; }
+
+.search:focus-within,
+.overview-search:focus-within {
+  border-color: var(--accent-warm);
+  box-shadow: var(--ring-focus);
+}
+
+/* A bare search input (the piece picker): the same magnifier, drawn as a
+   background because an input has no children. The stroke is --muted's value
+   (a data URI cannot read a custom property). */
+input.search,
+.piece-picker__search {
+  padding-left: 36px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath fill='%236d675f' d='M229.66 218.34l-50.07-50.06a88.11 88.11 0 1 0-11.31 11.31l50.06 50.07a8 8 0 0 0 11.32-11.32ZM40 112a72 72 0 1 1 72 72a72.08 72.08 0 0 1-72-72Z'/%3E%3C/svg%3E");
+  background-position: 12px 50%;
+  background-repeat: no-repeat;
+  background-size: 16px 16px;
+}
+
+/* ─── Choice card ───────────────────────────────────────────────────────── */
+
+.choice,
+.provider-switch__option,
+.onboarding-provider,
+.variant-method-picker button {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--paper-raised);
+  color: var(--ink);
+  text-align: left;
+  box-shadow: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    border-color var(--dur-pop) var(--ease-out),
+    background var(--dur-pop) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
+}
+
+/* Hover only darkens the hairline: it must never look like the selection. */
+@media (hover: hover) and (pointer: fine) {
+  .choice:hover:not(:disabled, .is-selected, [aria-checked="true"], [aria-pressed="true"]),
+  .provider-switch__option:hover:not(:disabled, .is-active),
+  .onboarding-provider:hover:not(.is-selected),
+  .variant-method-picker button:hover:not(.active) {
+    border-color: var(--muted);
+    box-shadow: none;
+  }
+}
+
+/* Selected (variant A): an ink hairline over a wash, the language of the
+   filled ink chip. */
+.choice.is-selected,
+.choice[aria-checked="true"],
+.choice[aria-pressed="true"],
+.provider-switch__option.is-active,
+.onboarding-provider.is-selected,
+.variant-method-picker button.active {
+  border-color: var(--ink);
+  background: var(--wash-1);
+  box-shadow: none;
+}
+
+.choice:focus-visible,
+.provider-switch__option:focus-visible,
+.onboarding-provider:focus-visible,
+.variant-method-picker button:focus-visible {
+  outline: 2px solid var(--accent-warm);
+  outline-offset: 2px;
+}
+
+/* Focus is the ring alone; a focused card that is not chosen keeps its
+   hairline, so it never reads as a second selection. */
+.provider-switch__option:focus-visible:not(.is-active, .is-busy),
+.onboarding-provider:focus-visible:not(.is-selected) { border-color: var(--line); }
+
+.choice:active:not(:disabled),
+.variant-method-picker button:active { transform: scale(.98); }
+
+@media (prefers-reduced-motion: reduce) {
+  .choice:active:not(:disabled),
+  .variant-method-picker button:active,
+  .provider-switch__option:active:not(:disabled) { transform: none; }
+}
+
+/* ─── Input with an attached button (add a tag) ─────────────────────────── */
+
+/* Input and button share one seam: rounded only on their outer corners, so
+   together they read as one control, not two rectangles glued together. */
+.tag-input-row { display: flex; }
+
+.tag-input-row input {
+  border-right: 0;
+  border-radius: var(--r-sm) 0 0 var(--r-sm);
+}
+
+.tag-input-row button {
+  flex: none;
+  width: 44px;
+  border: 1px solid var(--line);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  background: var(--paper-raised);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition:
+    background var(--dur-pop) var(--ease-out),
+    color var(--dur-pop) var(--ease-out),
+    border-color var(--dur-pop) var(--ease-out);
+}
+
+.tag-input-row button:disabled { color: var(--muted); opacity: .45; cursor: default; }
+
+/* Focusing the input lights the whole control, button included. */
+.tag-input-row input:focus + button { border-color: var(--accent-warm); }
+
+@media (hover: hover) and (pointer: fine) {
+  .tag-input-row button:not(:disabled):hover { border-color: var(--accent); background: var(--accent); color: var(--paper); }
+}
+
+.tag-input-row button:not(:disabled):focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
+.tag-input-row button:not(:disabled):active { transform: scale(.94); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tag-input-row button:not(:disabled):active { transform: none; }
+}

@@ -256,22 +256,8 @@
   line-height: var(--leading-caption);
 }
 
-.outfit-style-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.outfit-style-tag {
-  border-radius: var(--r-full);
-  padding: var(--s-1) 10px;
-  background: var(--wash-1);
-  color: var(--muted);
-  font-size: var(--text-eyebrow);
-  font-weight: var(--weight-medium);
-  letter-spacing: var(--track-caps);
-  text-transform: uppercase;
-}
+/* .outfit-style-tags / .outfit-style-tag are the shared .tag-list / .tag
+   (src/components/chips.css, S3). */
 
 /* The outfit's name, set on the card like a lookbook caption: centred in the
    lower third over a fade to paper — the same floor the modeled hero stands on

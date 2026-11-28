@@ -163,9 +163,11 @@
   .cheat-editor__header h2 { font-size: var(--text-title); }
   .cheat-editor__header-count { display: none; }
   .cheat-editor__close-spacer { margin-left: auto; }
-  .cheat-editor__mobile-tabs { display: flex; flex: 0 0 auto; gap: var(--s-1); padding: 6px var(--s-4); border-bottom: 1px solid var(--line); }
-  .cheat-editor__mobile-tabs button { flex: 1; min-height: 44px; border: 0; border-radius: var(--r-full); background: transparent; color: var(--muted); font: inherit; font-size: var(--text-body); cursor: pointer; }
-  .cheat-editor__mobile-tabs button.is-active { background: var(--wash-2); color: var(--ink); font-weight: var(--weight-semibold); }
+  /* The tabs are the shared .tabs (src/components/chips.css, S3); only the
+     placement in the editor's own header is here. */
+  .cheat-editor__mobile-tabs.tabs { display: flex; flex: 0 0 auto; padding: 0 var(--s-4); }
+  /* The tab rule is the header's divider: one line, not two around the tabs. */
+  .cheat-editor__header:has(+ .cheat-editor__mobile-tabs) { padding-bottom: 0; min-height: 56px; border-bottom-color: transparent; }
   .cheat-editor__main { display: flex; flex-direction: column; }
   .cheat-editor__left-pane { flex: 1 1 auto; border-right: 0; }
   .cheat-editor__preview-pane { display: none; flex: 1 1 auto; }
