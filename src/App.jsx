@@ -6,7 +6,7 @@ import { buildOutfitIndex } from "../shared/outfit-index.mjs";
 import { ColorProfileModal, SEASONS, itemMatchesPalette } from "./color-profile.jsx";
 import { Mirror } from "./mirror.jsx";
 import { Inspo } from "./inspo.jsx";
-import { Overview } from "./overview.jsx";
+import { Overview, OVERVIEW_SECTIONS } from "./overview.jsx";
 import { GalleryItem, ItemViewer } from "./item-editor.jsx";
 import { WARDROBE_TYPES as TYPES, TYPE_MAP } from "./categories.js";
 import { PageShell } from "./components/PageShell.jsx";
@@ -16,7 +16,8 @@ import "./components/hot-cards.css";
 import { PageStatus } from "./components/PageStatus.jsx";
 import { useTypeFilteredItems } from "./hooks/useTypeFilteredItems.js";
 import { BottomNav } from "./components/BottomNav.jsx";
-import { MobileCompactBar, MobileHeadRow, useMobileHeaderScroll } from "./components/MobileHeader.jsx";
+import { PageHeader } from "./components/MobileHeader.jsx";
+import { PageTabs } from "./components/PageTabs.jsx";
 import { useChromeScroll } from "./hooks/useChromeScroll.js";
 import "./components/mobile-chrome.css";
 import { Onboarding, RESUME_KEY as ONBOARDING_RESUME_KEY, SWITCHED_KEY as PROVIDER_SWITCHED_KEY } from "./onboarding.jsx";
@@ -30,6 +31,10 @@ const VIEW_TITLES = {
   overview: "Overview",
   inspo: "Inspo",
 };
+const INSPO_VIEWS = [
+  { id: "pieces", label: "Pieces" },
+  { id: "sources", label: "Sources" },
+];
 
 // A developer setting, findable but quiet: a small dot on the gear button and
 // the AI tab reporting the current Gemini mode, nothing more. The actual switch
@@ -50,7 +55,6 @@ function AiModeBadge({ setup }) {
 
 export function App() {
   const [view, setView] = useState("wardrobe");
-  const { barRef, largeRef } = useMobileHeaderScroll(VIEW_TITLES[view] || "Wardrobe");
   // Mobile chrome: the bottom nav contracts and the relocated action row hides
   // as you scroll. Both are no-ops above 860px, where CSS leaves the desktop
   // top bar alone and the nav is not rendered at all.
@@ -92,6 +96,15 @@ export function App() {
   // Which Overview section is showing. Session state only, never persisted;
   // reset to Outfits whenever you leave Overview, so it always opens there.
   const [overviewSection, setOverviewSection] = useState("outfits");
+  // The count of what the active Overview section shows, reported by Overview
+  // (null while it is still loading). Only the active tab carries a count: the
+  // other sections have not loaded their lists.
+  const [overviewCount, setOverviewCount] = useState(null);
+  // Inspo's two collections, as tabs in the page header: the pieces detected
+  // out of your inspo, and the source pins they came from. Same lifetime as
+  // overviewSection: reset to Pieces whenever you leave Inspo.
+  const [inspoView, setInspoView] = useState("pieces");
+  const [inspoCounts, setInspoCounts] = useState(null);
   // Which saved outfits use each piece. Lives here rather than in the Outfits
   // section because the wardrobe grid is the surface that asks the question,
   // and that view must not have to mount Overview › Outfits (or wait on the
@@ -116,6 +129,11 @@ export function App() {
     if (view !== "overview") {
       setOverviewSelectionCount(0);
       setOverviewSection("outfits");
+      setOverviewCount(null);
+    }
+    if (view !== "inspo") {
+      setInspoView("pieces");
+      setInspoCounts(null);
     }
   }, [view, browserState?.archiveGeneration]);
 
@@ -570,10 +588,6 @@ export function App() {
 
   return (
     <div key={browserState?.archiveGeneration ?? 0} className={`app-shell${selectedItem ? " has-selection" : ""}`}>
-      <MobileCompactBar
-        title={VIEW_TITLES[view] || "Wardrobe"}
-        barRef={barRef}
-      />
       <div className="app-top-bar">
         <nav className="app-view-switch" aria-label="Switch between wardrobe, overview, and inspo">
           <button type="button" className={view === "wardrobe" ? "active" : ""} onClick={() => setView("wardrobe")} aria-pressed={view === "wardrobe"}>Wardrobe</button>
@@ -581,11 +595,12 @@ export function App() {
           <button type="button" className={view === "inspo" ? "active" : ""} onClick={() => setView("inspo")} aria-pressed={view === "inspo"}>Inspo</button>
         </nav>
         <div className="app-top-bar__right">
-          {/* Global tools, always in the same place: one import primary per
-              view (relabelled to Add inspo on Inspo) and Mirror as the
-              secondary everywhere. Overview's sections carry their own
-              + Outfit / Suggest outfit / + Cheat sheet in their header rows. */}
-          {!archiveMaintenanceActive && <div className="top-actions" ref={topActionsRef} data-hidden="false" data-overview-selection={view === "overview" && overviewSelectionCount > 0 ? "true" : "false"}>
+          {/* Global tools, always in the same place: the import action
+              (relabelled to Add inspo on Inspo) and Mirror as the secondary
+              everywhere. Overview's sections carry their own primary
+              (+ Outfit / + Cheat sheet), so there the import action steps
+              down to the secondary tone (data-view): one primary per view. */}
+          {!archiveMaintenanceActive && <div className="top-actions" ref={topActionsRef} data-hidden="false" data-view={view} data-overview-selection={view === "overview" && overviewSelectionCount > 0 ? "true" : "false"}>
             {/* Remounts on every view change (key={view}) so the spark
                 animation replays on arrival. Secondary first, primary
                 last: DOM order is the visual and the tab order. */}
@@ -605,11 +620,28 @@ export function App() {
       </div>
 
       <div className="app-shell__page">
-        <MobileHeadRow
+        <PageHeader
           title={VIEW_TITLES[view] || "Wardrobe"}
           onSettings={openSettings}
           badge={<AiModeBadge setup={aiSetup} />}
-          largeRef={largeRef}
+          nav={!archiveReady ? null : view === "overview" ? (
+            <PageTabs
+              idPrefix="overview"
+              label="Overview sections"
+              tabs={OVERVIEW_SECTIONS.map((section) => ({ ...section, count: section.id === overviewSection ? overviewCount : null }))}
+              active={overviewSection}
+              onChange={setOverviewSection}
+              controls
+            />
+          ) : view === "inspo" ? (
+            <PageTabs
+              idPrefix="inspo"
+              label="Inspo collections"
+              tabs={INSPO_VIEWS.map((entry) => ({ ...entry, count: inspoCounts?.[entry.id] ?? null }))}
+              active={inspoView}
+              onChange={setInspoView}
+            />
+          ) : null}
         />
 
         {!archiveReady ? (
@@ -633,6 +665,7 @@ export function App() {
             onSelectionChange={setOverviewSelectionCount}
             section={overviewSection}
             onSectionChange={setOverviewSection}
+            onCountChange={setOverviewCount}
             colorProfile={colorProfile}
             onOpenColorQuiz={() => setShowColorQuiz(true)}
             openOutfitId={openOutfitId}
@@ -640,10 +673,10 @@ export function App() {
             archiveGeneration={browserState?.archiveGeneration}
           />
         ) : view === "inspo" ? (
-        <Inspo showImporter={showInspoImporter} onImporterClose={() => setShowInspoImporter(false)} />
+        <Inspo view={inspoView} onCountsChange={setInspoCounts} showImporter={showInspoImporter} onImporterClose={() => setShowInspoImporter(false)} />
       ) : (
         <PageShell
-          count={onlyMatches ? visibleItems.length : items.length}
+          count={visibleItems.length}
           noun={onlyMatches && colorProfile ? `${(SEASONS[colorProfile.season] || SEASONS[colorProfile.parentSeason])?.label || "palette"} match` : "piece"}
           categories={availableTypes}
           activeCategory={activeType}

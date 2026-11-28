@@ -1,19 +1,20 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { OverviewPieces } from "./overview-pieces.jsx";
 import { OutfitsSection } from "./outfits.jsx";
 import { CheatSheetsArea } from "./cheat-sheets.jsx";
 import "./overview.css";
 
-const SECTIONS = [
+export const OVERVIEW_SECTIONS = [
   { id: "outfits", label: "Outfits" },
   { id: "sheets", label: "Cheat sheets" },
   { id: "pieces", label: "Pieces" },
 ];
 
-// Overview is the home of everything that groups pieces. The shell owns the
-// page title and the section tabs; App owns which section is active. Inactive
-// sections unmount, except CheatSheetsArea, which stays rendered with an
-// `active` flag so an open editor (and its unsaved draft) survives a switch.
+// Overview is the home of everything that groups pieces. The page header
+// (App's PageHeader + PageTabs) owns the section tabs and App owns which
+// section is active. Inactive sections unmount, except CheatSheetsArea, which
+// stays rendered with an `active` flag so an open editor (and its unsaved
+// draft) survives a switch.
 export function Overview({
   items,
   premiumAllowed = true,
@@ -26,6 +27,7 @@ export function Overview({
   onSelectionChange,
   section = "outfits",
   onSectionChange,
+  onCountChange,
   colorProfile,
   onOpenColorQuiz,
   openOutfitId,
@@ -38,48 +40,32 @@ export function Overview({
     if (section !== "pieces") onSelectionChange?.(0);
   }, [section, onSelectionChange]);
 
-  // Automatic activation: arrows, Home and End select the tab they land on.
-  const handleTabKeyDown = (event) => {
-    const current = SECTIONS.findIndex(({ id }) => id === section);
-    let next;
-    if (event.key === "ArrowRight") next = (current + 1) % SECTIONS.length;
-    else if (event.key === "ArrowLeft") next = (current - 1 + SECTIONS.length) % SECTIONS.length;
-    else if (event.key === "Home") next = 0;
-    else if (event.key === "End") next = SECTIONS.length - 1;
-    else return;
-    event.preventDefault();
-    const { id } = SECTIONS[next];
-    onSectionChange?.(id);
-    document.getElementById(`overview-tab-${id}`)?.focus();
-  };
+  // The active tab carries the count of what its section shows. Pieces is the
+  // wardrobe itself; Outfits and Cheat sheets load their own lists and print
+  // the count in their section heading (visually hidden, see overview.css),
+  // so it is read from there rather than fetched a second time.
+  const panelRef = useRef(null);
+  useEffect(() => {
+    if (!onCountChange) return undefined;
+    if (section === "pieces") {
+      onCountChange(items.length);
+      return undefined;
+    }
+    const panel = panelRef.current;
+    if (!panel) return undefined;
+    const read = () => {
+      const text = panel.querySelector(".overview-panel-head h2 > span")?.textContent?.trim();
+      onCountChange(text && /^\d+$/.test(text) ? Number(text) : null);
+    };
+    read();
+    const observer = new MutationObserver(read);
+    observer.observe(panel, { childList: true, subtree: true, characterData: true });
+    return () => observer.disconnect();
+  }, [section, items.length, onCountChange]);
 
   return (
     <main className="overview-page">
-      <header className="overview-header">
-        {/* The page h1 is the shared large title (MobileHeadRow), on desktop too. */}
-        <div className="overview-subnav" role="tablist" aria-label="Overview sections" onKeyDown={handleTabKeyDown}>
-          {SECTIONS.map(({ id, label }) => {
-            const active = id === section;
-            return (
-              <button
-                key={id}
-                id={`overview-tab-${id}`}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                aria-controls="overview-panel"
-                tabIndex={active ? 0 : -1}
-                className={active ? "is-active" : ""}
-                onClick={() => onSectionChange?.(id)}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
-      </header>
-
-      <div id="overview-panel" role="tabpanel" aria-labelledby={`overview-tab-${section}`}>
+      <div id="overview-panel" ref={panelRef} role="tabpanel" aria-labelledby={`overview-tab-${section}`}>
         {section === "outfits" && (
           <OutfitsSection
             items={items}

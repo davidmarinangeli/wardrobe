@@ -718,6 +718,9 @@ button { font: inherit; }
 .ai-mode-switch__pill button:active { transform: scale(.97); }
 
 
+/* The main nav speaks in sentence case, like every other control that moves
+   you somewhere (section tabs, the phone's bottom nav); tracked caps are kept
+   for labels. */
 .app-view-switch button {
   min-height: 34px;
   border: 0;
@@ -725,10 +728,9 @@ button { font: inherit; }
   padding: 7px var(--s-4);
   background: transparent;
   color: var(--muted);
-  font-size: var(--text-eyebrow);
+  font-size: var(--text-body);
   font-weight: var(--weight-medium);
-  letter-spacing: var(--track-caps);
-  text-transform: uppercase;
+  letter-spacing: var(--track-body);
   cursor: pointer;
   transition:
     background var(--dur-pop) var(--ease-out),
@@ -754,51 +756,160 @@ button { font: inherit; }
 
 .app-view-switch button:active { transform: scale(.97); }
 
-.gallery-header {
-  padding: 40px var(--page-x) 0;
+/* == S1 page shell ==========================================================
+   Variant A, "the tabs are the title". The top nav (desktop) and the bottom
+   nav (phone) already say which page you are on, so the page name is an h1
+   for the outline only (PageHeader). Each page opens on one row of its own
+   navigation instead: Overview's and Inspo's section tabs, each carrying its
+   count, with the section's actions on the same row; Wardrobe, which has no
+   sections, opens on its count and filters. The row sits at the same height
+   on every page. */
+.app-shell__page {
+  position: relative;
+  /* Where the first row of every page starts, and how tall the tab row is.
+     Overview's section actions (overview.css) are placed on that row. */
+  --page-head-top: var(--s-5);
+  --page-tabs-h: 48px;
 }
 
-/* The page title. Every view has exactly one h1 and it always looks the same:
-   the large title from MobileHeadRow. On a phone mobile-chrome.css lays it out
-   with the gear beside it; on desktop the gear already lives in the top bar, so
-   only the title shows, sitting where Overview's own title used to and pulling
-   the page content up under it. */
+.page-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--page-head-top) var(--page-x) 0;
+}
+
+.page-head__nav { flex: 1 1 auto; min-width: 0; }
+
+/* Nothing to show on desktop: the gear is in the top bar, the h1 is hidden. */
 @media (min-width: 861px) {
-  .app-shell .mobile-headrow {
-    display: block;
-    padding: 28px var(--page-x) 0;
-  }
-  .app-shell .mobile-headrow .mobile-settings { display: none; }
-  .mobile-largetitle {
-    margin: 0;
-    color: var(--ink);
-    font-size: var(--text-display);
-    font-weight: var(--weight-medium);
-    line-height: var(--leading-display);
-    letter-spacing: var(--track-display);
-  }
-  .app-shell .gallery-header { padding-top: 14px; }
-  .app-shell .overview-page { padding-top: 22px; }
+  .page-head:not(.has-nav) { display: contents; }
+  .page-head .page-head__settings { display: none; }
 }
 
+.page-head__settings { position: relative; flex: none; --btn-shadow: var(--shadow-xs); }
+
+/* Section tabs. Larger than control text because they are the heading of the
+   page: --text-section, the same weight as every heading. The count sits in
+   the active tab in muted figures; the accent underline marks the selection
+   and the hairline under the row is the only divider before the content. */
+.page-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: var(--s-5);
+  min-height: var(--page-tabs-h);
+  border-bottom: 1px solid var(--line);
+}
+
+.page-tabs button {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--s-2);
+  border: 0;
+  padding: 0 2px;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-section);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--track-tight);
+  line-height: var(--leading-heading);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--dur-pop) var(--ease-out);
+}
+
+.page-tabs button[aria-selected="true"] { color: var(--ink); }
+
+.page-tabs button[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  border-radius: var(--r-full);
+  background: var(--accent);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .page-tabs button:not([aria-selected="true"]):hover { color: var(--ink-soft); }
+}
+
+.page-tabs button:focus-visible {
+  outline: 2px solid var(--accent-warm);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+
+.page-tabs__count {
+  color: var(--muted);
+  font-size: var(--text-subsection);
+  font-weight: var(--weight-regular);
+  font-variant-numeric: tabular-nums;
+}
+
+.gallery-header {
+  padding: var(--page-head-top) var(--page-x) 0;
+}
+
+/* Under section tabs (Inspo) the filters are a second level, not a new page
+   head: a tighter interval than the one above the tabs. */
+.page-head.has-nav + .gallery-pane > .gallery-header { padding-top: var(--s-4); }
+
+/* Count and filters, one row. The count leads in muted body text, the pills
+   follow and scroll sideways when they run out of room. */
 .gallery-meta-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--s-5);
+  gap: var(--s-4);
+  min-width: 0;
 }
 
-/* Caps kept as the structural device, but at roughly half the volume:
-   tracking down from .1em, lighter weight, warm muted instead of ink. */
+/* Layout only (the pill row's own styling is S3's): the nav carries 6px / 18px
+   of padding so the active pill's shadow survives its scroll clip; the
+   negative margins give that room back so the row is as tall as one pill. */
+.gallery-meta-row > .category-nav {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: -6px 0 -18px;
+  /* When the pills outrun the row they fade out at its end instead of being
+     cut flat, so the clipped ones read as "scroll for more". The fade covers
+     the trailing padding, so a row that fits ends before it. */
+  padding-inline-end: var(--s-7);
+  -webkit-mask-image: linear-gradient(to left, transparent, #000 var(--s-7));
+  mask-image: linear-gradient(to left, transparent, #000 var(--s-7));
+}
+
 .piece-count {
+  flex: none;
   margin: 0;
   color: var(--muted);
-  font-size: var(--text-eyebrow);
-  font-weight: var(--weight-medium);
-  letter-spacing: var(--track-caps);
+  font-size: var(--text-body);
+  font-variant-numeric: tabular-nums;
   line-height: var(--leading-none);
-  text-transform: uppercase;
+  white-space: nowrap;
 }
+
+/* One primary per view. Overview's sections bring their own (+ Outfit,
+   + Cheat sheet), so there the global import action takes the secondary tone.
+   An import error keeps its error fill: that is state, not emphasis. */
+.top-actions[data-view="overview"] .top-action--primary:not(.is-error) {
+  border-color: var(--glass-border);
+  background: var(--paper-raised);
+  color: var(--ink-soft);
+  box-shadow: var(--shadow-sm);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .top-actions[data-view="overview"] .top-action--primary:not(.is-error):hover {
+    border-color: var(--line);
+    background: var(--paper-raised);
+    box-shadow: var(--shadow-md);
+  }
+}
+/* == /S1 page shell == */
 
 .category-nav {
   width: max-content;
@@ -2253,7 +2364,6 @@ button:where(.edit-button, .primary-button, .secondary-button, .danger-button, .
 
 @media (max-width: 860px) {
   :root { --page-x: 24px; --item-pad: 12px; }
-  .gallery-header { padding-top: 28px; }
   .category-nav { width: 100%; margin: 22px 0 0; }
   .category-nav button { min-height: 40px; padding: 9px 15px; }
   .gallery-grid {
@@ -2322,8 +2432,6 @@ button:where(.edit-button, .primary-button, .secondary-button, .danger-button, .
   :root { --page-x: 16px; --item-pad: 10px; }
   .app-top-bar { padding-top: max(10px, env(safe-area-inset-top)); gap: var(--s-2) var(--s-3); }
   .app-view-switch button { padding: 7px var(--s-3); }
-  .gallery-header { padding-top: 22px; }
-  .piece-count { font-size: var(--text-eyebrow); }
   .category-nav { margin: 18px 0 0; }
   /* 44px minimum hit target on touch. */
   .category-nav button { min-height: 44px; padding: 11px 15px; font-size: var(--text-eyebrow); }
@@ -2363,7 +2471,6 @@ button:where(.edit-button, .primary-button, .secondary-button, .danger-button, .
   .viewer-actions > button { min-height: 44px; padding-inline: var(--s-2); font-size: var(--text-caption); }
   .color-controls { align-items: flex-start; flex-direction: column; }
   .sample-button { width: 100%; }
-  .gallery-meta-row { align-items: flex-start; }
 }
 
 /* ─── Accessibility ────────────────────────────────────────────────────────
