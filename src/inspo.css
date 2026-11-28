@@ -108,66 +108,9 @@
   line-height: var(--leading-body);
 }
 
-/* Drop zone */
-.inspo-dropzone {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  min-height: 160px;
-  border: 1px dashed var(--line);
-  border-radius: var(--r-lg);
-  padding: var(--s-5);
-  background: var(--glass-card);
-  cursor: pointer;
-  transition: border-color var(--dur-pop) var(--ease-out), background var(--dur-pop) var(--ease-out);
-  text-align: center;
-}
-
-.inspo-dropzone.over {
-  border-color: var(--accent-warm);
-  background: var(--glass-card-hover);
-}
-
-.inspo-dropzone input[type="file"] {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.inspo-dropzone-label {
-  color: var(--muted);
-  font-size: var(--text-body);
-  line-height: var(--leading-body);
-}
-
-.inspo-dropzone-label strong {
-  display: block;
-  color: var(--ink-soft);
-  font-size: var(--text-body);
-  font-weight: var(--weight-medium);
-}
-
-.inspo-drop-btn {
-  min-height: 32px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-full);
-  padding: 6px 14px;
-  background: var(--paper-raised);
-  color: var(--ink-soft);
-  font-size: var(--text-caption);
-  font-weight: var(--weight-medium);
-  cursor: pointer;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .inspo-drop-btn:hover { border-color: var(--muted); box-shadow: var(--shadow-sm); }
-}
-
-.inspo-drop-btn:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
+/* Drop zone: the shared .dropzone (styles.css), a little taller here because
+   it is the whole tab. */
+.inspo-dropzone { min-height: 208px; }
 
 /* Queued previews in importer */
 .inspo-queue {
@@ -211,11 +154,13 @@
 
 /* Import results */
 .inspo-import-errors {
+  display: grid;
+  gap: var(--s-1);
   margin: 0;
   border-radius: var(--r-sm);
   padding: 9px var(--s-3);
   border: 1px solid var(--error);
-  background: rgba(138, 63, 53, .07);
+  background: color-mix(in srgb, var(--error) 7%, transparent);
   color: var(--error);
   font-size: var(--text-caption);
   line-height: var(--leading-body);
@@ -227,10 +172,6 @@
   .inspo-importer-entry { width: 100%; }
 }
 
-.inspo-drop-btn { transition: transform var(--dur-press) var(--ease-out), background var(--dur-pop) var(--ease-out), border-color var(--dur-pop) var(--ease-out); }
-.inspo-drop-btn:active { transform: scale(.97); }
-
 @media (prefers-reduced-motion: reduce) {
-  .inspo-drop-btn:active,
   .inspo-queue-remove:active { transform: none; }
 }

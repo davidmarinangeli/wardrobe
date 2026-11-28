@@ -1,128 +1,36 @@
 /* The trigger itself is .top-action--secondary, styled once in styles.css
-   and shared with the import trigger — see App.jsx's .top-actions comment
-   for why both live in the top bar instead of a floating launcher. */
+   and shared with the import trigger. */
 
-/* Centered popover, same grow-from-launcher pattern as the import flow. */
-.mirror-popover-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 75;
-  display: grid;
-  place-items: center;
-  padding: var(--s-5);
-  background: var(--scrim);
-  -webkit-backdrop-filter: var(--glass-blur-sm);
-  backdrop-filter: var(--glass-blur-sm);
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transition: opacity var(--dur-pop) var(--ease-out), visibility var(--dur-pop) var(--ease-out);
-}
+/* Mirror is a ViewerPanel: the same side sheet as every viewer on desktop and
+   the same bottom sheet on a phone, so it has no frame of its own here. In a
+   sheet the photo sits over the critique, one column at every width. */
 
-.mirror-popover-backdrop[data-open="true"] { opacity: 1; visibility: visible; pointer-events: auto; }
-
-.mirror-popover {
-  width: min(760px, 100%);
-  max-height: min(820px, calc(100dvh - 48px));
-  /* A frame, like every panel: a fixed header over the only scroller. */
-  --popover-pad: 28px;
-  --popover-pad-bottom: 28px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  padding: 0;
-  color: var(--ink);
-  background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: var(--r-xl);
-  box-shadow: var(--shadow-lg);
-  /* Grows out of the chip that opened it. The origin is measured per open by
-     usePopoverOrigin (the trigger's center, expressed in this panel's own box)
-     because a top-bar pill is nowhere near any fixed corner — this used to be a
-     hardcoded translate(6vw, 8vh) from `right bottom`, geometry left from when
-     the trigger was a floating dock, so the panel flew in from empty space.
-     The travel is a small nudge in the trigger's direction; scaling from the
-     right origin is what actually sells it. */
-  transform: translate(var(--travel-x, 0px), var(--travel-y, 0px)) scale(.92);
-  transform-origin: var(--origin-x, 50%) var(--origin-y, 50%);
-  opacity: 0;
-  filter: blur(6px);
-  transition:
-    transform 280ms var(--ease-out),
-    opacity var(--dur-pop) var(--ease-out),
-    filter 280ms var(--ease-out);
-}
-
-.mirror-popover-backdrop[data-open="true"] .mirror-popover { transform: none; opacity: 1; filter: none; }
-
-.mirror-popover__header { display: flex; flex: none; align-items: flex-start; justify-content: space-between; gap: 20px; padding: var(--popover-close-inset, var(--s-5)) var(--popover-close-inset, var(--s-5)) var(--s-4) var(--popover-pad); border-bottom: 1px solid transparent; transition: border-color var(--dur-pop) var(--ease-out); }
-.mirror-popover__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 6px var(--popover-pad) var(--popover-pad-bottom); scrollbar-width: thin; scrollbar-color: var(--wash-3) transparent; }
-.mirror-popover[data-scrolled] > .mirror-popover__header { border-bottom-color: var(--line); }
-.mirror-popover__heading { min-width: 0; }
-.mirror-popover__eyebrow { margin: 0 0 6px; color: var(--muted); font-size: var(--text-eyebrow); text-transform: uppercase; letter-spacing: var(--track-caps); font-weight: var(--weight-medium); }
-.mirror-popover__title { margin: 0; font: inherit; font-size: var(--text-title); font-weight: var(--weight-medium); line-height: var(--leading-title); letter-spacing: var(--track-title); }
-
-/* A plain .icon-button, like every other panel's close. */
-.mirror-close { flex: none; }
-
-.mirror-dropzone {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--s-3);
-  text-align: center;
-  max-width: 420px;
-  margin: var(--s-6) auto;
-  padding: 40px var(--s-5);
-  border: 1px dashed var(--line);
-  border-radius: var(--r-md);
-  color: var(--muted);
-}
-
-.mirror-dropzone h3 {
-  margin: var(--s-1) 0 0;
-  color: var(--ink);
-  font-size: var(--text-section);
-  font-weight: var(--weight-medium);
-  line-height: var(--leading-heading);
-  letter-spacing: var(--track-tight);
-}
-
-.mirror-dropzone p {
-  margin: 0;
-  font-size: var(--text-body);
-}
-
-.mirror-dropzone .primary-button {
-  margin-top: var(--s-2);
-}
+/* The empty state is the shared .dropzone, given room to breathe. */
+.mirror-dropzone { min-height: 280px; }
 
 .mirror-layout {
   display: grid;
-  grid-template-columns: minmax(200px, 300px) 1fr;
-  gap: 28px;
-  align-items: start;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-5);
 }
 
 .mirror-photo {
   display: flex;
   flex-direction: column;
   gap: var(--s-3);
-  position: sticky;
-  top: 0;
 }
 
+/* The whole photo, never cropped, at a height that leaves the start of the
+   critique in view under it. */
 .mirror-photo img {
-  width: 100%;
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: 52vh;
+  margin-inline: auto;
   border-radius: var(--r-md);
   border: 1px solid var(--line);
-  object-fit: cover;
-  max-height: 60vh;
-}
-
-.mirror-photo-actions {
-  display: flex;
-  gap: var(--s-3);
+  object-fit: contain;
 }
 
 .mirror-result {
@@ -371,43 +279,12 @@
   to   { background-position: -120% 0; }
 }
 
-@media (max-width: 720px) {
-  .mirror-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .mirror-photo {
-    position: static;
-  }
-}
-
-@media (max-width: 640px) {
-  .mirror-popover-backdrop { align-items: end; padding: 0; }
-  .mirror-popover {
-    width: 100%;
-    max-height: min(90dvh, 820px);
-    --popover-pad: var(--s-4);
-    --popover-close-inset: 18px;
-    --popover-pad-bottom: calc(18px + env(safe-area-inset-bottom));
-    border-radius: var(--r-xl) var(--r-xl) 0 0;
-    /* A full-width sheet isn't anchored to the chip — it belongs to the bottom
-       edge it slides off, so it ignores the measured origin on purpose. */
-    transform: translateY(100%) scale(0.96);
-    transform-origin: bottom center;
-  }
+@media (max-width: 860px) {
+  .mirror-photo img { max-height: 46vh; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .top-action,
-  .mirror-popover-backdrop,
-  .mirror-popover { transition-property: opacity, background, border-color, box-shadow; }
-
-  /* The panel still fades in; it just no longer flies out of the chip. */
-  .mirror-popover {
-    transform: none;
-    filter: none;
-  }
-
+  .top-action { transition-property: opacity, background, border-color, box-shadow; }
   .top-action:active { transform: none; }
 
   /* The status copy is information and stays; its entry and the shimmer are

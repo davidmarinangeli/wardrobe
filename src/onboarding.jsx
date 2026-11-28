@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, CaretDown, CaretUp, Check, CheckCircle, Info, SpinnerGap, UploadSimple, WarningCircle, X } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, CaretDown, CaretRight, CaretUp, Check, CheckCircle, Info, SpinnerGap, UploadSimple, WarningCircle, X } from "@phosphor-icons/react";
 import { api } from "./api.js";
 import { ViewerFooter, ViewerPanel } from "./components/ViewerPanel.jsx";
 import "./onboarding.css";
@@ -12,10 +12,12 @@ export const RESUME_KEY = "open-wardrobe-onboarding-resume-v1";
 // the provider picker reads it back to confirm the switch landed.
 export const SWITCHED_KEY = "open-wardrobe-provider-switched-v1";
 
-const STEPS = ["welcome", "provider", "keys", "photos", "done"];
-// With WARDROBE_MANAGED_CONFIG on, the desktop app owns keys: no key step.
-const MANAGED_STEPS = ["welcome", "provider", "photos", "done"];
-const STEP_LABELS = { welcome: "Welcome", provider: "Provider", keys: "API key", photos: "Reference photo", done: "Done" };
+// The steps the progress indicator counts. Welcome and done are the way in and
+// the way out, not steps, so the bars and the "Step N of M" next to them count
+// the same things. With WARDROBE_MANAGED_CONFIG on, the desktop app owns keys:
+// no key step.
+const PROGRESS_STEPS = ["provider", "keys", "photos"];
+const MANAGED_PROGRESS_STEPS = ["provider", "photos"];
 export const MANAGED_KEYS_HINT = "API keys are managed by the Wardrobe desktop app. Open Settings from the tray icon to change them.";
 
 /**
@@ -111,14 +113,20 @@ function initialStepFor(setup) {
   return "done";
 }
 
-function StepDots({ step, steps = STEPS }) {
+// One indicator: the bars and the words say the same thing. The bars are the
+// picture of it, so they stay out of the accessibility tree.
+function StepProgress({ step, steps }) {
   const activeIndex = steps.indexOf(step);
+  if (activeIndex < 0) return null;
   return (
-    <ol className="onboarding-dots" aria-label="Setup progress">
-      {steps.map((id, index) => (
-        <li key={id} className={index === activeIndex ? "is-active" : index < activeIndex ? "is-done" : ""} title={STEP_LABELS[id]} />
-      ))}
-    </ol>
+    <div className="onboarding-progress">
+      <ol className="onboarding-progress__bars" aria-hidden="true">
+        {steps.map((id, index) => (
+          <li key={id} className={index === activeIndex ? "is-active" : index < activeIndex ? "is-done" : ""} />
+        ))}
+      </ol>
+      <span className="onboarding-progress__label">Step {activeIndex + 1} of {steps.length}</span>
+    </div>
   );
 }
 
@@ -133,22 +141,22 @@ function Dropzone({ label, hint, required, uploaded, previewUrl, busy, onFile })
 
   return (
     <div
-      className={`onboarding-dropzone${over ? " is-over" : ""}${uploaded ? " is-uploaded" : ""}`}
+      className={`dropzone dropzone--row onboarding-dropzone${over ? " is-over" : ""}${uploaded ? " is-done" : ""}`}
       onDragOver={(event) => { event.preventDefault(); setOver(true); }}
       onDragLeave={() => setOver(false)}
       onDrop={(event) => { event.preventDefault(); setOver(false); handleFiles(event.dataTransfer.files); }}
       onClick={() => inputRef.current?.click()}
       role="button"
       tabIndex={0}
-      onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") inputRef.current?.click(); }}
+      onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); inputRef.current?.click(); } }}
     >
       <input ref={inputRef} type="file" accept="image/*" hidden onChange={(event) => { handleFiles(event.target.files); event.target.value = ""; }} />
-      {previewUrl ? <img className="onboarding-dropzone__preview" src={previewUrl} alt="" /> : (
-        busy ? <SpinnerGap size={26} className="onboarding-spinner" /> : uploaded ? <CheckCircle size={26} weight="fill" /> : <UploadSimple size={26} weight="light" />
+      {previewUrl ? <img className="dropzone__preview" src={previewUrl} alt="" /> : (
+        busy ? <SpinnerGap size={26} className="dropzone__icon onboarding-spinner" aria-hidden="true" /> : uploaded ? <CheckCircle size={26} weight="fill" className="dropzone__icon" aria-hidden="true" /> : <UploadSimple size={26} weight="light" className="dropzone__icon" aria-hidden="true" />
       )}
-      <div className="onboarding-dropzone__text">
-        <p className="onboarding-dropzone__label">{label}{required && <span className="onboarding-required"> · required</span>}</p>
-        <p className="onboarding-dropzone__hint">{uploaded ? "Saved — drop a new photo to replace it." : hint}</p>
+      <div className="dropzone__text">
+        <p className="dropzone__title">{label}{required && <span className="onboarding-required"> · required</span>}</p>
+        <p className="dropzone__hint">{uploaded ? "Saved — drop a new photo to replace it." : hint}</p>
       </div>
     </div>
   );
@@ -157,8 +165,6 @@ function Dropzone({ label, hint, required, uploaded, previewUrl, busy, onFile })
 function WelcomeStep({ onNext, managed = false }) {
   return (
     <div className="onboarding-step">
-      <p className="onboarding-eyebrow">Setup</p>
-      <h2>Welcome to your wardrobe</h2>
       <p className="onboarding-lede">A local-first closet: detect clothes from a photo, plan outfits, keep a mood board and a wishlist, and see yourself wearing anything in it. AI imports and modeled photos need an AI API key and a reference photo. Archive and Google Drive settings are available from the shortcut in this panel.</p>
       <ul className="onboarding-highlights">
         <li>Detects every clothing item in a photo and cuts it out cleanly</li>
@@ -181,8 +187,6 @@ function WelcomeStep({ onNext, managed = false }) {
 function ProviderStep({ provider, setProvider, onNext, onBack }) {
   return (
     <div className="onboarding-step">
-      <p className="onboarding-eyebrow">Step 1 of 3</p>
-      <h2>Choose an AI provider</h2>
       <p className="onboarding-lede">This decides which service detects your clothes and generates the images. You can switch this later.</p>
       <div className="onboarding-provider-list" role="radiogroup" aria-label="AI provider">
         {PROVIDERS.map((option) => (
@@ -225,8 +229,6 @@ function ManagedProviderStep({ providers, onNext, onBack }) {
   const others = PROVIDERS.filter((option) => option.id !== current?.id && configured[option.id]);
   return (
     <div className="onboarding-step">
-      <p className="onboarding-eyebrow">Step 1 of 2</p>
-      <h2>AI provider</h2>
       <div className="onboarding-managed-provider" aria-live="polite">
         {current ? (
           <p>
@@ -255,7 +257,6 @@ function ManagedProviderStep({ providers, onNext, onBack }) {
 
 function KeysStep({ provider, onSaved, onBack, fromSettings = false }) {
   const option = PROVIDERS.find((item) => item.id === provider);
-  const Heading = fromSettings ? "h3" : "h2";
   const [openaiKey, setOpenaiKey] = useState("");
   const [openrouterKey, setOpenrouterKey] = useState("");
   const [geminiTestKey, setGeminiTestKey] = useState("");
@@ -322,9 +323,9 @@ function KeysStep({ provider, onSaved, onBack, fromSettings = false }) {
 
   return (
     <div className="onboarding-step">
-      <p className="onboarding-eyebrow">{fromSettings ? "Switch provider" : "Step 2 of 3"}</p>
-      {/* In Settings this form is a section under the "Settings" title, not a dialog title of its own. */}
-      <Heading>Add your {option.label} key</Heading>
+      {/* In the wizard the step title is the panel title. In Settings this form
+          is a section under the "Settings" title, so it carries its own. */}
+      {fromSettings && <h3>Add your {option.label} key</h3>}
       <p className="onboarding-lede">
         Saved straight into <code>.env</code> on your machine — it never leaves this computer. Get a key at{" "}
         <a href={option.getKeyUrl} target="_blank" rel="noreferrer">{option.getKeyLabel}</a>.
@@ -520,13 +521,11 @@ function ReferencePhotos({ setup, onSetupChange, onFullUploaded }) {
   );
 }
 
-function PhotosStep({ setup, onSetupChange, onNext, onBack, eyebrow = "Step 3 of 3" }) {
+function PhotosStep({ setup, onSetupChange, onNext, onBack }) {
   const [fullUploaded, setFullUploaded] = useState(setup?.hasModelReference || false);
 
   return (
     <div className="onboarding-step">
-      <p className="onboarding-eyebrow">{eyebrow}</p>
-      <h2>Add a reference photo</h2>
       <p className="onboarding-lede">Wardrobe uses this to put you in every modeled photo. A clear, well-lit full-body shot works best — plain background, facing the camera.</p>
 
       <ReferencePhotos setup={setup} onSetupChange={onSetupChange} onFullUploaded={() => setFullUploaded(true)} />
@@ -667,8 +666,6 @@ function ProviderSwitcher({ setup, onSetupChange, onAddKey }) {
 function DoneStep({ setup, onSetupChange, onModeChange, onAddKey, onClose, managed = false }) {
   return (
     <div className="onboarding-step">
-      <p className="onboarding-eyebrow">All set</p>
-      <h2>Your wardrobe is ready</h2>
       <p className="onboarding-lede">Drag any clothing photo onto the gallery — or paste one — to start importing. Every item gets a clean cutout and, once you ask for it, a modeled photo of you wearing it.</p>
       <ul className="onboarding-highlights">
         <li>Try the bundled <code>$import-clothes</code> and <code>$generate-outfits</code> Codex skills for hands-off importing</li>
@@ -748,19 +745,38 @@ export function Onboarding({ setup, onSetupChange, onModeChange, onClose, onOpen
 
   if (!active) return null;
 
+  // The panel header carries the step: its title in the title row, then one
+  // secondary row with the progress and the archive shortcut, which has to be
+  // reachable from every step but is not what any step is about.
+  const shownStep = managed && step === "keys" ? "provider" : step;
+  const providerLabel = PROVIDERS.find((option) => option.id === provider)?.label || "AI";
+  const stepTitle = {
+    welcome: "Welcome to your wardrobe",
+    provider: managed ? "AI provider" : "Choose an AI provider",
+    keys: `Add your ${providerLabel} key`,
+    photos: "Add a reference photo",
+    done: "Your wardrobe is ready",
+  }[shownStep];
+  // A key added from the done step is a detour, not step 2 of 3.
+  const showProgress = !(step === "keys" && keysFromSettings);
+
   return (
     <ViewerPanel
+      title={stepTitle}
       onClose={dismiss}
       ariaLabel="Wardrobe setup"
       overlayClassName="onboarding-overlay"
       entryClassName="onboarding-entry"
       panelClassName="onboarding"
-      headerContent={<StepDots step={step} steps={managed ? MANAGED_STEPS : STEPS} />}
+      headerBelow={(
+        <div className="onboarding-subbar">
+          {showProgress && <StepProgress step={shownStep} steps={managed ? MANAGED_PROGRESS_STEPS : PROGRESS_STEPS} />}
+          <button type="button" className="ghost-button button--sm onboarding-archive-link" onClick={onOpenStorage}>
+            Archive / Google Drive <CaretRight size={12} weight="bold" aria-hidden="true" />
+          </button>
+        </div>
+      )}
     >
-      <div className="onboarding-storage-shortcut">
-        <span>Archive settings</span>
-        <button type="button" className="ghost-button button--sm" onClick={onOpenStorage}>Archive / Google Drive <span aria-hidden="true">›</span></button>
-      </div>
       {step === "welcome" && <WelcomeStep managed={managed} onNext={() => setStep("provider")} />}
       {(step === "provider" || step === "keys") && managed && (
         <ManagedProviderStep providers={providers} onNext={() => setStep("photos")} onBack={() => setStep("welcome")} />
@@ -778,7 +794,6 @@ export function Onboarding({ setup, onSetupChange, onModeChange, onClose, onOpen
         <PhotosStep
           setup={setup}
           onSetupChange={onSetupChange}
-          eyebrow={managed ? "Step 2 of 2" : undefined}
           onNext={() => setStep("done")}
           onBack={() => setStep(managed ? "provider" : setup?.hasApiKey ? "welcome" : "keys")}
         />

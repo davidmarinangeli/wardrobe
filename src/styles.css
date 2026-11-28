@@ -399,88 +399,138 @@ button { font: inherit; }
   transition: opacity 90ms linear;
 }
 
-.popover-identity {
-  display: flex;
-  align-items: center;
-  gap: 9px;
+/* == S5 popovers & flows ======================================================
+   Everything below up to "== /S5 ==" belongs to step S5 of
+   docs/impeccable/plan.md: the title + subtitle heading of the import panel,
+   and the one dropzone used by import, Mirror, the Inspo importer and the
+   wizard. Import, Mirror and the Inspo importer are ViewerPanels now, so the
+   popover-only chip morph that used to live here is gone. */
+
+/* A panel title with one line of context under it (the import queue: what is
+   ready, what failed, how many). The context sits under the title, never above
+   it as a kicker. */
+.viewer-header__row > .viewer-heading.popover-heading,
+.viewer-header__content > .viewer-heading.popover-heading {
+  flex: 1 1 0;
   min-width: 0;
-  /* Left center, so the block only has to reconcile one point with the chip's
-     content edge — a center origin would need the width ratio too, and the
-     title is a different length from the chip label in half the states. */
-  transform-origin: left center;
-  transform:
-    translate(var(--identity-dx, 0px), var(--identity-dy, 0px))
-    scale(var(--identity-scale, 1));
-  opacity: 0;
-  /* 12px chip label to a 22–32px title is a real type interpolation, and no
-     easing hides it. A couple of pixels of blur held through the move blends the
-     two readings into one perceived transformation — STANDARDS calls this out
-     specifically, and keeps it well under the 20px where blur gets expensive. */
-  filter: blur(4px);
+  padding: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+}
+
+.viewer-heading.popover-heading h2 {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.popover-subtitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-body);
+  line-height: var(--leading-caption);
+}
+
+/* ─── One dropzone ────────────────────────────────────────────────────────────
+   Import, Mirror, the Inspo importer and the setup wizard each drew their own
+   dashed box. This is the one box: a dashed hairline on the card fill, the
+   inner-callout radius, an icon, a title, a hint and, when the box is not
+   itself the button, its action. A real drop target (role="button") also gets
+   the hover, focus and drag-over states. `--row` is the compact slot used in a
+   form (the wizard's two reference photos). */
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  min-height: 176px;
+  padding: var(--s-5);
+  border: 1px dashed var(--line);
+  border-radius: var(--r-md);
+  background: var(--glass-card);
+  box-shadow: var(--glass-edge);
+  color: var(--muted);
+  text-align: center;
   transition:
-    transform 260ms var(--ease-out),
-    opacity 130ms linear,
-    filter 200ms var(--ease-out);
+    border-color var(--dur-pop) var(--ease-out),
+    background var(--dur-pop) var(--ease-out);
 }
 
-[data-open="true"] .popover-identity,
-.is-open .popover-identity {
-  transform: none;
-  opacity: 1;
-  filter: none;
+.dropzone__icon { flex: none; color: var(--muted); }
+
+.dropzone__title {
+  margin: var(--s-1) 0 0;
+  color: var(--ink);
+  font-size: var(--text-subsection);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-heading);
+  letter-spacing: var(--track-tight);
 }
 
-/* The header renders the chip's own icon node, so it arrives at the chip's
-   16–17px size — correct at the start of the morph, undersized next to a 32px
-   title at the end. Sizing it here rather than passing a second `size` prop
-   keeps it one object rendered twice instead of two that merely match. */
-.popover-identity__icon {
+.dropzone__hint {
+  max-width: 44ch;
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+}
+
+.dropzone__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s-2);
+  margin-top: var(--s-2);
+}
+
+.dropzone[role="button"] { cursor: pointer; }
+.dropzone[role="button"]:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
+.dropzone.is-over { border-color: var(--accent-warm); background: var(--glass-card-hover); }
+.dropzone.is-done { border-style: solid; }
+.dropzone.is-done .dropzone__icon { color: var(--success); }
+
+@media (hover: hover) and (pointer: fine) {
+  .dropzone[role="button"]:hover:not(.is-over) { border-color: var(--muted); background: var(--glass-card-hover); }
+}
+
+.dropzone--row {
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: var(--s-3);
+  min-height: 72px;
+  padding: var(--s-3) var(--s-4);
+  text-align: left;
+}
+
+.dropzone__text { display: grid; gap: 2px; min-width: 0; }
+.dropzone--row .dropzone__title { margin: 0; font-size: var(--text-body); }
+.dropzone--row .dropzone__hint { font-size: var(--text-caption); line-height: var(--leading-caption); }
+
+.dropzone__preview {
   flex: none;
-  display: grid;
-  place-items: center;
-  font-size: var(--text-title);
-  color: var(--accent);
+  width: 46px;
+  height: 46px;
+  border-radius: var(--r-sm);
+  object-fit: cover;
 }
 
-.popover-identity__icon svg {
-  width: 1.1em;
-  height: 1.1em;
-}
-
-/* The eyebrow is context, not identity — it names the panel rather than being
-   the thing that arrived, so it comes in just behind the morph instead of
-   riding along with it. */
-.popover-identity + .popover-eyebrow,
-.popover-eyebrow {
+/* The file input a drop target opens; never shown. */
+.dropzone input[type="file"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
   opacity: 0;
-  transition: opacity 160ms var(--ease-out) 90ms;
+  pointer-events: none;
 }
 
-[data-open="true"] .popover-eyebrow,
-.is-open .popover-eyebrow { opacity: 1; }
-
-/* Below 860px the chips collapse to icon-only circles (see the media query
-   further down) — there is no label to morph out of, and the panel goes
-   full-width, so it falls back to the plain trigger-anchored scale. */
-@media (max-width: 860px) {
-  .popover-identity {
-    transform: none;
-    filter: none;
-    transition: opacity var(--dur-pop) var(--ease-out);
-  }
-
-  .top-action.is-morphing > :not(.ai-action-beam-mask) { opacity: 1; }
+@media (prefers-reduced-transparency: reduce) {
+  .dropzone { background: var(--paper-raised); }
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .popover-identity {
-    transform: none;
-    filter: none;
-    transition: opacity var(--dur-pop) var(--ease-out);
-  }
-
-  .top-action.is-morphing > :not(.ai-action-beam-mask) { opacity: 1; }
-}
+/* == /S5 ================================================================== */
 
 /* ─── AI action border beam ───────────────────────────────────────────────────
    A one-shot light that travels the border of an AI-powered action ("How do
