@@ -53,7 +53,7 @@ export function MobileHeadRow({ title, subtitle, onSettings, badge, largeRef }) 
       </h1>
       <button
         type="button"
-        className="mobile-settings"
+        className="icon-button icon-button--outlined mobile-settings"
         onClick={onSettings}
         aria-label="Open settings"
       >

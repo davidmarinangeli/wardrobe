@@ -1,0 +1,267 @@
+/* ─── Buttons ────────────────────────────────────────────────────────────────
+   One vocabulary for every pressable that acts (cards, chips, tabs and menu
+   rows are their own components and are not in here).
+
+     .primary-button    filled accent. The one thing a view or section is for:
+                        at most one per section, last in its row, never
+                        destructive. The global top bar (Add clothes) is a
+                        section of its own: it may sit above a page header
+                        that has its own primary (+ Outfit, + Cheat sheet). When a view already has its own commit
+                        (Save, Wore it today), an AI action in it takes the
+                        secondary tone (.generate-button--secondary).
+     .secondary-button  outlined paper. Everything else that deserves a button.
+     .ghost-button      text-only, accent ink. Tertiary actions, disclosures,
+                        "restore default" — things that should not compete.
+     .danger-button     destructive, in --danger (a redder, lighter red than
+                        the accent, so it never reads as a primary). Add
+                        .danger-button--solid only for the final confirming
+                        step of a destructive dialog, with a trash icon.
+     .icon-button       circular, icon-only, transparent. Must carry an
+                        aria-label. Tones: --outlined (paper + hairline),
+                        --danger (danger ink).
+
+   Modifiers: .button--sm (32px, dense rows and overlays), .button--lg (44px,
+   the stage/hero actions) and .button--on-media (frosted glass, for controls
+   that float over a photo or a card's art).
+
+   What lives here: colour, shape, size and states. Typography does not: the
+   type of the shared buttons stays in styles.css, where it always was.
+
+   Cascade. This file is imported last (main.jsx), like the shared block it
+   replaces at the end of styles.css: a component rule of equal specificity
+   does not override a variant's shape. Every variant's inks and sizes are
+   custom properties whose defaults sit in :where() (zero specificity), so a
+   component or context re-themes a variant by setting --btn-* on any
+   selector, without restating the states (see .save-bar in styles.css). */
+
+:root {
+  --danger: #b23a2a;
+
+  --btn-h: 38px;
+  --btn-h-sm: 32px;
+  --btn-h-lg: 44px;
+  --btn-pad-x: 16px;
+  --btn-pad-x-sm: 12px;
+  --btn-gap: 7px;
+  --btn-radius: var(--r-full);
+  --btn-icon: 40px;
+  --btn-icon-sm: 32px;
+  --btn-press: scale(.97);
+  --btn-press-icon: scale(.92);
+  --btn-disabled-opacity: .45;
+  --btn-focus-ring: 2px solid var(--accent-warm);
+  --btn-focus-offset: 2px;
+  --btn-transition:
+    background var(--dur-pop) var(--ease-out),
+    border-color var(--dur-pop) var(--ease-out),
+    color var(--dur-pop) var(--ease-out),
+    box-shadow var(--dur-pop) var(--ease-out),
+    opacity var(--dur-pop) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
+}
+
+/* The touch floor. Below the app's phone breakpoint every default and large
+   button and every icon button is 44px; .button--sm stays compact. */
+@media (max-width: 860px) {
+  :root {
+    --btn-h: 44px;
+    --btn-icon: 44px;
+  }
+}
+
+/* ─── Defaults (zero specificity: any selector may override them) ─── */
+:where(.primary-button, .secondary-button, .ghost-button, .danger-button, .icon-button) {
+  --btn-bg: transparent;
+  --btn-fg: var(--ink-soft);
+  --btn-border: transparent;
+  --btn-shadow: none;
+  --btn-bg-hover: var(--wash-1);
+  --btn-fg-hover: var(--btn-fg);
+  --btn-border-hover: var(--btn-border);
+  --btn-shadow-hover: var(--btn-shadow);
+}
+
+:where(.primary-button) {
+  --btn-bg: var(--accent);
+  --btn-fg: var(--paper);
+  --btn-border: var(--accent);
+  --btn-shadow: var(--shadow-sm);
+  --btn-bg-hover: var(--accent-warm);
+  --btn-border-hover: var(--accent-warm);
+  --btn-shadow-hover: var(--shadow-md);
+}
+
+:where(.secondary-button) {
+  --btn-bg: var(--paper-raised);
+  --btn-border: var(--line);
+  --btn-bg-hover: var(--paper-raised);
+  --btn-border-hover: var(--muted);
+  --btn-shadow-hover: var(--shadow-sm);
+}
+
+:where(.ghost-button) {
+  --btn-fg: var(--accent);
+  --btn-fg-hover: var(--accent-warm);
+}
+
+:where(.danger-button) {
+  --btn-fg: var(--danger);
+  --btn-border: color-mix(in srgb, var(--danger) 36%, transparent);
+  --btn-bg-hover: color-mix(in srgb, var(--danger) 8%, transparent);
+  --btn-border-hover: var(--danger);
+}
+
+:where(.danger-button--solid) {
+  --btn-bg: var(--danger);
+  --btn-fg: var(--paper);
+  --btn-border: var(--danger);
+  --btn-shadow: var(--shadow-sm);
+  --btn-bg-hover: color-mix(in srgb, var(--danger) 86%, var(--ink));
+  --btn-border-hover: color-mix(in srgb, var(--danger) 86%, var(--ink));
+  --btn-fg-hover: var(--paper);
+}
+
+:where(.icon-button) {
+  --btn-bg-hover: var(--wash-2);
+}
+
+:where(.icon-button--outlined) {
+  --btn-bg: var(--paper-raised);
+  --btn-border: var(--line);
+  --btn-bg-hover: var(--paper-raised);
+  --btn-border-hover: var(--muted);
+  --btn-shadow-hover: var(--shadow-sm);
+}
+
+:where(.icon-button--danger) {
+  --btn-fg: var(--danger);
+  --btn-bg-hover: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+:where(.button--sm) {
+  --btn-h: var(--btn-h-sm);
+  --btn-pad-x: var(--btn-pad-x-sm);
+  --btn-icon: var(--btn-icon-sm);
+  --btn-gap: 6px;
+}
+
+:where(.button--lg) {
+  --btn-h: var(--btn-h-lg);
+}
+
+/* Frosted glass over a photo or a card's art: the colour passing underneath
+   would otherwise swallow a plain paper or transparent fill. */
+:where(.button--on-media) {
+  --btn-bg: color-mix(in srgb, var(--paper-warm) 84%, transparent);
+  --btn-border: var(--glass-border);
+  --btn-shadow: var(--glass-edge), var(--shadow-sm);
+  --btn-bg-hover: var(--paper-raised);
+  --btn-border-hover: var(--glass-border-hover);
+  --btn-shadow-hover: var(--glass-edge), var(--shadow-md);
+}
+
+/* An open menu's trigger stays visibly pressed. */
+:where(.icon-button[aria-expanded="true"]) {
+  --btn-bg: var(--ink-soft);
+  --btn-fg: var(--paper-warm);
+  --btn-bg-hover: var(--ink-soft);
+  --btn-border: var(--ink-soft);
+  --btn-border-hover: var(--ink-soft);
+}
+
+/* ─── Anatomy ─── */
+.primary-button,
+.secondary-button,
+.ghost-button,
+.danger-button,
+.icon-button {
+  border: 1px solid var(--btn-border);
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  box-shadow: var(--btn-shadow);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: var(--btn-transition);
+}
+
+.primary-button,
+.secondary-button,
+.ghost-button,
+.danger-button {
+  min-height: var(--btn-h);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--btn-gap);
+  border-radius: var(--btn-radius);
+  padding: 6px var(--btn-pad-x);
+}
+
+.icon-button {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: var(--btn-icon);
+  height: var(--btn-icon);
+  border-radius: 50%;
+  padding: 0;
+}
+
+.button--on-media {
+  -webkit-backdrop-filter: var(--glass-blur-panel);
+  backdrop-filter: var(--glass-blur-panel);
+}
+
+/* ─── States ─── */
+@media (hover: hover) and (pointer: fine) {
+  :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .icon-button):hover:not(:disabled) {
+    border-color: var(--btn-border-hover);
+    background: var(--btn-bg-hover);
+    color: var(--btn-fg-hover);
+    box-shadow: var(--btn-shadow-hover);
+  }
+}
+
+:is(.primary-button, .secondary-button, .ghost-button, .danger-button):active:not(:disabled) { transform: var(--btn-press); }
+.icon-button:active:not(:disabled) { transform: var(--btn-press-icon); }
+
+:is(.primary-button, .secondary-button, .ghost-button, .danger-button, .icon-button):focus-visible {
+  outline: var(--btn-focus-ring);
+  outline-offset: var(--btn-focus-offset);
+}
+
+:is(.primary-button, .secondary-button, .ghost-button, .danger-button, .icon-button):disabled {
+  opacity: var(--btn-disabled-opacity);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Busy: the action is running (or its data is still loading). It stays at
+   full strength — the label usually says what is happening — but stops
+   looking pressable. */
+:is(.primary-button, .secondary-button, .ghost-button, .danger-button, .icon-button)[aria-busy="true"] {
+  opacity: 1;
+  cursor: progress;
+}
+
+/* Reduced motion: no press scale and no state transitions. This file loads
+   last, so a component's own `transition: none` under reduced motion (e.g.
+   .outfit-worn-btn) would otherwise lose to --btn-transition; it is settled
+   here once for every variant. */
+@media (prefers-reduced-motion: reduce) {
+  .primary-button,
+  .secondary-button,
+  .ghost-button,
+  .danger-button,
+  .icon-button { transition: none; }
+
+  :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .icon-button):active:not(:disabled) { transform: none; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .button--on-media {
+    --btn-bg: var(--paper-warm);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}

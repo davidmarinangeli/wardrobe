@@ -9,7 +9,8 @@ import { Trash } from "@phosphor-icons/react";
  *
  * Props
  * ─────
- * onDelete        fn     – Renders a left-aligned delete button.
+ * onDelete        fn     – Renders a left-aligned .danger-button, kept apart
+ *                          from the confirm by the spacer.
  * leadingActions  node   – Extra buttons rendered beside the delete button.
  * onCancel        fn     – Renders a secondary "Cancel" button.
  * cancelLabel     string – Override "Cancel" (e.g. "Done").
@@ -33,7 +34,7 @@ export function PanelActions({
   return (
     <div className="viewer-actions">
       {onDelete && (
-        <button className="delete-button" type="button" onClick={onDelete}>
+        <button className="danger-button" type="button" onClick={onDelete}>
           <Trash size={15} weight="regular" aria-hidden="true" /> Delete
         </button>
       )}

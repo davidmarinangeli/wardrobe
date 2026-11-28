@@ -745,7 +745,7 @@ export function Onboarding({ setup, onSetupChange, onModeChange, onClose, onOpen
       <StepDots step={step} steps={managed ? MANAGED_STEPS : STEPS} />
       <div className="onboarding-storage-shortcut">
         <span>Archive settings</span>
-        <button type="button" onClick={onOpenStorage}><span aria-hidden="true">↗</span> Archive / Google Drive</button>
+        <button type="button" className="ghost-button button--sm" onClick={onOpenStorage}>Archive / Google Drive <span aria-hidden="true">›</span></button>
       </div>
       {step === "welcome" && <WelcomeStep managed={managed} onNext={() => setStep("provider")} />}
       {(step === "provider" || step === "keys") && managed && (

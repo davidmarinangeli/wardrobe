@@ -79,7 +79,7 @@ function SheetCard({ sheet, onOpen, onEdit, opening }) {
         <span className="cheat-card__title">{sheet.title}</span>
         <span className="cheat-card__meta">{opening ? "Opening…" : <>{sheet.pieces?.length || 0} {(sheet.pieces?.length || 0) === 1 ? "piece" : "pieces"}{sheet.beautifyStatus === "processing" ? " · Beautifying…" : sheet.aiImage ? " · AI finish" : ""}</>}</span>
       </button>
-      <button type="button" className="cheat-card__edit" onClick={onEdit} aria-label={`Edit cheat sheet: ${sheet.title || "Untitled"}`} aria-haspopup="dialog" title={`Edit ${sheet.title || "cheat sheet"}`}>
+      <button type="button" className="icon-button button--on-media cheat-card__edit" onClick={onEdit} aria-label={`Edit cheat sheet: ${sheet.title || "Untitled"}`} aria-haspopup="dialog" title={`Edit ${sheet.title || "cheat sheet"}`}>
         <PencilSimple size={19} weight="regular" aria-hidden="true" />
       </button>
     </article>
@@ -96,7 +96,7 @@ function SheetCollection({ sheets, loading, error, canCreate, onNew, onOpen, onE
         {/* Keep cheat-new-button: saved/closeEditor fall back to it for focus. */}
         <button
           type="button"
-          className="cheat-new-button overview-panel-head__add"
+          className="primary-button cheat-new-button overview-panel-head__add"
           onClick={onNew}
           aria-haspopup="dialog"
           disabled={!canCreate}
@@ -631,7 +631,7 @@ function CheatSheetEditor({ items, entry, onClose, onSaved, onSheetUpdate, premi
                   <textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={CHEAT_SHEET_DESCRIPTION_LIMIT} rows={3} placeholder="e.g. Weekend hikes in the Dolomites, earthy tones and fresh alpine air" disabled={controlsDisabled} />
                   <small>Helps the AI choose a theme · {description.length}/{CHEAT_SHEET_DESCRIPTION_LIMIT}</small>
                 </label>
-                <div className="cheat-piece-count"><strong>{selectedCount} {selectedCount === 1 ? "piece" : "pieces"}</strong><button type="button" aria-haspopup="dialog" onClick={openPiecePicker} disabled={controlsDisabled}><PencilSimple size={15} weight="bold" aria-hidden="true" /> Edit pieces</button></div>
+                <div className="cheat-piece-count"><strong>{selectedCount} {selectedCount === 1 ? "piece" : "pieces"}</strong><button type="button" className="ghost-button" aria-haspopup="dialog" onClick={openPiecePicker} disabled={controlsDisabled}><PencilSimple size={15} weight="bold" aria-hidden="true" /> Edit pieces</button></div>
               </div>
               <section className="cheat-beautify" aria-labelledby="cheat-beautify-title">
                 <h3 id="cheat-beautify-title"><Sparkle size={18} aria-hidden="true" /> Beautify</h3>
@@ -643,10 +643,11 @@ function CheatSheetEditor({ items, entry, onClose, onSaved, onSheetUpdate, premi
                     <textarea value={beautifyPrompt} onChange={(event) => setBeautifyPrompt(event.target.value)} maxLength={CHEAT_SHEET_PROMPT_LIMIT} rows={9} disabled={controlsDisabled} />
                     <small>Title, description and sheet image are included automatically.</small>
                   </label>
-                  <button type="button" className="cheat-beautify__reset" onClick={() => setBeautifyPrompt(DEFAULT_CHEAT_SHEET_BEAUTIFY_PROMPT)} disabled={controlsDisabled}>Restore suggested prompt</button>
+                  <button type="button" className="ghost-button button--sm cheat-beautify__reset" onClick={() => setBeautifyPrompt(DEFAULT_CHEAT_SHEET_BEAUTIFY_PROMPT)} disabled={controlsDisabled}>Restore suggested prompt</button>
                 </details>
                 <GenerateButton
                   block
+                  tone="secondary"
                   icon={<Sparkle size={16} aria-hidden="true" />}
                   label={dirty || !savedSheet ? "Save & beautify" : savedSheet.aiImage ? "Generate another finish" : "Beautify"}
                   busy={busy || beautifying}
@@ -678,13 +679,13 @@ function CheatSheetEditor({ items, entry, onClose, onSaved, onSheetUpdate, premi
                           </select>
                         )}
                         <div className="cheat-selected-piece__scale" role="group" aria-label={`Thumbnail size for ${item?.name || "this piece"}`}>
-                          <button type="button" aria-label={`Reduce size of ${item?.name || "this piece"}`} onClick={() => adjustPieceScale(itemId, -1)} disabled={controlsDisabled || !item || scale <= CHEAT_SHEET_MIN_PIECE_SCALE}><Minus size={14} weight="bold" /></button>
+                          <button type="button" className="icon-button icon-button--outlined" aria-label={`Reduce size of ${item?.name || "this piece"}`} onClick={() => adjustPieceScale(itemId, -1)} disabled={controlsDisabled || !item || scale <= CHEAT_SHEET_MIN_PIECE_SCALE}><Minus size={14} weight="bold" /></button>
                           <output aria-live="polite">{Math.round(scale * 100)}%</output>
-                          <button type="button" aria-label={`Increase size of ${item?.name || "this piece"}`} onClick={() => adjustPieceScale(itemId, 1)} disabled={controlsDisabled || !item || scale >= CHEAT_SHEET_MAX_PIECE_SCALE}><Plus size={14} weight="bold" /></button>
+                          <button type="button" className="icon-button icon-button--outlined" aria-label={`Increase size of ${item?.name || "this piece"}`} onClick={() => adjustPieceScale(itemId, 1)} disabled={controlsDisabled || !item || scale >= CHEAT_SHEET_MAX_PIECE_SCALE}><Plus size={14} weight="bold" /></button>
                         </div>
                       </div>
-                      <button type="button" className="cheat-selected-piece__remove" aria-label={`Remove ${item?.name || "missing piece"}`} onClick={() => removePiece(itemId)} disabled={controlsDisabled}><X size={17} /></button>
-                      {(unavailable || issueForItem) && <div className="cheat-selected-piece__issue" role="alert"><span>{issueForItem ? renderIssue.message : `${item?.name || "This piece"} needs an approved cutout.`}</span><button type="button" onClick={retryPreview} disabled={controlsDisabled}>Retry</button><button type="button" onClick={() => removePiece(itemId)} disabled={controlsDisabled}>Remove</button></div>}
+                      <button type="button" className="icon-button cheat-selected-piece__remove" aria-label={`Remove ${item?.name || "missing piece"}`} onClick={() => removePiece(itemId)} disabled={controlsDisabled}><X size={17} /></button>
+                      {(unavailable || issueForItem) && <div className="cheat-selected-piece__issue" role="alert"><span>{issueForItem ? renderIssue.message : `${item?.name || "This piece"} needs an approved cutout.`}</span><button type="button" className="secondary-button button--sm" onClick={retryPreview} disabled={controlsDisabled}>Retry</button><button type="button" className="secondary-button button--sm" onClick={() => removePiece(itemId)} disabled={controlsDisabled}>Remove</button></div>}
                     </article>
                   );
                 }) : <p className="cheat-selected-list__empty">Choose pieces with Edit pieces to get started.</p>}
@@ -704,27 +705,27 @@ function CheatSheetEditor({ items, entry, onClose, onSaved, onSheetUpdate, premi
                   <button type="button" aria-pressed={showingAi} onClick={() => setPreviewVersion("ai")}><Sparkle size={14} aria-hidden="true" /> AI finish</button>
                 </>}
               </div>
-              <button type="button" className="cheat-preview__fullscreen" onClick={openFullscreen} aria-label="Open cheat sheet fullscreen" title="Open fullscreen" disabled={!hasFullscreenPreview}><CornersOut size={17} aria-hidden="true" /><span>Fullscreen</span></button>
+              <button type="button" className="secondary-button cheat-preview__fullscreen" onClick={openFullscreen} aria-label="Open cheat sheet fullscreen" title="Open fullscreen" disabled={!hasFullscreenPreview}><CornersOut size={17} aria-hidden="true" /><span>Fullscreen</span></button>
             </div>
             {beautifying && <p className="cheat-preview__progress" role="status"><SpinnerGap size={16} className="cheat-spinner" aria-hidden="true" />{pollError || "Creating your AI finish. You can close this sheet and come back."}</p>}
             <div className="cheat-editor__preview-scroll" aria-busy={previewUpdating || undefined}>
               {displayPreview()}
             </div>
-            {renderIssue && !renderIssue.itemId && (savedSheet?.originalImage || (dirty && preview?.bands?.length)) && <div className="cheat-render-error" role="alert"><span>{renderIssue.message}</span><button type="button" onClick={retryPreview} disabled={controlsDisabled}>Retry preview</button></div>}
-            {previewError?.key === key && previewError.error?.itemId && <div className="cheat-render-error" role="alert"><span>{previewError.error.message}</span><button type="button" onClick={retryPreview} disabled={controlsDisabled}>Retry</button><button type="button" onClick={() => removePiece(previewError.error.itemId)} disabled={controlsDisabled}>Remove</button></div>}
+            {renderIssue && !renderIssue.itemId && (savedSheet?.originalImage || (dirty && preview?.bands?.length)) && <div className="cheat-render-error" role="alert"><span>{renderIssue.message}</span><button type="button" className="secondary-button button--sm" onClick={retryPreview} disabled={controlsDisabled}>Retry preview</button></div>}
+            {previewError?.key === key && previewError.error?.itemId && <div className="cheat-render-error" role="alert"><span>{previewError.error.message}</span><button type="button" className="secondary-button button--sm" onClick={retryPreview} disabled={controlsDisabled}>Retry</button><button type="button" className="secondary-button button--sm" onClick={() => removePiece(previewError.error.itemId)} disabled={controlsDisabled}>Remove</button></div>}
           </section>
         </div>
 
         <footer className="cheat-editor__footer">
           <div className="cheat-editor__footer-leading">
-            {savedSheet && <button ref={deleteTriggerRef} type="button" className="cheat-editor__delete" onClick={() => setDeleteConfirm(true)} disabled={busy || modalOpen}><Trash size={15} /> Delete</button>}
+            {savedSheet && <button ref={deleteTriggerRef} type="button" className="danger-button cheat-editor__delete" onClick={() => setDeleteConfirm(true)} disabled={busy || modalOpen}><Trash size={15} /> Delete</button>}
             {dirty && !canSave && !actionError && !renderIssue && <span className="cheat-editor__status">{title.trim() ? "Preparing preview…" : "Add a title to save"}</span>}
           </div>
           <div className="cheat-editor__footer-actions">
-            <button type="button" className="cheat-editor__download" onClick={saveAndDownload} disabled={!canDownload}>
+            <button type="button" className="secondary-button cheat-editor__download" onClick={saveAndDownload} disabled={!canDownload}>
               <DownloadSimple size={16} aria-hidden="true" />{saving ? "Saving…" : dirty && canSave ? "Save & download" : dirty && savedSheet?.originalImage ? "Download saved" : dirty ? "Save & download" : showingAi ? "Download AI finish" : "Download original"}
             </button>
-            <button type="button" className="cheat-editor__save" onClick={saveAndClose} disabled={!canSave || !dirty}><Check size={16} weight="bold" />{savedSheet && !dirty ? "Saved" : "Save"}</button>
+            <button type="button" className="primary-button cheat-editor__save" onClick={saveAndClose} disabled={!canSave || !dirty}><Check size={16} weight="bold" />{savedSheet && !dirty ? "Saved" : "Save"}</button>
           </div>
           {actionError && <p className="cheat-editor__action-error" role="alert">{actionError}</p>}
         </footer>
@@ -734,7 +735,7 @@ function CheatSheetEditor({ items, entry, onClose, onSaved, onSheetUpdate, premi
         <div className="cheat-confirm-layer" role="presentation">
           <div className="cheat-confirm" role="alertdialog" aria-modal="true" aria-labelledby="cheat-close-title" aria-describedby="cheat-close-copy">
             <span className="cheat-confirm__eyebrow">Unsaved changes</span><h2 id="cheat-close-title">Leave this cheat sheet?</h2><p id="cheat-close-copy">Your changes haven’t been saved yet.</p>
-            <div className="cheat-confirm__actions"><button ref={closeKeepRef} type="button" className="cheat-confirm__keep" onClick={() => { setCloseConfirm(false); requestAnimationFrame(restoreCloseConfirmFocus); }}>Keep editing</button><button type="button" className="cheat-confirm__discard" onClick={confirmDiscard}>Discard changes</button></div>
+            <div className="cheat-confirm__actions"><button ref={closeKeepRef} type="button" className="secondary-button cheat-confirm__keep" onClick={() => { setCloseConfirm(false); requestAnimationFrame(restoreCloseConfirmFocus); }}>Keep editing</button><button type="button" className="danger-button cheat-confirm__discard" onClick={confirmDiscard}>Discard changes</button></div>
           </div>
         </div>
       )}
@@ -742,7 +743,7 @@ function CheatSheetEditor({ items, entry, onClose, onSaved, onSheetUpdate, premi
         <div className="cheat-confirm-layer" role="presentation">
           <div className="cheat-confirm" role="alertdialog" aria-modal="true" aria-labelledby="cheat-delete-title" aria-describedby="cheat-delete-copy">
             <span className="cheat-confirm__eyebrow">Delete sheet</span><h2 id="cheat-delete-title">Delete “{savedSheet?.title}”?</h2><p id="cheat-delete-copy">This permanently removes the saved cheat sheet and all its images.</p>
-            <div className="cheat-confirm__actions"><button ref={deleteKeepRef} type="button" className="cheat-confirm__keep" onClick={() => { setDeleteConfirm(false); requestAnimationFrame(() => deleteTriggerRef.current?.focus({ preventScroll: true })); }} disabled={deleting}>Keep sheet</button><button type="button" className="cheat-confirm__discard" onClick={deleteSheet} disabled={deleting}>{deleting ? <><SpinnerGap size={15} className="cheat-spinner" /> Deleting…</> : "Delete sheet"}</button></div>
+            <div className="cheat-confirm__actions"><button ref={deleteKeepRef} type="button" className="secondary-button cheat-confirm__keep" onClick={() => { setDeleteConfirm(false); requestAnimationFrame(() => deleteTriggerRef.current?.focus({ preventScroll: true })); }} disabled={deleting}>Cancel</button><button type="button" className="danger-button danger-button--solid cheat-confirm__discard" onClick={deleteSheet} disabled={deleting} aria-busy={deleting || undefined}>{deleting ? <><SpinnerGap size={15} className="cheat-spinner" /> Deleting…</> : <><Trash size={15} aria-hidden="true" /> Delete sheet</>}</button></div>
           </div>
         </div>
       )}

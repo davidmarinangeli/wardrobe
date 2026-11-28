@@ -259,9 +259,10 @@ function OutfitCard({ outfit, itemMap, onOpen, wornToday, wearReady, onWear }) {
     </button>
     <button
       type="button"
-      className={`outfit-worn-btn${wornToday ? " is-worn" : ""}`}
+      className={`secondary-button button--sm button--on-media outfit-worn-btn${wornToday ? " is-worn" : ""}`}
       onClick={() => wearReady && !wornToday && onWear(outfit)}
       disabled={!wearReady || wornToday}
+      aria-busy={!wearReady || undefined}
       aria-pressed={wornToday}
       aria-label={wornToday ? `${outfit.name}: logged as worn today` : `Log ${outfit.name} as worn today`}
       title={wornToday ? "Worn today" : "I wore this today"}
@@ -326,6 +327,7 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
     <GenerateButton
       icon={<Sparkle size={16} weight="bold" aria-hidden="true" />}
       label="Generate model photo"
+      tone="secondary"
       busy={busy}
       disabled={!tierReady || missing > 0}
       title={photoHint}
@@ -362,6 +364,7 @@ function OutfitViewer({ outfit, itemMap, onClose, onEdit, onDelete, onGenerateMo
             onTierChange={chooseTier}
             premiumAllowed={premiumAllowed}
             disabled={!tierReady}
+            tone="secondary"
           />
         </ModeledHero>
       ) : (
@@ -498,7 +501,7 @@ function SuggestionNudges({ items, colorProfile, onOpenColorQuiz }) {
           {nudge.actionLabel}
         </button>
       )}
-      <button type="button" className="nudge-banner__dismiss" onClick={() => dismiss(nudge.id)} disabled={!browserState.ready} aria-label="Dismiss">
+      <button type="button" className="icon-button button--sm nudge-banner__dismiss" onClick={() => dismiss(nudge.id)} disabled={!browserState.ready} aria-label="Dismiss">
         <X size={16} />
       </button>
     </aside>
@@ -649,7 +652,7 @@ export function OutfitsSection({ items, premiumAllowed = true, provider = null, 
           </button>
           <button
             type="button"
-            className="overview-panel-head__add"
+            className="primary-button overview-panel-head__add"
             onClick={openNewOutfit}
             disabled={!items.length}
             aria-haspopup="dialog"

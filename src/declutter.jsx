@@ -185,10 +185,10 @@ function Pile({ title, empty, items, onRestore }) {
               <span className="declutter-pile__name">{item.name}</span>
               <span className="declutter-pile__meta">{GARMENT_PART_MAP[item.part]?.label}</span>
             </div>
-            <button type="button" className="declutter-icon-btn" onClick={() => copy(item)} title="Copy listing text" aria-label={`Copy listing text for ${item.name}`}>
+            <button type="button" className="icon-button icon-button--outlined button--sm" onClick={() => copy(item)} title="Copy listing text" aria-label={`Copy listing text for ${item.name}`}>
               {copied === item.id ? <Check size={15} weight="bold" /> : <Copy size={15} weight="regular" />}
             </button>
-            <button type="button" className="declutter-icon-btn" onClick={() => onRestore(item.id)} title="Put back in wardrobe" aria-label={`Put ${item.name} back in the wardrobe`}>
+            <button type="button" className="icon-button icon-button--outlined button--sm" onClick={() => onRestore(item.id)} title="Put back in wardrobe" aria-label={`Put ${item.name} back in the wardrobe`}>
               <ArrowCounterClockwise size={15} weight="regular" />
             </button>
           </li>

@@ -65,20 +65,12 @@
   font-size: 11px;
 }
 
+/* .ghost-button.button--sm, flush with the box's right padding. */
 .onboarding-storage-shortcut button {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border: 0;
-  padding: 4px 0;
-  background: transparent;
-  color: var(--ink);
+  margin: -6px -6px -6px 0;
   font-size: 11px;
   font-weight: 600;
-  cursor: pointer;
 }
-
-.onboarding-storage-shortcut button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
 .onboarding-dots li {
   width: 22px;
@@ -364,6 +356,7 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
+  min-height: 32px;
   background: none;
   border: none;
   padding: 2px 0;

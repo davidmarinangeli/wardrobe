@@ -7,9 +7,8 @@
 .confirm-dialog h2 { margin: 0; font-size: 22px; font-weight: 500; letter-spacing: -.03em; }
 .confirm-dialog p { margin: 12px 0 24px; color: var(--muted); font-size: 14px; line-height: 1.6; }
 .confirm-dialog__actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.confirm-dialog__actions button { flex: 1 0 auto; min-height: 44px; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--r-full); background: transparent; color: var(--ink-soft); font: inherit; font-size: 12px; cursor: pointer; }
-.confirm-dialog__actions .confirm-dialog__keep { border-color: var(--accent); background: var(--accent); color: var(--paper-raised); }
-.confirm-dialog__actions button:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 3px; }
+/* Keep is a .secondary-button and Discard a .danger-button (buttons.css). */
+.confirm-dialog__actions button { flex: 1 0 auto; font: inherit; font-size: 12px; }
 
 @media (max-width: 860px) {
   .confirm-dialog { padding: 24px 20px; }

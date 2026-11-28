@@ -404,7 +404,7 @@ export function SuggestionPanel({ items, onSaveOutfit, onClose }) {
           <>
             <div className="deck" ref={deckRef}>
               {undo && (
-                <button type="button" className="deck-undo" onClick={undoPass}>
+                <button type="button" className="secondary-button deck-undo" onClick={undoPass}>
                   <ArrowCounterClockwise size={15} aria-hidden="true" /> Undo pass
                 </button>
               )}

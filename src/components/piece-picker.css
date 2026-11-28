@@ -14,7 +14,7 @@
 .piece-picker__header { display: flex; align-items: center; gap: 14px; min-height: 76px; padding: 14px 20px 14px 28px; border-bottom: 1px solid var(--line); }
 .piece-picker__title { margin: 0; overflow: hidden; color: var(--ink); font-size: 22px; font-weight: 500; letter-spacing: -.03em; text-overflow: ellipsis; white-space: nowrap; }
 .piece-picker__count { margin-left: auto; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.piece-picker__confirm { flex: none; min-height: 44px; }
+.piece-picker__confirm { flex: none; }
 .piece-picker__close-spacer { flex: 0 0 44px; }
 
 /* ─── Filters ────────────────────────────────────────────────────────────── */

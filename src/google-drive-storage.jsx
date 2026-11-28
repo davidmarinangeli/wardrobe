@@ -143,7 +143,7 @@ function PreviewContent({ preview, busy, slow, onChoose }) {
         )}
         {action && !cancelling && (
           <button
-            className={`primary-button${action.danger ? " is-danger" : ""}`}
+            className={action.danger ? "danger-button danger-button--solid" : "primary-button"}
             type="button"
             disabled={Boolean(busy) || action.unpicked}
             aria-busy={confirming}
@@ -194,7 +194,7 @@ export function GoogleDriveOfflineNotice({ status }) {
   return (
     <div className="drive-offline-notice" role="status" lang="it">
       <p>{GOOGLE_DRIVE_OUTAGE_NOTICE}</p>
-      <button type="button" aria-label="Chiudi avviso" onClick={() => setDismissed(true)}><X size={14} weight="bold" /></button>
+      <button type="button" className="icon-button button--sm" aria-label="Chiudi avviso" onClick={() => setDismissed(true)}><X size={14} weight="bold" /></button>
     </div>
   );
 }
@@ -347,7 +347,7 @@ export function ArchiveSettings({ controller, snapshot, open }) {
                 <dd>{status.reconnectRequired ? "Da ricollegare" : status.connected ? (folderReady ? "Collegato" : "Cartella non accessibile") : "Non collegato"}</dd>
               </div>
             </dl>
-            <button className="delete-button drive-disconnect" type="button" disabled={accountLocked} onClick={() => controller.confirmAction("disconnect")}>
+            <button className="danger-button button--sm drive-disconnect" type="button" disabled={accountLocked} onClick={() => controller.confirmAction("disconnect")}>
               <SignOut size={15} aria-hidden="true" />
               Scollega account
             </button>
@@ -378,7 +378,7 @@ export function ArchiveSettings({ controller, snapshot, open }) {
               : "Wardrobe dimentica l’accesso a questo account. La copia su Drive non viene cancellata; per revocare del tutto l’accesso usa le impostazioni del tuo account Google."}</p>
             <div className="drive-preview__choices">
               {busy !== "disconnect" && <button className="secondary-button" type="button" disabled={Boolean(busy)} onClick={() => controller.clearConfirmation()}>Annulla</button>}
-              <button className="primary-button is-danger" type="button" disabled={Boolean(busy)} aria-busy={busy === "disconnect"} onClick={() => void confirmDisconnect()}>
+              <button className="danger-button danger-button--solid" type="button" disabled={Boolean(busy)} aria-busy={busy === "disconnect"} onClick={() => void confirmDisconnect()}>
                 {busy === "disconnect" ? spinner : <X size={15} aria-hidden="true" />}
                 {busy === "disconnect" ? "Scollego…" : "Scollega"}
               </button>
@@ -392,7 +392,7 @@ export function ArchiveSettings({ controller, snapshot, open }) {
           <h3 id="drive-backup-heading" ref={backupHeadingRef} tabIndex={-1}>Backup su Google Drive</h3>
           <div className="drive-section-heading__actions">
             {status?.backupEnabled && status.retryAt && !status.syncPaused && (
-              <button className="secondary-button drive-retry" type="button" disabled={blocked} aria-busy={busy === "retry"} aria-label={busy === "retry" ? "Riprovo…" : undefined} onClick={() => void controller.retrySync()}>
+              <button className="secondary-button button--sm drive-retry" type="button" disabled={blocked} aria-busy={busy === "retry"} aria-label={busy === "retry" ? "Riprovo…" : undefined} onClick={() => void controller.retrySync()}>
                 {busy === "retry" ? spinner : <><ArrowClockwise size={15} aria-hidden="true" />Riprova ora</>}
               </button>
             )}
@@ -404,7 +404,7 @@ export function ArchiveSettings({ controller, snapshot, open }) {
                     Disattiva backup
                   </button>
                 ) : (
-                  <button className="primary-button" type="button" disabled={!status || blocked || !hasVerifiedFolder} aria-busy={busy === "activation-preview"} onClick={() => void controller.openPreview("activation")}>
+                  <button className={hasVerifiedFolder ? "primary-button" : "secondary-button"} type="button" disabled={!status || blocked || !hasVerifiedFolder} aria-busy={busy === "activation-preview"} onClick={() => void controller.openPreview("activation")}>
                     {busy === "activation-preview" ? spinner : <CloudArrowUp size={15} aria-hidden="true" />}
                     {busy === "activation-preview" ? "Controllo le copie…" : "Attiva backup"}
                   </button>

@@ -381,7 +381,7 @@ export function PiecePicker({
           eyebrow="Unsaved changes"
           title="Discard this selection?"
           description="Your changes to the selected pieces haven’t been saved."
-          keepLabel="Keep picking"
+          keepLabel="Keep editing"
           discardLabel="Discard changes"
           onKeep={keepPicking}
           onDiscard={discard}

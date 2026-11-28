@@ -323,7 +323,7 @@ export function ColorControl({ label, field, value, palette, onChange, sampling,
           <small>Optional</small>
         </div>
         <p>No distinct secondary color detected.</p>
-        <button className="add-secondary-button" type="button" onClick={onAdd}>Add secondary color</button>
+        <button className="secondary-button button--sm add-secondary-button" type="button" onClick={onAdd}>Add secondary color</button>
       </div>
     );
   }
@@ -332,7 +332,7 @@ export function ColorControl({ label, field, value, palette, onChange, sampling,
     <div className="color-slot">
       <div className="color-slot-heading">
         <span>{label}</span>
-        {optional && <button type="button" onClick={onClear}>Remove</button>}
+        {optional && <button type="button" className="ghost-button button--sm" onClick={onClear}>Remove</button>}
       </div>
       <label className="selected-color-control">
         <input
@@ -364,7 +364,7 @@ export function ColorControl({ label, field, value, palette, onChange, sampling,
         ))}
       </div>
       <button
-        className={`sample-button${sampling === field ? " active" : ""}`}
+        className={`secondary-button sample-button${sampling === field ? " active" : ""}`}
         type="button"
         onClick={() => setSampling((current) => current === field ? null : field)}
       >
@@ -753,7 +753,7 @@ function AddVariantSheet({ item, sourceVariantId, tier, tiers, onTierChange, tie
             <h2 id="add-variant-title">Add a way to wear it</h2>
             <p>{item.name || "This item"}</p>
           </div>
-          <button type="button" className="add-variant-sheet__close" aria-label="Close" onClick={onClose} disabled={busy}>
+          <button type="button" className="icon-button add-variant-sheet__close" aria-label="Close" title="Close" onClick={onClose} disabled={busy}>
             <X size={18} weight="bold" aria-hidden="true" />
           </button>
         </div>
@@ -1129,8 +1129,9 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
         <div className="viewer-more" ref={moreRef}>
           <button
             type="button"
-            className="viewer-toolbar__button"
+            className="icon-button button--on-media viewer-toolbar__button"
             aria-label="More actions"
+            title="More actions"
             aria-haspopup="menu"
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((open) => !open)}
@@ -1140,7 +1141,7 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
           {menuOpen && <MoreMenu sections={menuSections} busyAction={menuBusy} onSelect={runMenuAction} onClose={closeMenu} />}
         </div>
       )}
-      <button type="button" className="viewer-toolbar__button" onClick={() => requestClose()} aria-label="Close viewer" ref={closeButtonRef}>
+      <button type="button" className="icon-button button--on-media viewer-toolbar__button" onClick={() => requestClose()} aria-label="Close viewer" title="Close" ref={closeButtonRef}>
         <X size={18} weight="bold" aria-hidden="true" />
       </button>
     </div>
@@ -1273,8 +1274,8 @@ export function ItemViewer({ item, onClose, onSave, onDelete, onGenerateModeled,
             <span className="save-bar__label" role="status">
               {closeBlocked ? "Save or discard before closing" : unsavedLabel(changes.length)}
             </span>
-            <button type="button" className="save-bar__discard" onClick={discardEditing}>Discard</button>
-            <button type="button" className="save-bar__save" onClick={saveEditing}>
+            <button type="button" className="danger-button save-bar__discard" onClick={discardEditing}>Discard</button>
+            <button type="button" className="primary-button save-bar__save" onClick={saveEditing}>
               <Check size={15} weight="bold" aria-hidden="true" /> Save
             </button>
           </div>
