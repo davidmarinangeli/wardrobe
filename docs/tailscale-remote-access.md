@@ -37,8 +37,8 @@ The address has the form `https://<machine>.<tailnet>.ts.net/`, for example `htt
 | Browse the wardrobe, pieces, outfits, Overview, Inspo, Mirror, My Colors | Yes |
 | Import a photo (also from the camera roll), generate images, create outfits | Yes |
 | Gemini TEST/PROD switch | Yes. The computer sees the change after a reload: the mode is stored by the server. |
-| Settings › Archive: status, backup on/off, restore, check access, disconnect | Yes |
-| Settings › Archive: **connect** a Google account | No. Connect Google Drive on the computer; the phone then uses that connection. The tab says *"Collega Google Drive dal computer su cui è in esecuzione Wardrobe."* |
+| Settings › Cloud backup: status, backup on/off, restore, check access, disconnect | Yes |
+| Settings › Cloud backup: **connect** a Google account | No. Connect Google Drive on the computer; the phone then uses that connection. The tab says *"Collega Google Drive dal computer su cui è in esecuzione Wardrobe."* |
 | API keys, provider, port, data folder, any other setting | No. They exist only in the desktop app's Settings window on the computer. In Wardrobe › Settings › AI the phone sees the same read-only state the desktop shows. |
 
 Why Google Drive connect is excluded: Google sends the sign-in back to `http://localhost:5173/…`, and on the phone `localhost` is the phone itself. A phone sign-in flow is a later decision.

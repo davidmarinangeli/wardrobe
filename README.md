@@ -164,7 +164,7 @@ That's it — the importer unlocks and you can drag, paste, or choose a photo to
 
 Prefer to do it by hand? Copy `.env.example` to `.env`, add `OPENAI_API_KEY` (or your provider's key), and place a PNG reference photo at `data/model-reference.png` — the wizard is just a friendlier way to do the same thing.
 
-Google Drive archive settings live in the **Archive** tab of **Settings** (gear icon), or the shortcut in the wizard. The tab stays greyed out until the four `GOOGLE_DRIVE_*` values are set in `.env`. Drive connection and backup are opt-in; connecting does not turn synchronization on. See [Google Drive archive setup and recovery](docs/google-drive-operations.md) for OAuth configuration, what is copied, and restore behavior. No AI key is needed to configure or use storage.
+Google Drive archive settings live in the **Cloud backup** tab of **Settings** (gear icon), or the shortcut in the wizard. The tab stays greyed out until the four `GOOGLE_DRIVE_*` values are set in `.env`. Drive connection and backup are opt-in; connecting does not turn synchronization on. See [Google Drive archive setup and recovery](docs/google-drive-operations.md) for OAuth configuration, what is copied, and restore behavior. No AI key is needed to configure or use storage.
 
 ## Desktop app
 
