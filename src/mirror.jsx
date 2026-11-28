@@ -259,7 +259,7 @@ export function Mirror({ items }) {
                 <h2 className="mirror-popover__title" id="mirror-title">How do I look?</h2>
               </div>
             </div>
-            <button className="mirror-close" type="button" onClick={() => setOpen(false)} aria-label="Close" ref={closeButtonRef}>
+            <button className="icon-button mirror-close" type="button" onClick={() => setOpen(false)} aria-label="Close" title="Close" ref={closeButtonRef}>
               <X size={20} />
             </button>
           </header>

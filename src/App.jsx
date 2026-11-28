@@ -586,17 +586,18 @@ export function App() {
               secondary everywhere. Overview's sections carry their own
               + Outfit / Suggest outfit / + Cheat sheet in their header rows. */}
           {!archiveMaintenanceActive && <div className="top-actions" ref={topActionsRef} data-hidden="false" data-overview-selection={view === "overview" && overviewSelectionCount > 0 ? "true" : "false"}>
+            {/* Remounts on every view change (key={view}) so the spark
+                animation replays on arrival. Secondary first, primary
+                last: DOM order is the visual and the tab order. */}
+            <Mirror key={view} items={items} />
             <WardrobeImportFlow
               onGarmentApproved={addImportedItem}
               externalSetup={aiSetup}
               idleLabel={view === "inspo" ? "Add Inspo" : undefined}
               onIdleActivate={view === "inspo" ? () => setShowInspoImporter(true) : undefined}
             />
-            {/* Remounts on every view change (key={view}) so the spark
-                animation replays on arrival. */}
-            <Mirror key={view} items={items} />
           </div>}
-          <button type="button" className="setup-trigger" onClick={openSettings} aria-label="Open settings">
+          <button type="button" className="icon-button icon-button--outlined setup-trigger" onClick={openSettings} aria-label="Open settings" title="Settings">
             <Gear size={16} />
             <AiModeBadge setup={aiSetup} />
           </button>

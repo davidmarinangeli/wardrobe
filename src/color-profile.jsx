@@ -452,7 +452,7 @@ function DrapeTest({ initialSetId = "sisterDeep", onApply, onBack }) {
       <div className="drape-other-tests">
         <button
           type="button"
-          className="drape-disclosure"
+          className="ghost-button button--sm drape-disclosure"
           onClick={() => setShowAllTests((open) => !open)}
           aria-expanded={showAllTests}
         >
@@ -583,7 +583,7 @@ function PaletteSection({ palette, onRemove, onAdd }) {
         <p className="details-label">Your palette</p>
         <button
           type="button"
-          className="palette-edit-toggle"
+          className="ghost-button button--sm palette-edit-toggle"
           onClick={() => {
             setEditing((open) => !open);
             setCandidates([]);
@@ -1035,11 +1035,11 @@ export function ColorProfileModal({ onClose, onSave, initialProfile }) {
                 most people open this panel to do. */}
             <div className="color-more-actions">
               {!openQuestion && (
-                <button type="button" onClick={() => setMode("drapes")}>
+                <button type="button" className="ghost-button button--sm" onClick={() => setMode("drapes")}>
                   <Sparkle size={13} weight="fill" aria-hidden="true" /> Drape test
                 </button>
               )}
-              <button type="button" onClick={() => faceUploadRef.current?.click()} disabled={analyzing || !browserState.ready}>
+              <button type="button" className="ghost-button button--sm" onClick={() => faceUploadRef.current?.click()} disabled={analyzing || !browserState.ready}>
                 <Camera size={13} aria-hidden="true" /> Change photo
               </button>
               <input
@@ -1049,10 +1049,10 @@ export function ColorProfileModal({ onClose, onSave, initialProfile }) {
                 hidden
                 onChange={handleUpdateFacePhoto}
               />
-              <button type="button" onClick={() => setMode("certified")}>
+              <button type="button" className="ghost-button button--sm" onClick={() => setMode("certified")}>
                 I know my season
               </button>
-              <button type="button" onClick={() => setMode("quiz")}>
+              <button type="button" className="ghost-button button--sm" onClick={() => setMode("quiz")}>
                 Take the quiz
               </button>
             </div>

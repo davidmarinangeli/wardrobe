@@ -55,20 +55,8 @@
 .mirror-popover__eyebrow { margin: 0 0 6px; color: var(--muted); font-size: var(--text-eyebrow); text-transform: uppercase; letter-spacing: var(--track-caps); font-weight: var(--weight-medium); }
 .mirror-popover__title { margin: 0; font: inherit; font-size: var(--text-title); font-weight: var(--weight-medium); line-height: var(--leading-title); letter-spacing: var(--track-title); }
 
-.mirror-close {
-  flex: 0 0 40px;
-  width: 40px;
-  height: 40px;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  color: var(--muted);
-  background: transparent;
-  border: 1px solid var(--line);
-  border-radius: 50%;
-  cursor: pointer;
-}
-.mirror-close:hover, .mirror-close:focus-visible { color: var(--ink); border-color: var(--ink); outline: none; }
+/* A plain .icon-button, like every other panel's close. */
+.mirror-close { flex: none; }
 
 .mirror-dropzone {
   display: flex;

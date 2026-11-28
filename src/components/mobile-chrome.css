@@ -78,23 +78,8 @@
     letter-spacing: var(--track-tight);
   }
 
-  .mobile-settings {
-    position: relative;
-    flex: none;
-    display: grid;
-    place-items: center;
-    width: 44px;
-    height: 44px;
-    border: 1px solid var(--line);
-    border-radius: var(--r-full);
-    background: var(--paper-raised);
-    box-shadow: var(--shadow-xs);
-    color: var(--ink-soft);
-    cursor: pointer;
-    transition: transform var(--dur-press) var(--ease-out);
-  }
-
-  .mobile-settings:active { transform: scale(.92); }
+  /* .icon-button.icon-button--outlined — the same button as the desktop gear. */
+  .mobile-settings { position: relative; --btn-shadow: var(--shadow-xs); }
 
   /* ─── The desktop top bar yields to .mobile-header on mobile ──────────────── */
   .app-shell .app-top-bar {
@@ -137,9 +122,8 @@
     /* Primary last (rightmost). With row-reverse, flex-start packs to the right
        edge so the CTAs sit on the right above the bottom nav.
        Reversing here keeps the desktop markup untouched. */
-    flex-direction: row-reverse;
     gap: 8px;
-    justify-content: flex-start;
+    justify-content: flex-end;
     padding: 0;
     border: none;
     transition: transform 300ms var(--ease-out), opacity 200ms var(--ease-out);

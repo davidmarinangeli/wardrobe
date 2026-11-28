@@ -150,26 +150,9 @@
 .import-card__detail--status[data-tone="complete"] { color: var(--success); }
 .import-card__actions { display: flex; gap: 4px; }
 
-/* Icon-only buttons inside the import popover (close, review, delete). Sizing
-   and color only — the round shape, hover wash, focus ring and press scale all
-   come from the shared `icon-button` primitive in styles.css. */
-.import-icon-button {
-  flex: none;
-  width: 34px;
-  height: 34px;
-  color: var(--ink-soft);
-}
-.import-card__actions .import-icon-button { width: 30px; height: 30px; }
-.import-card__delete { color: var(--error); }
-.import-card__delete:hover,
-.import-card__delete:focus-visible { background: color-mix(in srgb, var(--error) 12%, transparent); }
-
-.import-icon-button:disabled { opacity: .45; cursor: not-allowed; }
-@media (hover: hover) and (pointer: fine) {
-  .import-icon-button:disabled:hover { background: transparent; }
-}
-.import-icon-button:disabled:active { transform: none; }
-.import-card__retry { min-height: 34px; padding: 0 12px; font-size: var(--text-caption); }
+/* Icon-only buttons in the popover (close, review, delete) are plain
+   .icon-button / .icon-button--danger; the card row uses .button--sm. */
+.import-card__actions { align-items: center; }
 .import-card.is-approved { border-color: var(--success); }
 .import-card.is-rejected { opacity: 0.55; }
 .import-card.is-selected { border-color: var(--ink-soft); background: var(--glass-card-hover); }
@@ -203,12 +186,12 @@
 .import-color-row input[type="color"] { height: 44px; padding: 5px; cursor: pointer; }
 .import-field-error { color: var(--error); font-size: var(--text-caption); line-height: var(--leading-caption); }
 /* Layout only. The buttons themselves are the app's shared .primary-button /
-   .secondary-button / .delete-button (styles.css) — this panel used to define a
+   .secondary-button / .danger-button (buttons.css) — this panel used to define a
    parallel family filled with --ink-soft instead of --accent, which is why its
    confirm never matched any other confirm in the app. Destructive sits apart
    from the confirms here for the same reason it does in .viewer-actions. */
 .import-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
-.import-actions .delete-button { margin-right: auto; }
+.import-actions .danger-button { margin-right: auto; }
 
 @keyframes import-progress { from { transform: translateX(-110%); } to { transform: translateX(300%); } }
 @keyframes import-pulse { 50% { transform: scale(1.65); opacity: 0.22; } }

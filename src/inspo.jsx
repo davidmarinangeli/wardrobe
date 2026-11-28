@@ -155,7 +155,7 @@ function InspoImporter({ onClose, onImported }) {
                   <div className="inspo-queue-item" key={index}>
                     <img className="inspo-queue-thumb" src={item.dataUrl} alt="" />
                     <span className="inspo-queue-name">{item.name}</span>
-                    <button className="icon-button inspo-queue-remove" type="button" onClick={() => removeQueued(index)} aria-label={`Remove ${item.name}`}>
+                    <button className="icon-button button--sm inspo-queue-remove" type="button" onClick={() => removeQueued(index)} aria-label={`Remove ${item.name}`} title="Remove">
                       <X size={13} />
                     </button>
                   </div>
@@ -495,7 +495,7 @@ export function Inspo({ showImporter, onImporterClose }) {
               {item.generateStatus === "error" && (
                 <button
                   type="button"
-                  className="wishlist-retry-badge"
+                  className="secondary-button button--sm button--on-media wishlist-retry-badge"
                   onClick={(event) => retryItem(event, item.id)}
                   disabled={retryingId === item.id}
                   aria-label={`Retry generating a clean image for ${item.name || "this item"}`}

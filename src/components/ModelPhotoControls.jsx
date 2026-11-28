@@ -38,7 +38,9 @@ export function useRememberedTier(provider, premiumAllowed) {
  * "Merge ▾". Without `tiers` it is the same pill with no caret, for actions
  * that have no quality to choose (detecting the pieces in a pin).
  */
-export function GenerateButton({ icon, label, busy = false, busyLabel = "Starting…", disabled = false, title, onGenerate, tier, tiers = null, onTierChange, premiumAllowed = true, block = false, tierStateError = "" }) {
+// tone="secondary" when the view already has its own primary (Save, Wore it
+// today): one filled accent per view.
+export function GenerateButton({ icon, label, busy = false, busyLabel = "Starting…", disabled = false, title, onGenerate, tier, tiers = null, onTierChange, premiumAllowed = true, block = false, tierStateError = "", tone = "primary" }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   const menuRef = useRef(null);
@@ -59,7 +61,7 @@ export function GenerateButton({ icon, label, busy = false, busyLabel = "Startin
   };
 
   return (
-    <div ref={rootRef} className={`generate-button${block ? " generate-button--block" : ""}`}>
+    <div ref={rootRef} className={`generate-button${block ? " generate-button--block" : ""}${tone === "secondary" ? " generate-button--secondary" : ""}`}>
       <div className="generate-button__pill">
         <button type="button" className="generate-button__main" disabled={disabled || busy} title={title} onClick={() => onGenerate(tier)}>
           {busy ? <SpinnerGap size={16} className="modeled-photo-spinner" aria-hidden="true" /> : icon}
@@ -185,7 +187,7 @@ export function StageChip({ ref, icon, label, onClick, disabled = false, title, 
     <button
       ref={ref}
       type="button"
-      className={`stage-chip${concealed ? " is-concealed" : ""}`}
+      className={`secondary-button button--on-media stage-chip${concealed ? " is-concealed" : ""}`}
       onClick={onClick}
       disabled={disabled}
       title={title}
@@ -208,7 +210,7 @@ export function StageChip({ ref, icon, label, onClick, disabled = false, title, 
  * Without an origin it grows from a chip-sized slot at the bottom centre.
  * Always mounted so the close can animate — `inert` and hidden while closed.
  */
-export function RefineComposer({ open, onClose, originRef, note, onNoteChange, busy, onGenerate, tier, tiers, onTierChange, premiumAllowed, disabled = false }) {
+export function RefineComposer({ open, onClose, originRef, note, onNoteChange, busy, onGenerate, tier, tiers, onTierChange, premiumAllowed, disabled = false, tone = "primary" }) {
   const rootRef = useRef(null);
   const surfaceRef = useRef(null);
   const inputRef = useRef(null);
@@ -273,7 +275,7 @@ export function RefineComposer({ open, onClose, originRef, note, onNoteChange, b
       <div className="refine-composer__body">
         <div className="refine-composer__head">
           <label className="refine-composer__label" htmlFor={inputId}>What should change?</label>
-          <button type="button" className="refine-composer__close" aria-label="Close" onClick={onClose} disabled={busy}>
+          <button type="button" className="icon-button refine-composer__close" aria-label="Close" title="Close" onClick={onClose} disabled={busy}>
             <X size={15} weight="bold" aria-hidden="true" />
           </button>
         </div>
@@ -297,6 +299,7 @@ export function RefineComposer({ open, onClose, originRef, note, onNoteChange, b
           block
           icon={<RegenerateIcon />}
           label="Regenerate"
+          tone={tone}
           busy={busy}
           disabled={disabled}
           onGenerate={onGenerate}

@@ -303,8 +303,10 @@
     box-shadow var(--dur-pop) var(--ease-out);
 }
 
-.deck-action:disabled { opacity: .4; cursor: default; }
-.deck-action:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 3px; }
+/* Kept as their own component: two round swipe-deck controls, sized to the
+   thumb rather than to a row. States and inks come from the button tokens. */
+.deck-action:disabled { opacity: var(--btn-disabled-opacity); cursor: not-allowed; }
+.deck-action:focus-visible { outline: var(--btn-focus-ring); outline-offset: 3px; }
 
 /* ♥ is the one this surface is asking for, so it is bigger, warmer and the
    only filled control on the card. ✕ stays available and stays quiet — a pass
@@ -412,25 +414,12 @@
   z-index: 30;
   left: 50%;
   bottom: 10px;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 8px 14px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-full);
-  background: var(--paper-raised);
-  box-shadow: var(--shadow-md);
-  color: var(--ink-soft);
+  --btn-shadow: var(--shadow-md);
+  --btn-shadow-hover: var(--shadow-md);
   font-size: var(--text-body);
-  cursor: pointer;
+  font-weight: var(--weight-regular);
   animation: deck-undo-in 220ms var(--ease-out) both;
 }
-
-@media (hover: hover) and (pointer: fine) {
-  .deck-undo:hover { color: var(--ink); }
-}
-
-.deck-undo:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 3px; border-radius: var(--r-xs); }
 
 @keyframes deck-undo-in {
   from { opacity: 0; transform: translate3d(-50%, 8px, 0); }

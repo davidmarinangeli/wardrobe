@@ -15,29 +15,19 @@
    hovered — on a grid of outfits a permanently visible row of buttons competes
    with the clothes, which are the reason anyone is looking at this page.
    Touch has no hover, so there it is simply always visible (see below). */
+/* A .secondary-button.button--sm.button--on-media; local: placement, type and
+   the hover reveal. */
 .outfit-worn-btn {
   position: absolute;
   top: 10px;
   right: 10px;
   z-index: 2;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px 6px 8px;
-  border: 0;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--paper) 82%, transparent);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 1px 3px rgb(0 0 0 / 12%);
-  color: var(--ink);
+  --btn-fg: var(--ink);
   font: inherit;
   font-size: var(--text-body);
   line-height: var(--leading-none);
-  cursor: pointer;
   opacity: 0;
   transform: translateY(-4px);
-  transition: opacity .18s ease, transform .18s ease, background .18s ease;
 }
 
 .outfit-card-wrap:hover .outfit-worn-btn,
@@ -47,23 +37,17 @@
   transform: none;
 }
 
-.outfit-worn-btn:focus-visible {
-  outline: 1px solid var(--ink);
-  outline-offset: 2px;
-}
-
-.outfit-worn-btn:hover { background: var(--paper); }
-
 /* Logged. It stops being a button in every way that matters — no pointer, no
    hover response — because tapping it again does nothing: the derivation
    collapses repeat wears of the same outfit on the same day. */
 .outfit-worn-btn.is-worn {
-  background: color-mix(in srgb, var(--ink) 88%, transparent);
-  color: var(--paper);
+  --btn-bg: color-mix(in srgb, var(--ink) 88%, transparent);
+  --btn-bg-hover: var(--btn-bg);
+  --btn-fg: var(--paper);
+  --btn-border: transparent;
+  --btn-border-hover: transparent;
   cursor: default;
 }
-
-.outfit-worn-btn.is-worn:hover { background: color-mix(in srgb, var(--ink) 88%, transparent); }
 
 @media (hover: none) {
   .outfit-worn-btn { opacity: 1; transform: none; }
@@ -555,25 +539,8 @@
 
 .nudge-banner__action { flex: 0 0 auto; }
 
-.nudge-banner__dismiss {
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  padding: 5px;
-  border: none;
-  border-radius: 50%;
-  color: var(--muted);
-  background: transparent;
-  cursor: pointer;
-  transition: color var(--dur-pop) var(--ease-out), background var(--dur-pop) var(--ease-out), transform var(--dur-press) var(--ease-out);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .nudge-banner__dismiss:hover { color: var(--ink-soft); background: var(--wash-1); }
-}
-
-.nudge-banner__dismiss:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 2px; }
-.nudge-banner__dismiss:active { transform: scale(.94); }
+/* .icon-button.button--sm, muted until hovered. */
+.nudge-banner__dismiss { --btn-fg: var(--muted); --btn-fg-hover: var(--ink-soft); }
 
 @keyframes nudge-in {
   from { opacity: 0; transform: translate3d(0, 6px, 0); }

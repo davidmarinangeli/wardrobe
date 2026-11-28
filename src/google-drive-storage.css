@@ -24,7 +24,8 @@
 .drive-section-heading h4 { margin-bottom: 0; }
 .drive-section-heading__actions { display: flex; align-items: center; gap: 8px; }
 .drive-account__card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 10px 16px; padding: 14px 10px 10px 15px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--paper-raised); }
-.drive-account__card .drive-disconnect { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; margin-bottom: -8px; padding-inline: 10px; white-space: nowrap; }
+/* A .danger-button.button--sm: only placement is local. */
+.drive-account__card .drive-disconnect { margin-bottom: -8px; white-space: nowrap; }
 .drive-account__details { display: grid; gap: 10px; margin: 0; }
 .drive-account__details > div { display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: center; gap: 10px; font-size: var(--text-body); }
 .drive-account__details dt { display: grid; place-items: center; color: var(--muted); }
@@ -32,27 +33,12 @@
 .drive-account__email { color: var(--ink-soft); font-weight: var(--weight-regular); }
 .drive-account__details .drive-dot.is-ok { background: var(--success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 22%, transparent); }
 /* While retrying it shrinks to a circle around the spinner. */
-.drive-settings .drive-retry { flex: none; min-height: 34px; padding: 7px 13px; white-space: nowrap; }
-.drive-settings .drive-retry[aria-busy="true"] { width: 34px; padding: 0; }
+.drive-settings .drive-retry { flex: none; white-space: nowrap; }
+.drive-settings .drive-retry[aria-busy="true"] { width: var(--btn-h-sm); padding: 0; }
 .drive-actions,
 .drive-preview__choices { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.drive-actions button,
-.drive-preview__choices button,
-.drive-restore > button { min-height: 37px; }
-
-/* The shared buttons have no disabled look, so a locked button read as one that
-   ignored the click. A busy button keeps full strength: it is working, not off. */
-.drive-settings :is(.primary-button, .secondary-button, .delete-button):disabled { cursor: not-allowed; transform: none; }
-.drive-settings :is(.primary-button, .secondary-button, .delete-button):disabled:not([aria-busy="true"]) { opacity: .45; box-shadow: none; }
-.drive-settings :is(.primary-button, .secondary-button)[aria-busy="true"] { cursor: progress; }
-.drive-settings .primary-button.is-danger { border-color: var(--error); background: var(--error); }
-@media (hover: hover) and (pointer: fine) {
-  .drive-settings .primary-button:disabled:hover { border-color: var(--accent); background: var(--accent); box-shadow: none; }
-  .drive-settings .primary-button.is-danger:hover { border-color: color-mix(in srgb, var(--error) 82%, var(--ink)); background: color-mix(in srgb, var(--error) 82%, var(--ink)); }
-  .drive-settings .primary-button.is-danger:disabled:hover { border-color: var(--error); background: var(--error); }
-  .drive-settings .secondary-button:disabled:hover { border-color: var(--line); box-shadow: none; }
-  .drive-settings .delete-button:disabled:hover { background: transparent; }
-}
+/* Button height, disabled and busy states come from the shared buttons
+   (components/buttons.css). */
 
 .drive-backup__state { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--text-body); font-weight: var(--weight-semibold); }
 .drive-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--wash-3); }
@@ -111,11 +97,7 @@
   border: 1px solid var(--accent); border-radius: var(--r-md); background: var(--paper-raised); color: var(--ink); box-shadow: var(--shadow-md);
 }
 .drive-offline-notice p { flex: 1; margin: 0; font-size: var(--text-body); line-height: var(--leading-caption); }
-.drive-offline-notice button { display: grid; flex: none; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; }
-
-@media (hover: hover) and (pointer: fine) {
-  .drive-offline-notice button:hover { background: var(--wash-1); color: var(--ink); }
-}
+.drive-offline-notice .icon-button { --btn-fg: var(--muted); --btn-fg-hover: var(--ink); }
 
 @media (max-width: 860px) {
   .drive-offline-notice { top: 8px; }

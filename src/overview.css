@@ -17,10 +17,9 @@
 .overview-panel-head h2 { margin: 0; color: var(--ink); font-size: var(--text-title); font-weight: var(--weight-medium); letter-spacing: var(--track-title); line-height: var(--leading-title); }
 .overview-panel-head h2 > span { margin-left: 8px; color: var(--muted); font-size: var(--text-subsection); font-variant-numeric: tabular-nums; }
 .overview-panel-head__actions { display: flex; align-items: center; gap: 10px; }
-.overview-panel-head__actions .top-action { min-height: 44px; }
-.overview-panel-head__add { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 10px 18px; border: 0; border-radius: var(--r-full); background: var(--accent); color: var(--paper-raised); font: inherit; font-size: var(--text-body); cursor: pointer; }
-.overview-panel-head__add:disabled { opacity: .45; cursor: not-allowed; }
-.overview-panel-head__add:focus-visible { outline: 2px solid var(--accent-warm); outline-offset: 3px; }
+.overview-panel-head__actions .top-action { min-height: var(--btn-h); }
+/* The section's one primary (.primary-button). */
+.overview-panel-head__add { font: inherit; font-size: var(--text-body); }
 
 /* Pieces: search, active filter and hidden-selection note. */
 .overview-toolbar {
@@ -283,7 +282,7 @@
   .overview-toolbar { display: flex; flex-direction: column; align-items: stretch; gap: 14px; margin: 0 0 24px; }
   .overview-panel-head { align-items: flex-start; gap: 12px; }
   .overview-panel-head h2 { font-size: var(--text-title); }
-  .overview-panel-head__add { font-size: var(--text-body); padding-inline: 12px; }
+  .overview-panel-head__add { font-size: var(--text-body); --btn-pad-x: 12px; }
   .overview-search { order: 0; height: 46px; }
   .overview-active-filter { align-self: center; margin: -4px 0 0; }
   .overview-hidden-selection { margin: -5px 0 0; }

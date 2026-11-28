@@ -33,8 +33,8 @@ export function ConfirmDialog({ eyebrow, title, description, keepLabel, discardL
         <h2 id={titleId}>{title}</h2>
         {description && <p id={descriptionId}>{description}</p>}
         <div className="confirm-dialog__actions">
-          <button ref={keepButtonRef} type="button" className="confirm-dialog__keep" onClick={onKeep}>{keepLabel}</button>
-          <button type="button" className="confirm-dialog__discard" onClick={onDiscard}>{discardLabel}</button>
+          <button ref={keepButtonRef} type="button" className="secondary-button confirm-dialog__keep" onClick={onKeep}>{keepLabel}</button>
+          <button type="button" className="danger-button confirm-dialog__discard" onClick={onDiscard}>{discardLabel}</button>
         </div>
       </div>
     </div>

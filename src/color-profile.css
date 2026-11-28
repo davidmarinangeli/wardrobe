@@ -169,21 +169,11 @@
   margin: 0;
 }
 
+/* .ghost-button.button--sm; pulled into the label row's line box. */
 .palette-edit-toggle {
-  border: 0;
-  background: none;
-  padding: 0;
+  margin: -8px calc(-1 * var(--btn-pad-x)) -8px 0;
   font: inherit;
   font-size: var(--text-body);
-  color: var(--muted);
-  cursor: pointer;
-  border-bottom: 1px solid transparent;
-  transition: color var(--dur-pop) var(--ease-out), border-color var(--dur-pop) var(--ease-out);
-}
-
-.palette-edit-toggle:hover {
-  color: var(--accent-warm);
-  border-bottom-color: currentColor;
 }
 
 .palette-swatches {
@@ -357,32 +347,20 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 16px;
+  gap: 0 4px;
+  margin-left: calc(-1 * var(--btn-pad-x-sm));
   padding-top: 4px;
   margin-bottom: 4px;
 }
 
+/* Text links in the panel's quiet register: .ghost-button.button--sm, muted
+   until hovered. */
 .color-more-actions button {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border: 0;
-  background: none;
-  padding: 2px 0;
+  --btn-fg: var(--muted);
+  --btn-fg-hover: var(--accent-warm);
   font: inherit;
   font-size: var(--text-body);
-  color: var(--muted);
-  cursor: pointer;
-  border-bottom: 1px solid transparent;
-  transition: color var(--dur-pop) var(--ease-out), border-color var(--dur-pop) var(--ease-out);
 }
-
-.color-more-actions button:hover:not(:disabled) {
-  color: var(--accent-warm);
-  border-bottom-color: currentColor;
-}
-
-.color-more-actions button:disabled { opacity: .5; cursor: default; }
 
 /* ==========================================================================
    ANALYSING / QUIZ
@@ -684,7 +662,11 @@
 
 .drape-fabric-dots { display: flex; gap: 6px; }
 
+/* Small to the eye, 24px to the pointer (32px on touch). */
 .drape-fabric-dot {
+  display: inline-grid;
+  place-items: center;
+  min-height: 24px;
   padding: 3px;
   border: 1px solid transparent;
   border-radius: var(--r-full);
@@ -695,6 +677,10 @@
 
 .drape-fabric-dot.is-active { border-color: var(--ink-soft); }
 .drape-fabric-dot:active { transform: scale(.94); }
+
+@media (max-width: 860px) {
+  .drape-fabric-dot { min-width: 32px; min-height: 32px; }
+}
 
 .drape-fabric-chip {
   display: flex;
@@ -795,20 +781,12 @@
   margin-bottom: 16px;
 }
 
+/* .ghost-button.button--sm, flush with the text above it. */
 .drape-disclosure {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 0;
-  background: none;
-  padding: 0;
+  margin-left: calc(-1 * var(--btn-pad-x));
   font: inherit;
   font-size: var(--text-body);
-  color: var(--muted);
-  cursor: pointer;
 }
-
-.drape-disclosure:hover { color: var(--accent-warm); }
 
 .drape-disclosure-caret {
   width: 0;
