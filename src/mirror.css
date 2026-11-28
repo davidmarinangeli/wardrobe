@@ -1,8 +1,10 @@
 /* The trigger itself is .top-action--secondary, styled once in styles.css
-   and shared with the import trigger — see App.jsx's .top-actions comment
-   for why both live in the top bar instead of a floating launcher. */
+   and shared with the import trigger. */
 
-/* Centered popover, same grow-from-launcher pattern as the import flow. */
+/* The popover is the panel frame (.viewer: header / body / footer, paper,
+   glass hairline, lit edge, large shadow) centered over the scrim, like the
+   import popover beside it. Only its size and its entry out of the chip live
+   here. */
 .mirror-popover-backdrop {
   position: fixed;
   inset: 0;
@@ -11,8 +13,8 @@
   place-items: center;
   padding: var(--s-5);
   background: var(--scrim);
-  -webkit-backdrop-filter: var(--glass-blur-sm);
-  backdrop-filter: var(--glass-blur-sm);
+  -webkit-backdrop-filter: var(--glass-blur-scrim);
+  backdrop-filter: var(--glass-blur-scrim);
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -21,28 +23,14 @@
 
 .mirror-popover-backdrop[data-open="true"] { opacity: 1; visibility: visible; pointer-events: auto; }
 
-.mirror-popover {
+.viewer.mirror-popover {
+  --viewer-pad-bottom: var(--s-6);
   width: min(760px, 100%);
+  height: auto;
   max-height: min(820px, calc(100dvh - 48px));
-  /* A frame, like every panel: a fixed header over the only scroller. */
-  --popover-pad: 28px;
-  --popover-pad-bottom: 28px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  padding: 0;
   color: var(--ink);
-  background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: var(--r-xl);
-  box-shadow: var(--shadow-lg);
-  /* Grows out of the chip that opened it. The origin is measured per open by
-     usePopoverOrigin (the trigger's center, expressed in this panel's own box)
-     because a top-bar pill is nowhere near any fixed corner — this used to be a
-     hardcoded translate(6vw, 8vh) from `right bottom`, geometry left from when
-     the trigger was a floating dock, so the panel flew in from empty space.
-     The travel is a small nudge in the trigger's direction; scaling from the
-     right origin is what actually sells it. */
+  /* Grows out of the chip that opened it; usePopoverOrigin measures the
+     origin per open. The travel is a small nudge in the chip's direction. */
   transform: translate(var(--travel-x, 0px), var(--travel-y, 0px)) scale(.92);
   transform-origin: var(--origin-x, 50%) var(--origin-y, 50%);
   opacity: 0;
@@ -53,49 +41,10 @@
     filter 280ms var(--ease-out);
 }
 
-.mirror-popover-backdrop[data-open="true"] .mirror-popover { transform: none; opacity: 1; filter: none; }
+.mirror-popover-backdrop[data-open="true"] .viewer.mirror-popover { transform: none; opacity: 1; filter: none; }
 
-.mirror-popover__header { display: flex; flex: none; align-items: flex-start; justify-content: space-between; gap: 20px; padding: var(--popover-close-inset, var(--s-5)) var(--popover-close-inset, var(--s-5)) var(--s-4) var(--popover-pad); border-bottom: 1px solid transparent; transition: border-color var(--dur-pop) var(--ease-out); }
-.mirror-popover__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 6px var(--popover-pad) var(--popover-pad-bottom); scrollbar-width: thin; scrollbar-color: var(--wash-3) transparent; }
-.mirror-popover[data-scrolled] > .mirror-popover__header { border-bottom-color: var(--line); }
-.mirror-popover__heading { min-width: 0; }
-.mirror-popover__eyebrow { margin: 0 0 6px; color: var(--muted); font-size: var(--text-eyebrow); text-transform: uppercase; letter-spacing: var(--track-caps); font-weight: var(--weight-medium); }
-.mirror-popover__title { margin: 0; font: inherit; font-size: var(--text-title); font-weight: var(--weight-medium); line-height: var(--leading-title); letter-spacing: var(--track-title); }
-
-/* A plain .icon-button, like every other panel's close. */
-.mirror-close { flex: none; }
-
-.mirror-dropzone {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--s-3);
-  text-align: center;
-  max-width: 420px;
-  margin: var(--s-6) auto;
-  padding: 40px var(--s-5);
-  border: 1px dashed var(--line);
-  border-radius: var(--r-md);
-  color: var(--muted);
-}
-
-.mirror-dropzone h3 {
-  margin: var(--s-1) 0 0;
-  color: var(--ink);
-  font-size: var(--text-section);
-  font-weight: var(--weight-medium);
-  line-height: var(--leading-heading);
-  letter-spacing: var(--track-tight);
-}
-
-.mirror-dropzone p {
-  margin: 0;
-  font-size: var(--text-body);
-}
-
-.mirror-dropzone .primary-button {
-  margin-top: var(--s-2);
-}
+/* The empty state is the shared .dropzone, given room to breathe. */
+.mirror-dropzone { min-height: 280px; }
 
 .mirror-layout {
   display: grid;
@@ -118,11 +67,6 @@
   border: 1px solid var(--line);
   object-fit: cover;
   max-height: 60vh;
-}
-
-.mirror-photo-actions {
-  display: flex;
-  gap: var(--s-3);
 }
 
 .mirror-result {
@@ -379,31 +323,40 @@
   .mirror-photo {
     position: static;
   }
+
+  /* One column: the whole photo, never cropped, at a height that leaves the
+     critique in view under it. */
+  .mirror-photo img {
+    width: auto;
+    max-width: 100%;
+    max-height: 46vh;
+    margin-inline: auto;
+    object-fit: contain;
+  }
 }
 
-@media (max-width: 640px) {
+/* A phone gets the sheet every panel becomes, at the panels' breakpoint. A
+   full-width sheet isn't anchored to the chip: it belongs to the bottom edge
+   it slides off, so it ignores the measured origin on purpose. */
+@media (max-width: 860px) {
   .mirror-popover-backdrop { align-items: end; padding: 0; }
-  .mirror-popover {
+  .viewer.mirror-popover {
     width: 100%;
-    max-height: min(90dvh, 820px);
-    --popover-pad: var(--s-4);
-    --popover-close-inset: 18px;
-    --popover-pad-bottom: calc(18px + env(safe-area-inset-bottom));
-    border-radius: var(--r-xl) var(--r-xl) 0 0;
-    /* A full-width sheet isn't anchored to the chip — it belongs to the bottom
-       edge it slides off, so it ignores the measured origin on purpose. */
-    transform: translateY(100%) scale(0.96);
+    max-height: 92dvh;
+    filter: none;
+    transform: translateY(100%);
     transform-origin: bottom center;
+    transition: transform var(--dur-panel) var(--ease-drawer), opacity var(--dur-pop) var(--ease-out);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .top-action,
   .mirror-popover-backdrop,
-  .mirror-popover { transition-property: opacity, background, border-color, box-shadow; }
+  .viewer.mirror-popover { transition-property: opacity, background, border-color, box-shadow; }
 
   /* The panel still fades in; it just no longer flies out of the chip. */
-  .mirror-popover {
+  .viewer.mirror-popover {
     transform: none;
     filter: none;
   }

@@ -42,20 +42,17 @@
 .import-drop-overlay.is-active .import-drop-target,
 .import-drop-overlay[data-active="true"] .import-drop-target { transform: scale(1); }
 .import-drop-target.is-over { background: var(--glass-card-hover); }
-/* h2 at display size only for the fullscreen drag overlay; inside the popover the
-   same block is an h3 (below). */
+/* The fullscreen drag overlay: the one place the drop target is page-sized. */
 .import-drop-overlay .import-drop-target h2 { margin: 0; font: inherit; font-size: var(--text-display); font-weight: var(--weight-medium); line-height: var(--leading-display); letter-spacing: var(--track-display); }
-/* Inside the popover the same block is a section under the popover title. */
-.import-drop-target h3 { margin: 0; font-size: var(--text-section); font-weight: var(--weight-medium); line-height: var(--leading-heading); letter-spacing: var(--track-tight); }
-.import-drop-target .import-loading-target__label { color: var(--ink-soft); }
-.import-drop-target p { max-width: 40ch; margin: 0; color: var(--muted); font-size: var(--text-body); }
-.import-setup-warning code { padding: 2px 5px; color: var(--ink-soft); background: var(--wash-1); border-radius: var(--r-xs); font-size: 0.92em; }
+.import-drop-overlay .import-drop-target p { max-width: 40ch; margin: 0; color: var(--muted); font-size: var(--text-body); }
 
 /* The trigger itself is .top-action--primary, styled once in styles.css and
-   shared with Mirror's trigger — see App.jsx and the .top-actions comment
-   there for why both now live in the top bar instead of floating trays. */
+   shared with Mirror's trigger. */
 
-/* Centered panel visually grows from the launcher without relying on JS animation. */
+/* The popover is the panel frame (.viewer: header / body / footer, the paper,
+   the glass hairline, the lit edge and the large shadow, all in styles.css)
+   centered over the scrim. What is left here is its size and its entry out of
+   the chip that opened it. */
 .import-popover-backdrop {
   position: fixed;
   inset: 0;
@@ -64,165 +61,172 @@
   place-items: center;
   padding: var(--s-5);
   background: var(--scrim);
-  -webkit-backdrop-filter: var(--glass-blur-sm);
-  backdrop-filter: var(--glass-blur-sm);
+  -webkit-backdrop-filter: var(--glass-blur-scrim);
+  backdrop-filter: var(--glass-blur-scrim);
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
   transition: opacity var(--dur-pop) var(--ease-out), visibility var(--dur-pop) var(--ease-out);
 }
 
-.import-popover-backdrop.is-open,
 .import-popover-backdrop[data-open="true"] { opacity: 1; visibility: visible; pointer-events: auto; }
 
-.import-popover {
+.viewer.import-popover {
+  --viewer-pad-bottom: var(--s-6);
   width: min(620px, 100%);
-  max-height: min(760px, calc(100dvh - 48px));
-  /* A frame, like every panel: fixed header, scrolling body, fixed footer.
-     The padding lives on the three parts, through these two variables. */
-  --popover-pad: var(--s-5);
-  --popover-pad-bottom: var(--s-5);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  padding: 0;
+  height: auto;
+  max-height: min(780px, calc(100dvh - 48px));
   color: var(--ink-soft);
-  background: var(--paper-raised);
-  border: 1px solid var(--line);
-  border-radius: var(--r-xl);
-  box-shadow: var(--shadow-md);
   /* Grows out of the chip that opened it, origin measured per open by
-     usePopoverOrigin. Was translate(-36vw, 42vh) scale(0.16) from `left
-     bottom` — stale geometry from the floating-dock era, and a scale that
-     small is the "appears from nothing" move: things in the real world don't
-     start at a sixth of their size. */
+     usePopoverOrigin. */
   transform: translate(var(--travel-x, 0px), var(--travel-y, 0px)) scale(0.92);
   transform-origin: var(--origin-x, 50%) var(--origin-y, 50%);
   opacity: 0;
   transition: transform 280ms var(--ease-out), opacity 180ms ease;
 }
 
-.import-popover-backdrop.is-open .import-popover,
-.import-popover-backdrop[data-open="true"] .import-popover { transform: none; opacity: 1; }
-.import-popover__header { display: flex; flex: none; align-items: flex-start; justify-content: space-between; gap: 20px; padding: var(--popover-close-inset, var(--s-5)) var(--popover-close-inset, var(--s-5)) 18px var(--popover-pad); border-bottom: 1px solid transparent; transition: border-color var(--dur-pop) var(--ease-out); }
-.import-popover__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 6px var(--popover-pad) var(--popover-pad-bottom); scrollbar-width: thin; scrollbar-color: var(--wash-3) transparent; }
-.import-popover__body:has(+ .import-popover__footer) { padding-bottom: 18px; }
-.import-popover__footer { flex: none; padding: 14px var(--popover-pad) var(--popover-pad-bottom); border-top: 1px solid transparent; transition: border-color var(--dur-pop) var(--ease-out); }
-.import-popover__footer > .import-actions { margin-top: 0; }
-.import-popover[data-scrolled] > .import-popover__header { border-bottom-color: var(--line); }
-.import-popover[data-more-below] > .import-popover__footer { border-top-color: var(--line); }
-.import-popover__heading { min-width: 0; }
-.import-popover__eyebrow { margin: 0 0 6px; color: var(--muted); font-size: var(--text-eyebrow); text-transform: uppercase; letter-spacing: var(--track-caps); font-weight: var(--weight-medium); }
-.import-popover__title { margin: 0; font: inherit; font-size: var(--text-title); font-weight: var(--weight-medium); line-height: var(--leading-title); letter-spacing: var(--track-title); }
+.import-popover-backdrop[data-open="true"] .viewer.import-popover { transform: none; opacity: 1; }
 
-.import-progress { display: grid; gap: 10px; margin: 20px 0; }
-.import-progress.is-reviewing { margin-bottom: var(--s-5); }
-.import-progress__meta { display: flex; justify-content: space-between; gap: var(--s-4); color: var(--muted); font-size: var(--text-caption); }
+/* Empty, loading and setup states. The empty box is the shared .dropzone. */
+.import-setup-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--wash-1);
+  color: var(--error);
+}
+
+.import-setup-warning svg { flex: none; margin-top: 1px; }
+.import-setup-warning h3 { margin: 0 0 var(--s-1); color: var(--ink); font-size: var(--text-subsection); font-weight: var(--weight-medium); line-height: var(--leading-heading); letter-spacing: var(--track-tight); }
+.import-setup-warning p { margin: 0; color: var(--ink-soft); font-size: var(--text-body); line-height: var(--leading-body); }
+.import-setup-warning code { padding: 2px 5px; color: var(--ink-soft); background: var(--wash-2); border-radius: var(--r-xs); font-size: 0.92em; }
+
+.import-analyzing {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0 0 var(--s-4);
+  color: var(--muted);
+  font-size: var(--text-body);
+}
+
+.import-progress { margin: 0 0 var(--s-5); }
 .import-progress__track { height: 3px; overflow: hidden; background: var(--wash-2); border-radius: var(--r-full); }
 .import-progress__bar { width: var(--import-progress, 0%); height: 100%; background: var(--ink-soft); border-radius: inherit; transition: width 500ms var(--ease-out); }
 .import-progress.is-indeterminate .import-progress__bar { width: 36%; animation: import-progress 1.2s var(--ease-out) infinite; }
-.import-status { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: var(--text-body); }
+.import-status { display: flex; align-items: center; gap: var(--s-2); margin: var(--s-4) 0 0; color: var(--muted); font-size: var(--text-body); }
 .import-status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: 0.45; }
-.import-status.is-processing::before { animation: import-pulse 1.2s ease-in-out infinite; }
 .import-status.is-complete { color: var(--success); }
 .import-status.is-error { color: var(--error); }
 
-.import-card-list { display: grid; gap: 10px; }
-.import-editor__stage {
-  grid-column: 1 / -1;
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--text-eyebrow);
-  letter-spacing: var(--track-caps);
-  font-weight: var(--weight-medium);
-  text-transform: uppercase;
-}
-.import-editor + .import-card-list,
-.import-cleanup-editor + .import-card-list { margin-top: 28px; }
-.import-card-list + .import-actions { margin-top: 28px; }
-.import-card {
-  display: grid;
-  grid-template-columns: 88px minmax(0, 1fr) auto;
-  gap: 14px;
-  align-items: center;
-  padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  background: var(--glass-card);
-  box-shadow: var(--glass-edge);
-}
-.import-card__image { width: 88px; aspect-ratio: 4 / 5; object-fit: contain; background: var(--paper); border-radius: var(--r-sm); filter: var(--shadow-contact); }
-.import-card__body { min-width: 0; }
-.import-card__title { margin: 0 0 var(--s-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-subsection); font-weight: var(--weight-medium); line-height: var(--leading-heading); letter-spacing: var(--track-tight); }
-.import-card__detail { margin: 0; color: var(--muted); font-size: var(--text-caption); }
-.import-card__detail--status { display: flex; align-items: center; gap: var(--s-2); }
-.import-card__detail--status::before { content: ""; flex: 0 0 6px; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .42; }
-.import-card__detail--status[data-tone="processing"]::before { animation: import-pulse 1.2s ease-in-out infinite; }
-.import-card__detail--status[data-tone="error"] { color: var(--error); }
-.import-card__detail--status[data-tone="complete"] { color: var(--success); }
-.import-card__actions { display: flex; gap: var(--s-1); }
+/* ─── Review editor ─── */
+.import-editor { display: grid; grid-template-columns: minmax(140px, 0.8fr) minmax(0, 1.2fr); gap: var(--s-5); align-items: start; }
+.import-editor__figure { display: grid; gap: var(--s-2); margin: 0; }
+.import-editor__preview { width: 100%; max-height: 360px; object-fit: contain; background: var(--paper); border: 1px solid var(--glass-border); border-radius: var(--r-md); box-shadow: var(--glass-edge); }
+.import-editor__figure figcaption { color: var(--muted); font-size: var(--text-caption); line-height: var(--leading-caption); text-align: center; }
+/* The editor's action row runs under both columns. */
+.import-editor > .import-actions { grid-column: 1 / -1; margin-top: 0; }
 
-/* Icon-only buttons in the popover (close, review, delete) are plain
-   .icon-button / .icon-button--danger; the card row uses .button--sm. */
-.import-card__actions { align-items: center; }
-.import-card.is-approved { border-color: var(--success); }
-.import-card.is-rejected { opacity: 0.55; }
-.import-card.is-selected { border-color: var(--ink-soft); background: var(--glass-card-hover); }
+.import-section-title { margin: 0; color: var(--ink); font-size: var(--text-section); font-weight: var(--weight-medium); line-height: var(--leading-heading); letter-spacing: var(--track-tight); }
 
-.import-editor { display: grid; grid-template-columns: minmax(140px, 0.8fr) minmax(0, 1.2fr); gap: 20px; }
-.import-editor__preview { width: 100%; max-height: 360px; object-fit: contain; background: var(--paper); border-radius: var(--r-md); filter: var(--shadow-contact); }
-.import-cleanup-editor { display: grid; gap: 14px; }
-.import-cleanup-editor > .import-card__detail { max-width: 680px; line-height: var(--leading-caption); }
-.import-cleanup-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); }
-.import-cleanup-comparison figure { margin: 0; overflow: hidden; border: 1px solid var(--line); border-radius: var(--r-md); background-color: var(--paper); background-image: linear-gradient(45deg, var(--wash-1) 25%, transparent 25%), linear-gradient(-45deg, var(--wash-1) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, var(--wash-1) 75%), linear-gradient(-45deg, transparent 75%, var(--wash-1) 75%); background-position: 0 0, 0 7px, 7px -7px, -7px 0; background-size: 14px 14px; }
-.import-cleanup-comparison img { display: block; width: 100%; aspect-ratio: 1; object-fit: contain; }
-.import-cleanup-comparison figcaption { padding: 9px 11px; border-top: 1px solid var(--line); color: var(--muted); background: color-mix(in srgb, var(--paper) 92%, transparent); font-size: var(--text-eyebrow); letter-spacing: var(--track-caps); font-weight: var(--weight-medium); text-transform: uppercase; }
-.import-cleanup-strength label { display: flex; justify-content: space-between; gap: var(--s-4); }
-.import-cleanup-strength label strong { color: var(--ink-soft); font-weight: var(--weight-semibold); }
-.import-cleanup-strength input[type="range"] { padding-inline: 0; border: 0; accent-color: var(--ink-soft); }
-.import-cleanup-scale { display: flex; justify-content: space-between; gap: var(--s-4); color: var(--muted); font-size: var(--text-caption); }
-.import-fields { display: grid; gap: 14px; align-content: start; }
-.import-field { display: grid; gap: 6px; }
-.import-field label { color: var(--muted); font-size: var(--text-caption); }
+.import-fields { display: grid; gap: var(--s-4); align-content: start; }
+.import-field { display: grid; gap: var(--s-2); }
+.import-field label { color: var(--muted); font-size: var(--text-caption); line-height: var(--leading-caption); }
+.import-field label span { color: var(--muted); opacity: .8; }
 .import-field input,
 .import-field select,
-.import-field textarea { width: 100%; box-sizing: border-box; padding: 11px var(--s-3); color: var(--ink-soft); background: transparent; border: 1px solid var(--line); border-radius: var(--r-sm); font: inherit; font-size: var(--text-body); }
+.import-field textarea { width: 100%; box-sizing: border-box; padding: 11px var(--s-3); color: var(--ink-soft); background: var(--paper-raised); border: 1px solid var(--line); border-radius: var(--r-sm); font: inherit; font-size: var(--text-body); transition: border-color var(--dur-pop) var(--ease-out), box-shadow var(--dur-pop) var(--ease-out); }
 /* Body-size text in the 11px padding comes out ~4px shorter than the old
    inherited 16px; keep the field at its earlier 44px. */
 .import-field input:not([type="color"]),
 .import-field select { min-height: 44px; }
+/* The app's one field focus: warm border plus the focus halo. */
 .import-field input:focus,
 .import-field select:focus,
-.import-field textarea:focus { outline: 1px solid var(--ink-soft); outline-offset: 1px; }
+.import-field textarea:focus { border-color: var(--accent-warm); box-shadow: var(--ring-focus); outline: none; }
 .import-color-row { display: grid; grid-template-columns: 52px 1fr; gap: var(--s-2); }
-.import-color-row input[type="color"] { height: 44px; padding: 5px; cursor: pointer; }
+.import-color-row input[type="color"] { height: 44px; padding: var(--s-1); cursor: pointer; }
 .import-field-error { color: var(--error); font-size: var(--text-caption); line-height: var(--leading-caption); }
-/* Layout only. The buttons themselves are the app's shared .primary-button /
-   .secondary-button / .danger-button (buttons.css) — this panel used to define a
-   parallel family filled with --ink-soft instead of --accent, which is why its
-   confirm never matched any other confirm in the app. Destructive sits apart
-   from the confirms here for the same reason it does in .viewer-actions. */
-.import-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: var(--s-2); margin-top: 22px; }
+
+/* ─── Background cleanup ─── */
+.import-cleanup-editor { display: grid; gap: var(--s-4); }
+.import-cleanup-editor > .import-card__detail { max-width: 68ch; font-size: var(--text-body); line-height: var(--leading-body); }
+.import-cleanup-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); }
+.import-cleanup-comparison figure { margin: 0; overflow: hidden; border: 1px solid var(--line); border-radius: var(--r-md); background-color: var(--paper); background-image: linear-gradient(45deg, var(--wash-1) 25%, transparent 25%), linear-gradient(-45deg, var(--wash-1) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, var(--wash-1) 75%), linear-gradient(-45deg, transparent 75%, var(--wash-1) 75%); background-position: 0 0, 0 7px, 7px -7px, -7px 0; background-size: 14px 14px; }
+.import-cleanup-comparison img { display: block; width: 100%; aspect-ratio: 1; object-fit: contain; }
+.import-cleanup-comparison figcaption { padding: var(--s-2) var(--s-3); border-top: 1px solid var(--line); color: var(--muted); background: color-mix(in srgb, var(--paper) 92%, transparent); font-size: var(--text-caption); line-height: var(--leading-caption); }
+.import-cleanup-strength label { display: flex; justify-content: space-between; gap: var(--s-4); }
+.import-cleanup-strength label strong { color: var(--ink-soft); font-weight: var(--weight-semibold); font-variant-numeric: tabular-nums; }
+.import-cleanup-strength input[type="range"] { padding-inline: 0; border: 0; background: transparent; box-shadow: none; accent-color: var(--accent); }
+.import-cleanup-scale { display: flex; justify-content: space-between; gap: var(--s-4); color: var(--muted); font-size: var(--text-caption); }
+.import-cleanup-editor > .import-actions { margin-top: 0; }
+
+/* ─── Queue ─── */
+.import-card-list { display: grid; gap: var(--s-2); }
+.import-editor + .import-card-list,
+.import-cleanup-editor + .import-card-list { margin-top: var(--s-6); padding-top: var(--s-5); border-top: 1px solid var(--line); }
+/* The queue's rows: glass card family, inner-row radius. */
+.import-card {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  gap: var(--s-3);
+  align-items: center;
+  padding: var(--s-2);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-md);
+  background: var(--glass-card);
+  box-shadow: var(--glass-edge), var(--shadow-xs);
+  transition: border-color var(--dur-pop) var(--ease-out), box-shadow var(--dur-pop) var(--ease-out);
+}
+.import-card__image { width: 72px; aspect-ratio: 1; object-fit: contain; background: var(--paper); border-radius: var(--r-sm); filter: var(--shadow-contact); }
+.import-card__body { min-width: 0; }
+.import-card__title { margin: 0 0 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font-size: var(--text-body); font-weight: var(--weight-medium); line-height: var(--leading-heading); }
+.import-card__detail { margin: 0; color: var(--muted); font-size: var(--text-caption); line-height: var(--leading-caption); }
+.import-card__detail--status { display: flex; align-items: flex-start; gap: var(--s-2); }
+.import-card__detail--status::before { content: ""; flex: 0 0 6px; width: 6px; height: 6px; margin-top: calc(0.7em - 3px); border-radius: 50%; background: currentColor; opacity: .42; }
+.import-card__detail--status[data-tone="processing"]::before { animation: import-pulse 1.2s ease-in-out infinite; }
+.import-card__detail--status[data-tone="error"] { color: var(--error); }
+.import-card__detail--status[data-tone="complete"] { color: var(--success); }
+.import-card__actions { display: flex; align-items: center; gap: var(--s-1); }
+.import-card.is-approved { border-color: var(--success); }
+.import-card.is-rejected { opacity: 0.55; }
+/* Selection, as on every card: a warm ring with the card's own shadow. */
+.import-card.is-selected { border-color: var(--accent-warm); box-shadow: var(--glass-edge), var(--shadow-sm); }
+
+/* Layout only. The buttons are the shared .primary-button / .secondary-button
+   / .danger-button (buttons.css); destructive sits apart from the confirms. */
+.import-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: var(--s-2); margin-top: var(--s-5); }
 .import-actions .danger-button { margin-right: auto; }
 
 @keyframes import-progress { from { transform: translateX(-110%); } to { transform: translateX(300%); } }
 @keyframes import-pulse { 50% { transform: scale(1.65); opacity: 0.22; } }
-/* import-spin removed — uses shared @keyframes spin from styles.css */
+/* uses the shared @keyframes spin from styles.css */
 .import-spinner { animation: spin 900ms linear infinite; }
 
-@media (max-width: 640px) {
+/* A phone gets the sheet every panel becomes (same breakpoint as the panels):
+   attached to the bottom edge it slides off, so it ignores the chip origin. */
+@media (max-width: 860px) {
   .import-popover-backdrop { align-items: end; padding: 0; }
-  /* A full-width sheet belongs to the bottom edge it slides off, not to the
-     chip — it ignores the measured origin on purpose. */
-  .import-popover { width: 100%; max-height: min(88dvh, 760px); --popover-pad: var(--s-4); --popover-close-inset: 18px; --popover-pad-bottom: calc(18px + env(safe-area-inset-bottom)); border-radius: var(--r-xl) var(--r-xl) 0 0; transform: translateY(100%) scale(0.96); transform-origin: bottom center; }
+  .viewer.import-popover {
+    width: 100%;
+    max-height: 92dvh;
+    transform: translateY(100%);
+    transform-origin: bottom center;
+    transition: transform var(--dur-panel) var(--ease-drawer), opacity var(--dur-pop) var(--ease-out);
+  }
   .import-drop-overlay { padding: var(--s-3); }
-  .import-drop-target { min-height: 50vh; padding: 28px 20px; border-radius: var(--r-lg); }
-  .import-card { grid-template-columns: 68px minmax(0, 1fr); }
-  .import-card__image { width: 68px; }
+  .import-drop-overlay .import-drop-target { min-height: 50vh; padding: 28px 20px; border-radius: var(--r-lg); }
+}
+
+@media (max-width: 640px) {
+  /* The row actions drop under the text, so an error message keeps its width. */
+  .import-card { grid-template-columns: 60px minmax(0, 1fr); row-gap: var(--s-1); }
+  .import-card__image { width: 60px; grid-row: span 2; }
   .import-card__actions { grid-column: 2; }
-  .import-editor + .import-card-list,
-  .import-cleanup-editor + .import-card-list { margin-top: 22px; }
-  .import-editor { grid-template-columns: 1fr; }
+  .import-editor { grid-template-columns: 1fr; gap: var(--s-4); }
   .import-editor__preview { max-height: 240px; }
 }
 
@@ -231,15 +235,16 @@
   .import-drop-target,
   .top-action,
   .import-popover-backdrop,
-  .import-popover,
+  .viewer.import-popover,
   .import-progress__bar { transition-property: opacity, background, border-color, box-shadow; }
 
   .import-drop-target,
-  .import-popover { transform: none; }
+  .viewer.import-popover { transform: none; }
 
   .top-action:active { transform: none; }
   .import-progress.is-indeterminate .import-progress__bar,
   .import-status.is-processing::before,
+  .import-card__detail--status::before,
   .import-spinner { animation: none !important; }
 }
 

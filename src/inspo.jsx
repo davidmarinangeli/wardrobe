@@ -105,6 +105,9 @@ function InspoImporter({ onClose, onImported }) {
       ariaLabel="Add inspiration"
       onClose={onClose}
       closeRef={closeButtonRef}
+      // Opened by the same top-bar chip as the import popover, so on desktop it
+      // is the same kind of thing: a centered dialog, not a side sheet.
+      overlayClassName="inspo-importer-overlay"
       entryClassName="inspo-importer-entry"
       panelClassName="inspo-importer-panel"
       // Header's second row, like the Settings tabs: they stay put.
@@ -134,7 +137,7 @@ function InspoImporter({ onClose, onImported }) {
         {tab === "drop" && (
           <>
             <div
-              className={`inspo-dropzone${over ? " over" : ""}`}
+              className={`dropzone inspo-dropzone${over ? " is-over" : ""}`}
               onDrop={onDrop}
               onDragOver={onDragOver}
               onDragLeave={onDragLeave}
@@ -142,7 +145,7 @@ function InspoImporter({ onClose, onImported }) {
               role="button"
               tabIndex={0}
               aria-label="Drop images here or click to browse"
-              onKeyDown={(e) => e.key === "Enter" && fileInputRef.current?.click()}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInputRef.current?.click(); } }}
             >
               <input
                 ref={fileInputRef}
@@ -152,11 +155,9 @@ function InspoImporter({ onClose, onImported }) {
                 aria-hidden="true"
                 onChange={(e) => addFiles(e.target.files)}
               />
-              <UploadSimple size={28} weight="light" aria-hidden="true" style={{ color: "var(--muted)" }} />
-              <div className="inspo-dropzone-label">
-                <strong>Drop images here</strong>
-                or click to browse
-              </div>
+              <UploadSimple size={28} weight="light" className="dropzone__icon" aria-hidden="true" />
+              <p className="dropzone__title">Drop images here</p>
+              <p className="dropzone__hint">or click to browse</p>
             </div>
 
             {dropQueue.length > 0 && (
@@ -177,7 +178,7 @@ function InspoImporter({ onClose, onImported }) {
 
         {importErrors.length > 0 && (
           <p className="inspo-import-errors">
-            {importErrors.map((e, i) => <span key={i} style={{ display: "block" }}>{e}</span>)}
+            {importErrors.map((e, i) => <span key={i}>{e}</span>)}
           </p>
         )}
 

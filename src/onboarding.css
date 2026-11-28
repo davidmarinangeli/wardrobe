@@ -14,77 +14,64 @@
   animation: viewer-in 240ms var(--ease-out) both;
 }
 
-/* The frame; its body scrolls (with the same slim, trackless thumb as every
-   panel — see .viewer-body in styles.css). */
+/* The frame is the panel every modal uses (.viewer in styles.css: warm paper,
+   glass hairline, the largest radius, lit edge and large shadow, the same
+   gutters and close inset). Only its height is the dialog's own. */
 .viewer.onboarding {
-  --viewer-pad-top: 40px;
-  --viewer-pad-x: 38px;
-  --viewer-pad-bottom: var(--s-6);
-  --viewer-gutter: 38px;
-  position: relative;
-  width: 100%;
+  height: auto;
   max-height: min(88vh, 760px);
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  background: var(--paper);
-  box-shadow: var(--shadow-lg);
 }
 
-/* The footer sits on the panel's own paper, not the sheet default. */
-.viewer.onboarding > .viewer-footer { background: inherit; }
-
-/* The wizard's progress is its header: dots left, close right. */
-.viewer-header__content > .onboarding-dots { margin: 0; }
-
-.onboarding-dots {
-  display: flex;
-  gap: 6px;
-  margin: 0 0 26px;
-  padding: 0;
-  list-style: none;
-}
-
-.onboarding-storage-shortcut {
+/* The header's second row: the step indicator on the left, the archive
+   shortcut on the right. Under the title, never above it. */
+.onboarding-subbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--s-3);
-  margin: -10px 0 20px;
-  padding: 10px var(--s-3);
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
-  background: var(--paper-raised);
+  min-height: 32px;
 }
 
-.onboarding-storage-shortcut > span {
-  color: var(--muted);
-  font-size: var(--text-caption);
+.onboarding-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-width: 0;
 }
 
-/* .ghost-button.button--sm, flush with the box's right padding. */
-.onboarding-storage-shortcut button {
-  margin: -6px -6px -6px 0;
-  font-size: var(--text-caption);
-  font-weight: var(--weight-semibold);
+.onboarding-progress__bars {
+  display: flex;
+  gap: var(--s-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.onboarding-dots li {
+.onboarding-progress__bars li {
   width: 22px;
   height: 3px;
+  border-radius: var(--r-full);
   background: var(--line);
-  border-radius: var(--r-xs);
+  transition: background var(--dur-pop) var(--ease-out);
 }
 
-.onboarding-dots li.is-active { background: var(--ink); }
-.onboarding-dots li.is-done { background: var(--muted); }
+.onboarding-progress__bars li.is-done { background: var(--muted); }
+.onboarding-progress__bars li.is-active { background: var(--ink); }
 
-.onboarding-step h2 {
-  margin: var(--s-1) 0 10px;
-  font: inherit;
-  font-size: var(--text-title);
-  font-weight: var(--weight-medium);
-  line-height: var(--leading-title);
-  letter-spacing: var(--track-title);
+.onboarding-progress__label {
+  color: var(--muted);
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* .ghost-button.button--sm, pushed to the right edge of the row even when
+   there is no progress beside it, and flush with the text gutter. */
+.onboarding-archive-link {
+  margin-left: auto;
+  margin-right: calc(-1 * var(--s-2));
+  font-size: var(--text-caption);
 }
 
 /* The key form opened from Settings: a section under the Settings title. */
@@ -190,10 +177,16 @@
   cursor: pointer;
 }
 
-.onboarding-provider:hover,
+/* Hover darkens the hairline like every secondary control; only the chosen
+   card gets the ink border, so a resting pointer never makes a second card
+   look selected. Focus is the app's outline. */
+@media (hover: hover) and (pointer: fine) {
+  .onboarding-provider:hover:not(.is-selected) { border-color: var(--muted); }
+}
+
 .onboarding-provider:focus-visible {
-  border-color: var(--ink);
-  outline: none;
+  outline: 2px solid var(--accent-warm);
+  outline-offset: 2px;
 }
 
 .onboarding-provider.is-selected {
@@ -219,14 +212,13 @@
 }
 
 .onboarding-badge {
-  padding: 2px 7px;
+  padding: 2px var(--s-2);
   border-radius: var(--r-full);
-  background: var(--accent);
-  color: var(--paper);
-  font-size: var(--text-eyebrow);
+  background: var(--wash-2);
+  color: var(--ink-soft);
+  font-size: var(--text-caption);
   font-weight: var(--weight-medium);
-  letter-spacing: var(--track-caps);
-  text-transform: uppercase;
+  line-height: var(--leading-caption);
 }
 
 .onboarding-provider__description {
@@ -283,63 +275,13 @@
 
 .onboarding-status.is-error { color: var(--error); }
 
-.onboarding-dropzone {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: var(--s-3);
-  border: 1px dashed var(--line);
-  border-radius: var(--r-md);
-  padding: 14px var(--s-4);
-  cursor: pointer;
-  transition: background 160ms ease, border-color 160ms ease;
-}
-
-.onboarding-dropzone:hover,
-.onboarding-dropzone:focus-visible {
-  border-color: var(--ink);
-  outline: none;
-}
-
-.onboarding-dropzone.is-over {
-  border-color: var(--ink);
-  background: var(--wash-1);
-}
-
-.onboarding-dropzone.is-uploaded { border-style: solid; }
-
-.onboarding-dropzone__preview {
-  width: 46px;
-  height: 46px;
-  flex: 0 0 auto;
-  border-radius: var(--r-sm);
-  object-fit: cover;
-}
-
-.onboarding-dropzone svg {
-  flex: 0 0 auto;
-  color: var(--muted);
-}
-
-.onboarding-dropzone.is-uploaded svg { color: var(--success); }
-
-.onboarding-dropzone__text { min-width: 0; }
-
-.onboarding-dropzone__label {
-  margin: 0 0 2px;
-  font-size: var(--text-body);
-  font-weight: var(--weight-semibold);
-}
+/* The two reference-photo slots are the shared .dropzone in its row form
+   (styles.css); only the spacing to the guide under each is local. */
+.onboarding-dropzone { margin-bottom: var(--s-2); }
 
 .onboarding-required {
   color: var(--muted);
   font-weight: var(--weight-regular);
-}
-
-.onboarding-dropzone__hint {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--text-caption);
 }
 
 .onboarding-photo-group {
@@ -511,16 +453,9 @@
     animation: sheet-out 160ms var(--ease-out) both;
   }
 
-  .viewer.onboarding {
-    --viewer-pad-top: var(--s-5);
-    --viewer-pad-x: 22px;
-    --viewer-pad-bottom: calc(var(--s-5) + env(safe-area-inset-bottom));
-    --viewer-gutter: 22px;
-    max-height: 92dvh;
-    border: 0;
-    border-radius: var(--r-xl) var(--r-xl) 0 0;
-    background: var(--paper-warm);
-  }
+  .viewer.onboarding { max-height: 92dvh; }
+
+  .photo-guide-toggle { min-height: 44px; }
 }
 
 @media (max-width: 640px) {
@@ -621,13 +556,9 @@
 .onboarding-managed-provider .is-missing { color: var(--muted); }
 .onboarding-managed-provider p.onboarding-managed-provider__others { color: var(--muted); font-size: var(--text-body); }
 
-/* First thing under the header row now, so it no longer tucks up under the
-   dots it used to follow. */
-.viewer.onboarding > .viewer-body > .onboarding-storage-shortcut { margin-top: 0; }
 
-/* The step's action row now lives in the fixed footer, so whatever is last in
-   the step no longer needs the gap it kept above that row; and the dots row
-   is compact enough to need no extra space under it. Without these a step
-   that used to fit would scroll by a few pixels. */
+/* The step's action row lives in the fixed footer, so whatever is last in the
+   step no longer needs the gap it kept above that row. The step's first line
+   starts a short beat under the header's progress row. */
 .viewer.onboarding .onboarding-step > :last-child { margin-bottom: 0; }
-.viewer.onboarding:not(.settings-panel) > .viewer-header--row { padding-bottom: 0; }
+.viewer.onboarding:not(.settings-panel) > .viewer-header--row + .viewer-body { padding-top: var(--s-3); }

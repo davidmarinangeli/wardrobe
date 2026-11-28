@@ -249,32 +249,33 @@ export function Mirror({ items }) {
       </button>
 
       <div className="mirror-popover-backdrop" data-open={open} onMouseDown={(event) => event.target === event.currentTarget && setOpen(false)}>
-        <section ref={panelRef} className="mirror-popover" role="dialog" aria-modal="true" aria-labelledby="mirror-title">
-          <header className="mirror-popover__header">
-            <div className="mirror-popover__heading">
-              <p className="mirror-popover__eyebrow popover-eyebrow">AI mirror</p>
-              {/* Same icon, same words as the chip — this block IS the chip,
-                  moved. usePopoverOrigin measures where it has to start. */}
-              <div className="popover-identity" ref={identityRef}>
-                <span className="popover-identity__icon" aria-hidden="true">
-                  <MagicWand size={22} weight="bold" />
-                </span>
-                <h2 className="mirror-popover__title" id="mirror-title">How do I look?</h2>
+        {/* The panel frame every modal uses (.viewer: header / body / footer);
+            the popover adds only its size and its entry out of the chip. */}
+        <section ref={panelRef} className="viewer mirror-popover" role="dialog" aria-modal="true" aria-labelledby="mirror-title">
+          <header className="viewer-header viewer-header--row">
+            <div className="viewer-header__row">
+              <div className="viewer-heading popover-heading">
+                {/* Same words as the chip: this title IS the chip label, moved.
+                    usePopoverOrigin measures where it has to start. */}
+                <div className="popover-identity" ref={identityRef}>
+                  <h2 id="mirror-title">How do I look?</h2>
+                </div>
               </div>
+              <button className="icon-button viewer-icon-close" type="button" onClick={() => setOpen(false)} aria-label="Close" title="Close" ref={closeButtonRef}>
+                <X size={24} weight="light" aria-hidden="true" />
+              </button>
             </div>
-            <button className="icon-button mirror-close" type="button" onClick={() => setOpen(false)} aria-label="Close" title="Close" ref={closeButtonRef}>
-              <X size={20} />
-            </button>
           </header>
 
-          {/* The only scroller: the header above stays put. */}
-          <div ref={bodyRef} className="mirror-popover__body">
+          {/* The only scroller: the header above and the actions below stay put. */}
+          <div ref={bodyRef} className="viewer-body mirror-popover__body">
           {!photo && !prototypeVariant ? (
-            <div className="mirror-dropzone">
-              <UploadSimple size={28} />
-              <h3>What do you think of my outfit?</h3>
-              <p>Upload a photo of yourself wearing the outfit and get a fit and color critique, plus swap suggestions from your own wardrobe.</p>
-              <button type="button" className="primary-button" onClick={() => inputRef.current?.click()}>Choose a photo</button>
+            <div className="dropzone mirror-dropzone">
+              <UploadSimple size={28} weight="light" className="dropzone__icon" aria-hidden="true" />
+              <p className="dropzone__hint">Upload a photo of yourself wearing the outfit and get a fit and color critique, plus swap suggestions from your own wardrobe.</p>
+              <div className="dropzone__actions">
+                <button type="button" className="primary-button" onClick={() => inputRef.current?.click()}>Choose a photo</button>
+              </div>
             </div>
           ) : (
             <div className="mirror-layout">
@@ -284,16 +285,6 @@ export function Mirror({ items }) {
                   /* PROTOTYPE: the panel is reachable with no photo when a
                      variant is being reviewed, so the frame holds its shape. */
                   : <div className="mirror-photo__placeholder" />}
-                <div className="mirror-photo-actions">
-                  <button type="button" className="secondary-button" onClick={() => (photo ? reset() : inputRef.current?.click())}>
-                    <ArrowCounterClockwise size={15} /> {photo ? "New photo" : "Choose a photo"}
-                  </button>
-                  {photo && !critique && (
-                    <button type="button" className="primary-button" onClick={getFeedback} disabled={loading}>
-                      <MagicWand size={15} weight="bold" /> Get feedback
-                    </button>
-                  )}
-                </div>
               </div>
 
               <div className="mirror-result" aria-busy={loading}>
@@ -352,6 +343,23 @@ export function Mirror({ items }) {
             </div>
           )}
           </div>
+
+          {/* The photo's actions, in the fixed footer like every panel's. */}
+          <footer className="viewer-footer">
+            {(photo || prototypeVariant) && (
+              <div className="viewer-actions">
+                <span className="action-spacer" />
+                <button type="button" className="secondary-button" onClick={() => (photo ? reset() : inputRef.current?.click())}>
+                  <ArrowCounterClockwise size={15} /> {photo ? "New photo" : "Choose a photo"}
+                </button>
+                {photo && !critique && (
+                  <button type="button" className="primary-button" onClick={getFeedback} disabled={loading}>
+                    <MagicWand size={15} weight="bold" /> Get feedback
+                  </button>
+                )}
+              </div>
+            )}
+          </footer>
         </section>
       </div>
     </>
